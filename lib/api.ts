@@ -3,6 +3,7 @@ import {
   ClientInput,
   Devis,
   DevisInput,
+  DevisPublic,
   Facture,
   FactureInput,
   GoogleStatus,
@@ -43,6 +44,17 @@ export const getDevisListe = () => requete<Devis[]>("/api/devis");
 export const getDevis = (id: string) => requete<Devis>(`/api/devis/${id}`);
 export const creerDevis = (data: DevisInput) =>
   requete<Devis>("/api/devis", { method: "POST", body: JSON.stringify(data) });
+export const envoyerDevisPourSignature = (id: string) =>
+  requete<Devis>(`/api/devis/${id}/envoyer`, { method: "POST" });
+
+// --- Signature publique (token secret, pas d'auth TOTP) ---
+export const getDevisPublic = (token: string) =>
+  requete<DevisPublic>(`/api/devis/public/${token}`);
+export const signerDevisPublic = (token: string, signatureImage: string) =>
+  requete<DevisPublic>(`/api/devis/public/${token}/signer`, {
+    method: "POST",
+    body: JSON.stringify({ signature_image: signatureImage }),
+  });
 
 // --- Factures ---
 export const getFacturesListe = () => requete<Facture[]>("/api/factures");

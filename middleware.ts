@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const COOKIE_NAME = "mutatech_session";
 
-const PUBLIC_PATHS = ["/login", "/api/verify-totp"];
+const PUBLIC_PATHS = ["/login", "/api/verify-totp", "/signer"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

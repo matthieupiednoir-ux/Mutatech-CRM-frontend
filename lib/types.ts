@@ -36,8 +36,21 @@ export interface Devis {
   taux_tva: number;
   statut: string;
   drive_file_url?: string | null;
+  signe_le?: string | null;
   lignes: Ligne[];
   client?: Client | null;
+}
+
+export interface DevisPublic {
+  numero: string;
+  objet?: string | null;
+  date_creation: string;
+  taux_tva: number;
+  statut: string;
+  signature_image?: string | null;
+  signe_le?: string | null;
+  lignes: Ligne[];
+  client_nom: string;
 }
 
 export interface DevisInput {

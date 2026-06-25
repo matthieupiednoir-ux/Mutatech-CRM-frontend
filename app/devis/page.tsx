@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import LigneEditor from "@/components/LigneEditor";
 import { Client, Devis, Ligne } from "@/lib/types";
-import { getClients, getDevisListe, creerDevis, calculerTotaux, ApiError } from "@/lib/api";
+import { getClients, getDevisListe, creerDevis, envoyerDevisPourSignature, calculerTotaux, ApiError } from "@/lib/api";
 
 export default function DevisPage() {
   const [devisListe, setDevisListe] = useState<Devis[]>([]);
@@ -13,6 +13,7 @@ export default function DevisPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
   const [enregistrement, setEnregistrement] = useState(false);
+  const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
 
   const [clientId, setClientId] = useState("");
   const [objet, setObjet] = useState("");
@@ -61,6 +62,19 @@ export default function DevisPage() {
       setError(e instanceof ApiError ? e.message : "Erreur d'enregistrement");
     } finally {
       setEnregistrement(false);
+    }
+  }
+
+  async function handleEnvoyer(id: string) {
+    setEnvoiEnCours(id);
+    setError(null);
+    try {
+      await envoyerDevisPourSignature(id);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur d'envoi");
+    } finally {
+      setEnvoiEnCours(null);
     }
   }
 
@@ -195,6 +209,21 @@ export default function DevisPage() {
                       <span className="text-xs text-textMuted">
                         Pas encore sur Drive
                       </span>
+                    )}
+                    {devis.signe_le ? (
+                      <span className="rounded bg-teal/10 px-2 py-1 text-xs font-medium text-teal">
+                        ✓ Signé
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleEnvoyer(devis.id)}
+                        disabled={envoiEnCours === devis.id}
+                        className="rounded bg-violet px-3 py-1.5 text-xs font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+                      >
+                        {envoiEnCours === devis.id
+                          ? "Envoi…"
+                          : "Envoyer pour signature"}
+                      </button>
                     )}
                   </div>
                 </div>
