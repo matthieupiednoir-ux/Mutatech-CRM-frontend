@@ -17,10 +17,13 @@ export default function DevisPage() {
 
   const [clientId, setClientId] = useState("");
   const [objet, setObjet] = useState("");
+  const [contexte, setContexte] = useState("");
   const [tauxTva, setTauxTva] = useState(20);
   const [lignes, setLignes] = useState<Ligne[]>([
     { description: "", quantite: 1, prix_unitaire: 0 },
   ]);
+
+  const clientSelectionne = clients.find((c) => c.id === clientId);
 
   function charger() {
     setLoading(true);
@@ -40,6 +43,7 @@ export default function DevisPage() {
   function ouvrirNouveau() {
     setClientId(clients[0]?.id || "");
     setObjet("");
+    setContexte("");
     setTauxTva(20);
     setLignes([{ description: "", quantite: 1, prix_unitaire: 0 }]);
     setFormOuvert(true);
@@ -53,6 +57,7 @@ export default function DevisPage() {
       await creerDevis({
         client_id: clientId,
         objet,
+        contexte: contexte || undefined,
         taux_tva: tauxTva,
         lignes: lignes.filter((l) => l.description.trim() !== ""),
       });
@@ -130,6 +135,12 @@ export default function DevisPage() {
                     </option>
                   ))}
                 </select>
+                {clientSelectionne?.secteur === "SSIAD" && (
+                  <p className="mt-1 text-xs text-amber">
+                    ⚠ Secteur SSIAD — la mention HDS/RGPD santé sera ajoutée
+                    automatiquement au PDF.
+                  </p>
+                )}
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Objet</span>
@@ -137,6 +148,18 @@ export default function DevisPage() {
                   value={objet}
                   onChange={(e) => setObjet(e.target.value)}
                   placeholder="ex: Déploiement Orchestrateur IA"
+                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary placeholder:text-textMuted/60"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-sm text-textMuted">
+                  Contexte (paragraphe narratif, optionnel)
+                </span>
+                <textarea
+                  value={contexte}
+                  onChange={(e) => setContexte(e.target.value)}
+                  rows={2}
+                  placeholder="ex: Ce devis accompagne le déploiement pilote IA pour ce client, avec un focus sur la réduction de la charge administrative."
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary placeholder:text-textMuted/60"
                 />
               </label>

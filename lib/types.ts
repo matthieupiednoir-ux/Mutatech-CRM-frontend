@@ -7,6 +7,7 @@ export interface Client {
   adresse?: string | null;
   siret?: string | null;
   notes?: string | null;
+  activite_description?: string | null;
   cree_le: string;
 }
 
@@ -18,6 +19,7 @@ export interface ClientInput {
   adresse?: string;
   siret?: string;
   notes?: string;
+  activite_description?: string;
 }
 
 export interface Ligne {
@@ -32,6 +34,7 @@ export interface Devis {
   numero: string;
   client_id: string;
   objet?: string | null;
+  contexte?: string | null;
   date_creation: string;
   taux_tva: number;
   statut: string;
@@ -44,6 +47,7 @@ export interface Devis {
 export interface DevisPublic {
   numero: string;
   objet?: string | null;
+  contexte?: string | null;
   date_creation: string;
   taux_tva: number;
   statut: string;
@@ -56,6 +60,7 @@ export interface DevisPublic {
 export interface DevisInput {
   client_id: string;
   objet?: string;
+  contexte?: string;
   taux_tva: number;
   lignes: Ligne[];
 }

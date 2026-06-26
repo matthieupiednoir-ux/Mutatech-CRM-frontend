@@ -95,6 +95,10 @@ export default function SignerPage() {
           </p>
         )}
 
+        {devis.contexte && (
+          <p className="text-sm italic text-textMuted">{devis.contexte}</p>
+        )}
+
         <div className="space-y-2">
           {devis.lignes.map((ligne, i) => (
             <div

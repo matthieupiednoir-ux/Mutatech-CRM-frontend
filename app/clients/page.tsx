@@ -19,6 +19,7 @@ const CLIENT_VIDE: ClientInput = {
   adresse: "",
   siret: "",
   notes: "",
+  activite_description: "",
 };
 
 export default function ClientsPage() {
@@ -57,6 +58,7 @@ export default function ClientsPage() {
       adresse: client.adresse || "",
       siret: client.siret || "",
       notes: client.notes || "",
+      activite_description: client.activite_description || "",
     });
     setClientEnEdition(client.id);
     setFormOuvert(true);
@@ -183,6 +185,23 @@ export default function ClientsPage() {
                   value={form.siret}
                   onChange={(e) => setForm({ ...form, siret: e.target.value })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-sm text-textMuted">
+                  Contexte d'activité{" "}
+                  <span className="text-textMuted/60">
+                    (taille de structure, équipe — utile notamment pour les SSIAD)
+                  </span>
+                </span>
+                <textarea
+                  value={form.activite_description}
+                  onChange={(e) =>
+                    setForm({ ...form, activite_description: e.target.value })
+                  }
+                  rows={2}
+                  placeholder="ex: SSIAD de 60 patients actifs, équipe de 16 membres (1 IDEC, 8 IDE, 6 AS, 1 secrétaire)"
+                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary placeholder:text-textMuted/60"
                 />
               </label>
               <label className="block sm:col-span-2">
