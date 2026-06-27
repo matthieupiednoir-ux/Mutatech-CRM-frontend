@@ -9,6 +9,8 @@ const ONGLETS = [
   { href: "/clients", label: "Clients" },
   { href: "/devis", label: "Devis" },
   { href: "/factures", label: "Factures" },
+  { href: "/taches", label: "Tâches" },
+  { href: "/prospects", label: "Prospects" },
 ];
 
 export default function NavBar() {
@@ -39,11 +41,11 @@ function NavBarInterieur() {
   return (
     <header className="border-b border-line">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-6">
           <span className="font-display text-sm font-bold text-teal">
             Mutatech / CRM
           </span>
-          <nav className="flex gap-4">
+          <nav className="flex flex-wrap gap-4">
             {ONGLETS.map((onglet) => (
               <Link
                 key={onglet.href}

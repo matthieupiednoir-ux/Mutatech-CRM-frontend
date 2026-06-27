@@ -8,6 +8,10 @@ import {
   FactureInput,
   GoogleStatus,
   Ligne,
+  Tache,
+  TacheInput,
+  Prospect,
+  ProspectInput,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -68,6 +72,29 @@ export const envoyerFacture = (id: string) =>
 export const getGoogleStatus = () =>
   requete<GoogleStatus>("/api/auth/google/status");
 export const urlConnexionGoogle = () => `${API_URL}/api/auth/google/login`;
+
+// --- Tâches ---
+export const getTaches = () => requete<Tache[]>("/api/taches");
+export const creerTache = (data: TacheInput) =>
+  requete<Tache>("/api/taches", { method: "POST", body: JSON.stringify(data) });
+export const modifierTache = (id: string, data: TacheInput) =>
+  requete<Tache>(`/api/taches/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const supprimerTache = (id: string) =>
+  requete<{ statut: string }>(`/api/taches/${id}`, { method: "DELETE" });
+
+// --- Prospects ---
+export const getProspects = () => requete<Prospect[]>("/api/prospects");
+export const creerProspect = (data: ProspectInput) =>
+  requete<Prospect>("/api/prospects", { method: "POST", body: JSON.stringify(data) });
+export const modifierProspect = (id: string, data: ProspectInput) =>
+  requete<Prospect>(`/api/prospects/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const supprimerProspect = (id: string) =>
+  requete<{ statut: string }>(`/api/prospects/${id}`, { method: "DELETE" });
+export const convertirEnClient = (id: string) =>
+  requete<{ statut: string; client_id: string }>(
+    `/api/prospects/${id}/convertir-en-client`,
+    { method: "POST" }
+  );
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {

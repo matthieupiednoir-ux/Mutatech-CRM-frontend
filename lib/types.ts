@@ -93,3 +93,45 @@ export interface FactureInput {
 export interface GoogleStatus {
   connecte: boolean;
 }
+
+export interface Tache {
+  id: string;
+  pilier: number;
+  titre: string;
+  description?: string | null;
+  statut: string;
+  ordre: number;
+}
+
+export interface TacheInput {
+  pilier: number;
+  titre: string;
+  description?: string;
+  statut: string;
+  ordre: number;
+}
+
+export interface Prospect {
+  id: string;
+  nom: string;
+  secteur?: string | null;
+  email?: string | null;
+  telephone?: string | null;
+  adresse?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  statut: string;
+  notes?: string | null;
+}
+
+export interface ProspectInput {
+  nom: string;
+  secteur?: string;
+  email?: string;
+  telephone?: string;
+  adresse?: string;
+  latitude?: number;
+  longitude?: number;
+  statut: string;
+  notes?: string;
+}
