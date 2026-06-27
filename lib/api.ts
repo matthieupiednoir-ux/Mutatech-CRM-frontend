@@ -81,6 +81,11 @@ export const modifierTache = (id: string, data: TacheInput) =>
   requete<Tache>(`/api/taches/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const supprimerTache = (id: string) =>
   requete<{ statut: string }>(`/api/taches/${id}`, { method: "DELETE" });
+export const importerTachesLot = (data: TacheInput[]) =>
+  requete<Tache[]>("/api/taches/import-lot", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 // --- Prospects ---
 export const getProspects = () => requete<Prospect[]>("/api/prospects");
@@ -95,6 +100,11 @@ export const convertirEnClient = (id: string) =>
     `/api/prospects/${id}/convertir-en-client`,
     { method: "POST" }
   );
+export const importerProspectsLot = (data: ProspectInput[]) =>
+  requete<Prospect[]>("/api/prospects/import-lot", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {

@@ -9,8 +9,10 @@ import {
   modifierProspect,
   supprimerProspect,
   convertirEnClient,
+  importerProspectsLot,
   ApiError,
 } from "@/lib/api";
+import { PROSPECTS_BRUTS, mapperProspect } from "@/lib/seed-prospects";
 
 const PROSPECT_VIDE: ProspectInput = {
   nom: "",
@@ -38,6 +40,13 @@ const STATUT_COULEUR: Record<string, string> = {
   perdu: "text-textMuted border-line opacity-60",
 };
 
+const FILTRES_NICHE = [
+  { id: "all", label: "Tous" },
+  { id: "SSIAD", label: "SSIAD" },
+  { id: "Cabinet médical", label: "Médical" },
+  { id: "Artisan", label: "Artisans" },
+];
+
 export default function ProspectsPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +57,8 @@ export default function ProspectsPage() {
   const [form, setForm] = useState<ProspectInput>({ ...PROSPECT_VIDE });
   const [enregistrement, setEnregistrement] = useState(false);
   const [conversionEnCours, setConversionEnCours] = useState<string | null>(null);
+  const [importEnCours, setImportEnCours] = useState(false);
+  const [filtreNiche, setFiltreNiche] = useState("all");
 
   function charger() {
     setLoading(true);
@@ -131,12 +142,44 @@ export default function ProspectsPage() {
     }
   }
 
+  async function handleImporter() {
+    if (
+      !confirm(
+        `Importer les ${PROSPECTS_BRUTS.length} prospects de l'ancien gestionnaire HTML ? À faire une seule fois.`
+      )
+    )
+      return;
+    setImportEnCours(true);
+    setError(null);
+    try {
+      const donnees = PROSPECTS_BRUTS.map(mapperProspect);
+      await importerProspectsLot(donnees);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur d'import");
+    } finally {
+      setImportEnCours(false);
+    }
+  }
+
+  const prospectsFiltres =
+    filtreNiche === "all"
+      ? prospects
+      : prospects.filter((p) => p.secteur === filtreNiche);
+
   return (
     <>
       <NavBar />
       <main className="mx-auto max-w-5xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="font-display text-2xl text-textPrimary">Prospects</h1>
+          <h1 className="font-display text-2xl text-textPrimary">
+            Prospects{" "}
+            {prospects.length > 0 && (
+              <span className="ml-2 font-mono text-sm font-normal text-textMuted">
+                ({prospects.length})
+              </span>
+            )}
+          </h1>
           <button
             onClick={ouvrirNouveau}
             className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
@@ -154,6 +197,24 @@ export default function ProspectsPage() {
           <p className="mb-4 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">
             {info}
           </p>
+        )}
+
+        {!loading && prospects.length === 0 && (
+          <div className="mb-6 rounded-lg border border-dashed border-violet/40 bg-violet/5 p-4">
+            <p className="mb-2 text-sm text-textPrimary">
+              Aucun prospect en base pour l'instant. Importe le contenu de
+              l'ancien gestionnaire HTML (une seule fois) pour démarrer.
+            </p>
+            <button
+              onClick={handleImporter}
+              disabled={importEnCours}
+              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+            >
+              {importEnCours
+                ? "Import en cours…"
+                : `Importer les ${PROSPECTS_BRUTS.length} prospects existants`}
+            </button>
+          </div>
         )}
 
         {formOuvert && (
@@ -264,15 +325,35 @@ export default function ProspectsPage() {
           </form>
         )}
 
+        {prospects.length > 0 && (
+          <div className="mb-4 flex gap-2">
+            {FILTRES_NICHE.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFiltreNiche(f.id)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                  filtreNiche === f.id
+                    ? "border-violet bg-violet text-white"
+                    : "border-line text-textMuted hover:text-textPrimary"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-textMuted">Chargement…</p>
-        ) : prospects.length === 0 ? (
-          <p className="text-sm text-textMuted">
-            Aucun prospect pour l'instant.
-          </p>
+        ) : prospectsFiltres.length === 0 ? (
+          prospects.length > 0 && (
+            <p className="text-sm text-textMuted">
+              Aucun prospect dans ce filtre.
+            </p>
+          )
         ) : (
           <div className="space-y-2">
-            {prospects.map((prospect) => (
+            {prospectsFiltres.map((prospect) => (
               <div
                 key={prospect.id}
                 className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface p-4"
@@ -285,13 +366,13 @@ export default function ProspectsPage() {
                     </span>
                   </p>
                   <p className="text-xs text-textMuted">
-                    {prospect.email || "—"}{" "}
-                    {prospect.telephone ? `· ${prospect.telephone}` : ""}
+                    {prospect.telephone || "—"}
+                    {prospect.notes ? ` · ${prospect.notes}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`rounded border px-2 py-1 text-xs font-medium ${STATUT_COULEUR[prospect.statut]}`}
+                    className={`whitespace-nowrap rounded border px-2 py-1 text-xs font-medium ${STATUT_COULEUR[prospect.statut]}`}
                   >
                     {STATUT_LABEL[prospect.statut]}
                   </span>
@@ -299,7 +380,7 @@ export default function ProspectsPage() {
                     <button
                       onClick={() => handleConvertir(prospect)}
                       disabled={conversionEnCours === prospect.id}
-                      className="rounded bg-teal px-3 py-1.5 text-xs font-medium text-ink hover:bg-teal/90 disabled:opacity-50"
+                      className="whitespace-nowrap rounded bg-teal px-3 py-1.5 text-xs font-medium text-ink hover:bg-teal/90 disabled:opacity-50"
                     >
                       {conversionEnCours === prospect.id
                         ? "…"

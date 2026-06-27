@@ -8,8 +8,10 @@ import {
   creerTache,
   modifierTache,
   supprimerTache,
+  importerTachesLot,
   ApiError,
 } from "@/lib/api";
+import { TACHES_SEED } from "@/lib/seed-taches";
 
 const PILIERS: Record<number, string> = {
   1: "Structure juridique & administrative",
@@ -50,7 +52,7 @@ export default function TachesPage() {
   const [formOuvert, setFormOuvert] = useState(false);
   const [form, setForm] = useState<TacheInput>({ ...TACHE_VIDE });
   const [enregistrement, setEnregistrement] = useState(false);
-  const [pilierActif, setPilierActif] = useState<number | null>(null);
+  const [importEnCours, setImportEnCours] = useState(false);
 
   function charger() {
     setLoading(true);
@@ -111,6 +113,25 @@ export default function TachesPage() {
     }
   }
 
+  async function handleImporter() {
+    if (
+      !confirm(
+        `Importer les ${TACHES_SEED.length} tâches de l'ancienne to-do HTML ? À faire une seule fois.`
+      )
+    )
+      return;
+    setImportEnCours(true);
+    setError(null);
+    try {
+      await importerTachesLot(TACHES_SEED);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur d'import");
+    } finally {
+      setImportEnCours(false);
+    }
+  }
+
   const piliersPresents = Array.from(
     new Set(taches.map((t) => t.pilier))
   ).sort((a, b) => a - b);
@@ -144,6 +165,24 @@ export default function TachesPage() {
           <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
             {error}
           </p>
+        )}
+
+        {!loading && taches.length === 0 && (
+          <div className="mb-6 rounded-lg border border-dashed border-violet/40 bg-violet/5 p-4">
+            <p className="mb-2 text-sm text-textPrimary">
+              Aucune tâche en base pour l'instant. Importe le contenu de
+              l'ancienne to-do HTML (une seule fois) pour démarrer.
+            </p>
+            <button
+              onClick={handleImporter}
+              disabled={importEnCours}
+              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+            >
+              {importEnCours
+                ? "Import en cours…"
+                : `Importer les ${TACHES_SEED.length} tâches existantes`}
+            </button>
+          </div>
         )}
 
         {formOuvert && (
@@ -233,12 +272,7 @@ export default function TachesPage() {
 
         {loading ? (
           <p className="text-sm text-textMuted">Chargement…</p>
-        ) : taches.length === 0 ? (
-          <p className="text-sm text-textMuted">
-            Aucune tâche pour l'instant — clique sur "+ Nouvelle tâche" pour
-            commencer (sans redéploiement !).
-          </p>
-        ) : (
+        ) : taches.length === 0 ? null : (
           <div className="space-y-8">
             {piliersPresents.map((pilier) => (
               <section key={pilier}>
