@@ -116,7 +116,7 @@ export default function TachesPage() {
   async function handleImporter() {
     if (
       !confirm(
-        `Importer les ${TACHES_SEED.length} tâches de l'ancienne to-do HTML ? À faire une seule fois.`
+        `Importer les ${TACHES_SEED.length} tâches de l'ancienne to-do HTML ?\n\nÀ ne faire qu'une seule fois — si tu cliques deux fois, les tâches seront dupliquées. Les tâches déjà présentes (comme tes tests) ne seront pas touchées, celles-ci seront simplement ajoutées en plus.`
       )
     )
       return;
@@ -144,7 +144,7 @@ export default function TachesPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-5xl px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Tâches</h1>
             {total > 0 && (
@@ -153,36 +153,29 @@ export default function TachesPage() {
               </p>
             )}
           </div>
-          <button
-            onClick={ouvrirNouveau}
-            className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
-          >
-            + Nouvelle tâche
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleImporter}
+              disabled={importEnCours}
+              className="rounded-lg border border-violet/40 px-4 py-2 text-sm font-medium text-violet hover:bg-violet/10 disabled:opacity-50"
+            >
+              {importEnCours
+                ? "Import en cours…"
+                : `Importer les ${TACHES_SEED.length} tâches existantes`}
+            </button>
+            <button
+              onClick={ouvrirNouveau}
+              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
+            >
+              + Nouvelle tâche
+            </button>
+          </div>
         </div>
 
         {error && (
           <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
             {error}
           </p>
-        )}
-
-        {!loading && taches.length === 0 && (
-          <div className="mb-6 rounded-lg border border-dashed border-violet/40 bg-violet/5 p-4">
-            <p className="mb-2 text-sm text-textPrimary">
-              Aucune tâche en base pour l'instant. Importe le contenu de
-              l'ancienne to-do HTML (une seule fois) pour démarrer.
-            </p>
-            <button
-              onClick={handleImporter}
-              disabled={importEnCours}
-              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
-            >
-              {importEnCours
-                ? "Import en cours…"
-                : `Importer les ${TACHES_SEED.length} tâches existantes`}
-            </button>
-          </div>
         )}
 
         {formOuvert && (
@@ -272,7 +265,12 @@ export default function TachesPage() {
 
         {loading ? (
           <p className="text-sm text-textMuted">Chargement…</p>
-        ) : taches.length === 0 ? null : (
+        ) : taches.length === 0 ? (
+          <p className="text-sm text-textMuted">
+            Aucune tâche pour l'instant — clique sur "Importer" ou "+ Nouvelle
+            tâche".
+          </p>
+        ) : (
           <div className="space-y-8">
             {piliersPresents.map((pilier) => (
               <section key={pilier}>
