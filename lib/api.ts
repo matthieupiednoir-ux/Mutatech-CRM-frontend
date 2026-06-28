@@ -106,6 +106,20 @@ export const importerProspectsLot = (data: ProspectInput[]) =>
     body: JSON.stringify(data),
   });
 
+// --- Agent IA ---
+export interface AgentChatResponse {
+  reply: string;
+  actions_effectuees: string[];
+}
+export const chatAgent = (
+  message: string,
+  history: { role: string; content: string }[]
+) =>
+  requete<AgentChatResponse>("/api/agent/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, history }),
+  });
+
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {
   const totalHt = lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);

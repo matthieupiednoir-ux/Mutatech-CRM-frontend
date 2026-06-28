@@ -11,6 +11,7 @@ const ONGLETS = [
   { href: "/factures", label: "Factures" },
   { href: "/taches", label: "Tâches" },
   { href: "/prospects", label: "Prospects" },
+  { href: "/agent", label: "Agent IA" },
 ];
 
 export default function NavBar() {
