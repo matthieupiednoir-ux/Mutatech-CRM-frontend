@@ -77,6 +77,7 @@ export interface Facture {
   statut: string;
   drive_file_url?: string | null;
   envoyee_le?: string | null;
+  payee_le?: string | null;
   lignes: Ligne[];
   client?: Client | null;
 }

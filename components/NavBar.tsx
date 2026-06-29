@@ -6,11 +6,13 @@ import { Suspense, useEffect, useState } from "react";
 import { getGoogleStatus, urlConnexionGoogle } from "@/lib/api";
 
 const ONGLETS = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/clients", label: "Clients" },
   { href: "/devis", label: "Devis" },
   { href: "/factures", label: "Factures" },
   { href: "/taches", label: "Tâches" },
   { href: "/prospects", label: "Prospects" },
+  { href: "/comptabilite", label: "Comptabilité" },
   { href: "/agent", label: "Agent IA" },
 ];
 
@@ -41,7 +43,7 @@ function NavBarInterieur() {
 
   return (
     <header className="border-b border-line">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div className="flex flex-wrap items-center gap-6">
           <span className="font-display text-sm font-bold text-teal">
             Mutatech / CRM

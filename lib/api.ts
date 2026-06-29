@@ -67,6 +67,8 @@ export const creerFacture = (data: FactureInput) =>
   requete<Facture>("/api/factures", { method: "POST", body: JSON.stringify(data) });
 export const envoyerFacture = (id: string) =>
   requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
+export const marquerFacturePayee = (id: string) =>
+  requete<Facture>(`/api/factures/${id}/marquer-payee`, { method: "POST" });
 
 // --- Google ---
 export const getGoogleStatus = () =>
