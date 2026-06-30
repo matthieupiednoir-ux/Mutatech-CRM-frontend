@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import ChatAgentPanel from "@/components/ChatAgentPanel";
 import {
@@ -126,6 +127,52 @@ function KpiCard({
   );
 }
 
+// Carte d'aperçu : titre, lien vers la page, et les 3 premiers éléments
+// (cliquable dans son ensemble pour aller voir la liste complète).
+function AperculCard({
+  titre,
+  lien,
+  items,
+}: {
+  titre: string;
+  lien: string;
+  items: { texte: string; sousTexte?: string; couleur?: string }[];
+}) {
+  return (
+    <Link
+      href={lien}
+      className="block rounded-xl border border-line bg-surface p-4 transition hover:border-violet/50"
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-display text-sm text-textPrimary">{titre}</h3>
+        <span className="text-xs text-violet">Voir tout →</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-textMuted">Rien pour l'instant.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map((it, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5"
+            >
+              <span className="truncate text-xs text-textPrimary">{it.texte}</span>
+              {it.sousTexte && (
+                <span
+                  className="ml-2 shrink-0 text-[11px]"
+                  style={{ color: it.couleur || "#77778A" }}
+                >
+                  {it.sousTexte}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [devis, setDevis] = useState<Devis[]>([]);
@@ -176,6 +223,28 @@ export default function DashboardPage() {
   const tauxConversion =
     prospects.length > 0 ? Math.round((convertis / prospects.length) * 100) : 0;
 
+  // --- 3 premiers éléments par carte d'aperçu ---
+  const apercuDevis = devis.slice(0, 3).map((d) => ({
+    texte: `${d.numero} — ${d.client?.nom || "—"}`,
+    sousTexte: LABEL[d.statut] || d.statut,
+    couleur: COULEUR_BARRE[d.statut],
+  }));
+  const apercuFactures = factures.slice(0, 3).map((f) => ({
+    texte: `${f.numero} — ${f.client?.nom || "—"}`,
+    sousTexte: LABEL[f.statut] || f.statut,
+    couleur: COULEUR_BARRE[f.statut],
+  }));
+  const apercuProspects = prospects.slice(0, 3).map((p) => ({
+    texte: p.nom,
+    sousTexte: LABEL[p.statut] || p.statut,
+    couleur: COULEUR_BARRE[p.statut],
+  }));
+  const apercuTaches = taches.slice(0, 3).map((t) => ({
+    texte: t.titre,
+    sousTexte: LABEL[t.statut] || t.statut,
+    couleur: COULEUR_BARRE[t.statut],
+  }));
+
   return (
     <>
       <NavBar />
@@ -192,7 +261,7 @@ export default function DashboardPage() {
           <p className="text-sm text-textMuted">Chargement…</p>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-            {/* Colonne principale : KPIs + graphiques */}
+            {/* Colonne principale : KPIs + graphiques + aperçus */}
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <KpiCard label="Clients" valeur={String(clients.length)} />
@@ -221,6 +290,13 @@ export default function DashboardPage() {
                   valeur={String(prospectsActifs)}
                   sousLabel={`${tauxConversion}% de conversion`}
                 />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <AperculCard titre="Devis" lien="/devis" items={apercuDevis} />
+                <AperculCard titre="Prospects" lien="/prospects" items={apercuProspects} />
+                <AperculCard titre="Factures" lien="/factures" items={apercuFactures} />
+                <AperculCard titre="Tâches" lien="/taches" items={apercuTaches} />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
