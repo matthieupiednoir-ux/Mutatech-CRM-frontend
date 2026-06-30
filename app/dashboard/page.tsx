@@ -63,6 +63,61 @@ function repartir(items: string[]): { statut: string; count: number }[] {
     .sort((a, b) => b.count - a.count);
 }
 
+// --- Identifiants stables des cartes (pour la personnalisation) ---
+const ORDRE_PAR_DEFAUT = [
+  "kpi-clients",
+  "kpi-ca-signe",
+  "kpi-en-attente",
+  "kpi-facture",
+  "kpi-taches",
+  "kpi-prospects",
+  "apercu-devis",
+  "apercu-prospects",
+  "apercu-factures",
+  "apercu-taches",
+  "graph-devis",
+  "graph-prospects",
+  "graph-factures",
+  "graph-taches",
+];
+
+const TITRES_CARTES: Record<string, string> = {
+  "kpi-clients": "KPI · Clients",
+  "kpi-ca-signe": "KPI · CA signé",
+  "kpi-en-attente": "KPI · En attente signature",
+  "kpi-facture": "KPI · Facturé",
+  "kpi-taches": "KPI · Tâches accomplies",
+  "kpi-prospects": "KPI · Prospects actifs",
+  "apercu-devis": "Aperçu · Devis",
+  "apercu-prospects": "Aperçu · Prospects",
+  "apercu-factures": "Aperçu · Factures",
+  "apercu-taches": "Aperçu · Tâches",
+  "graph-devis": "Graphique · Devis par statut",
+  "graph-prospects": "Graphique · Prospects par statut",
+  "graph-factures": "Graphique · Factures par statut",
+  "graph-taches": "Graphique · Tâches par statut",
+};
+
+const STORAGE_KEY = "mutatech-dashboard-cartes-v1";
+
+function chargerConfig(): { ordre: string[]; masquees: string[] } {
+  if (typeof window === "undefined") return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
+  try {
+    const brut = localStorage.getItem(STORAGE_KEY);
+    if (!brut) return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
+    const parsed = JSON.parse(brut);
+    // Ajoute en fin de liste toute nouvelle carte qui n'existerait pas encore
+    // dans la config sauvegardée (ex: après une mise à jour du dashboard).
+    const ordreComplet = [
+      ...parsed.ordre.filter((id: string) => ORDRE_PAR_DEFAUT.includes(id)),
+      ...ORDRE_PAR_DEFAUT.filter((id) => !parsed.ordre.includes(id)),
+    ];
+    return { ordre: ordreComplet, masquees: parsed.masquees || [] };
+  } catch {
+    return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
+  }
+}
+
 function MiniBarChart({
   titre,
   donnees,
@@ -127,25 +182,22 @@ function KpiCard({
   );
 }
 
-// Carte d'aperçu : titre, lien vers la page, et les 3 premiers éléments
-// (cliquable dans son ensemble pour aller voir la liste complète).
 function AperculCard({
   titre,
   lien,
   items,
+  modePerso,
 }: {
   titre: string;
   lien: string;
   items: { texte: string; sousTexte?: string; couleur?: string }[];
+  modePerso: boolean;
 }) {
-  return (
-    <Link
-      href={lien}
-      className="block rounded-xl border border-line bg-surface p-4 transition hover:border-violet/50"
-    >
+  const contenu = (
+    <>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display text-sm text-textPrimary">{titre}</h3>
-        <span className="text-xs text-violet">Voir tout →</span>
+        {!modePerso && <span className="text-xs text-violet">Voir tout →</span>}
       </div>
       {items.length === 0 ? (
         <p className="text-xs text-textMuted">Rien pour l'instant.</p>
@@ -169,7 +221,67 @@ function AperculCard({
           ))}
         </div>
       )}
+    </>
+  );
+
+  if (modePerso) {
+    return <div className="rounded-xl border border-line bg-surface p-4">{contenu}</div>;
+  }
+  return (
+    <Link
+      href={lien}
+      className="block rounded-xl border border-line bg-surface p-4 transition hover:border-violet/50"
+    >
+      {contenu}
     </Link>
+  );
+}
+
+// --- Carte de personnalisation : poignée de déplacement + bouton masquer ---
+function CarteReorganisable({
+  id,
+  index,
+  draggedId,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onMasquer,
+  children,
+}: {
+  id: string;
+  index: number;
+  draggedId: string | null;
+  onDragStart: (id: string) => void;
+  onDragOver: (id: string) => void;
+  onDrop: () => void;
+  onMasquer: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={() => onDragStart(id)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onDragOver(id);
+      }}
+      onDrop={onDrop}
+      className={`relative rounded-xl ring-2 transition ${
+        draggedId === id ? "opacity-40 ring-violet" : "ring-transparent"
+      }`}
+    >
+      <div className="pointer-events-none absolute -top-2 left-3 z-10 flex items-center gap-1.5 rounded-full border border-violet/40 bg-ink px-2 py-0.5 text-[10px] text-violet">
+        <span className="cursor-grab">⠿</span> Glisser
+      </div>
+      <button
+        onClick={() => onMasquer(id)}
+        className="absolute -top-2 right-3 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-amber/40 bg-ink text-[10px] text-amber hover:bg-amber/10"
+        title="Masquer cette carte"
+      >
+        ✕
+      </button>
+      {children}
+    </div>
   );
 }
 
@@ -181,6 +293,55 @@ export default function DashboardPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [ordre, setOrdre] = useState<string[]>(ORDRE_PAR_DEFAUT);
+  const [masquees, setMasquees] = useState<string[]>([]);
+  const [modePerso, setModePerso] = useState(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [survolId, setSurvolId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const config = chargerConfig();
+    setOrdre(config.ordre);
+    setMasquees(config.masquees);
+  }, []);
+
+  function sauvegarder(nouvelOrdre: string[], nouvellesMasquees: string[]) {
+    setOrdre(nouvelOrdre);
+    setMasquees(nouvellesMasquees);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ordre: nouvelOrdre, masquees: nouvellesMasquees })
+    );
+  }
+
+  function handleDrop() {
+    if (!draggedId || !survolId || draggedId === survolId) {
+      setDraggedId(null);
+      setSurvolId(null);
+      return;
+    }
+    const nouvelOrdre = [...ordre];
+    const depuis = nouvelOrdre.indexOf(draggedId);
+    const vers = nouvelOrdre.indexOf(survolId);
+    nouvelOrdre.splice(depuis, 1);
+    nouvelOrdre.splice(vers, 0, draggedId);
+    sauvegarder(nouvelOrdre, masquees);
+    setDraggedId(null);
+    setSurvolId(null);
+  }
+
+  function masquerCarte(id: string) {
+    sauvegarder(ordre, [...masquees, id]);
+  }
+
+  function reafficherCarte(id: string) {
+    sauvegarder(ordre, masquees.filter((m) => m !== id));
+  }
+
+  function reinitialiser() {
+    sauvegarder(ORDRE_PAR_DEFAUT, []);
+  }
 
   useEffect(() => {
     Promise.all([
@@ -223,7 +384,6 @@ export default function DashboardPage() {
   const tauxConversion =
     prospects.length > 0 ? Math.round((convertis / prospects.length) * 100) : 0;
 
-  // --- 3 premiers éléments par carte d'aperçu ---
   const apercuDevis = devis.slice(0, 3).map((d) => ({
     texte: `${d.numero} — ${d.client?.nom || "—"}`,
     sousTexte: LABEL[d.statut] || d.statut,
@@ -245,11 +405,108 @@ export default function DashboardPage() {
     couleur: COULEUR_BARRE[t.statut],
   }));
 
+  // Rendu de chaque carte par son identifiant — un seul endroit à modifier
+  // si on ajoute une nouvelle carte un jour.
+  function rendreCarte(id: string): React.ReactNode {
+    switch (id) {
+      case "kpi-clients":
+        return <KpiCard label="Clients" valeur={String(clients.length)} />;
+      case "kpi-ca-signe":
+        return (
+          <KpiCard label="CA signé (devis)" valeur={`${caSigne.toFixed(0)} €`} couleur="text-teal" />
+        );
+      case "kpi-en-attente":
+        return (
+          <KpiCard
+            label="En attente signature"
+            valeur={`${caEnAttente.toFixed(0)} €`}
+            couleur="text-amber"
+          />
+        );
+      case "kpi-facture":
+        return <KpiCard label="Facturé" valeur={`${caFacture.toFixed(0)} €`} couleur="text-violet" />;
+      case "kpi-taches":
+        return (
+          <KpiCard
+            label="Tâches accomplies"
+            valeur={`${pctTaches}%`}
+            sousLabel={`${tachesDone}/${taches.length}`}
+          />
+        );
+      case "kpi-prospects":
+        return (
+          <KpiCard
+            label="Prospects actifs"
+            valeur={String(prospectsActifs)}
+            sousLabel={`${tauxConversion}% de conversion`}
+          />
+        );
+      case "apercu-devis":
+        return <AperculCard titre="Devis" lien="/devis" items={apercuDevis} modePerso={modePerso} />;
+      case "apercu-prospects":
+        return (
+          <AperculCard titre="Prospects" lien="/prospects" items={apercuProspects} modePerso={modePerso} />
+        );
+      case "apercu-factures":
+        return (
+          <AperculCard titre="Factures" lien="/factures" items={apercuFactures} modePerso={modePerso} />
+        );
+      case "apercu-taches":
+        return <AperculCard titre="Tâches" lien="/taches" items={apercuTaches} modePerso={modePerso} />;
+      case "graph-devis":
+        return <MiniBarChart titre="Devis par statut" donnees={repartir(devis.map((d) => d.statut))} />;
+      case "graph-prospects":
+        return (
+          <MiniBarChart
+            titre="Prospects par statut"
+            donnees={repartir(prospects.map((p) => p.statut))}
+          />
+        );
+      case "graph-factures":
+        return (
+          <MiniBarChart titre="Factures par statut" donnees={repartir(factures.map((f) => f.statut))} />
+        );
+      case "graph-taches":
+        return <MiniBarChart titre="Tâches par statut" donnees={repartir(taches.map((t) => t.statut))} />;
+      default:
+        return null;
+    }
+  }
+
+  const cartesVisibles = ordre.filter((id) => !masquees.includes(id));
+
   return (
     <>
       <NavBar />
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <h1 className="mb-6 font-display text-2xl text-textPrimary">Tableau de bord</h1>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-display text-2xl text-textPrimary">Tableau de bord</h1>
+          <div className="flex items-center gap-2">
+            {modePerso && masquees.length > 0 && (
+              <span className="text-xs text-textMuted">
+                {masquees.length} carte(s) masquée(s)
+              </span>
+            )}
+            {modePerso && (
+              <button
+                onClick={reinitialiser}
+                className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary"
+              >
+                Réinitialiser
+              </button>
+            )}
+            <button
+              onClick={() => setModePerso((v) => !v)}
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium ${
+                modePerso
+                  ? "bg-violet text-white hover:bg-violet/90"
+                  : "border border-line text-textMuted hover:text-textPrimary"
+              }`}
+            >
+              {modePerso ? "✓ Terminer" : "⚙ Personnaliser"}
+            </button>
+          </div>
+        </div>
 
         {error && (
           <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
@@ -257,66 +514,105 @@ export default function DashboardPage() {
           </p>
         )}
 
+        {modePerso && masquees.length > 0 && (
+          <div className="mb-6 rounded-xl border border-dashed border-line bg-surface/50 p-4">
+            <p className="mb-2 text-xs uppercase tracking-wide text-textMuted">
+              Cartes masquées — clique pour réafficher
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {masquees.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => reafficherCarte(id)}
+                  className="rounded-full border border-line px-3 py-1.5 text-xs text-textMuted hover:border-teal hover:text-teal"
+                >
+                  + {TITRES_CARTES[id] || id}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-textMuted">Chargement…</p>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-            {/* Colonne principale : KPIs + graphiques + aperçus */}
+          <div className={`grid gap-6 ${modePerso ? "" : "lg:grid-cols-[1fr_380px]"}`}>
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <KpiCard label="Clients" valeur={String(clients.length)} />
-                <KpiCard
-                  label="CA signé (devis)"
-                  valeur={`${caSigne.toFixed(0)} €`}
-                  couleur="text-teal"
-                />
-                <KpiCard
-                  label="En attente signature"
-                  valeur={`${caEnAttente.toFixed(0)} €`}
-                  couleur="text-amber"
-                />
-                <KpiCard
-                  label="Facturé"
-                  valeur={`${caFacture.toFixed(0)} €`}
-                  couleur="text-violet"
-                />
-                <KpiCard
-                  label="Tâches accomplies"
-                  valeur={`${pctTaches}%`}
-                  sousLabel={`${tachesDone}/${taches.length}`}
-                />
-                <KpiCard
-                  label="Prospects actifs"
-                  valeur={String(prospectsActifs)}
-                  sousLabel={`${tauxConversion}% de conversion`}
-                />
+                {cartesVisibles
+                  .filter((id) => id.startsWith("kpi-"))
+                  .map((id) =>
+                    modePerso ? (
+                      <CarteReorganisable
+                        key={id}
+                        id={id}
+                        index={0}
+                        draggedId={draggedId}
+                        onDragStart={setDraggedId}
+                        onDragOver={setSurvolId}
+                        onDrop={handleDrop}
+                        onMasquer={masquerCarte}
+                      >
+                        {rendreCarte(id)}
+                      </CarteReorganisable>
+                    ) : (
+                      <div key={id}>{rendreCarte(id)}</div>
+                    )
+                  )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <AperculCard titre="Devis" lien="/devis" items={apercuDevis} />
-                <AperculCard titre="Prospects" lien="/prospects" items={apercuProspects} />
-                <AperculCard titre="Factures" lien="/factures" items={apercuFactures} />
-                <AperculCard titre="Tâches" lien="/taches" items={apercuTaches} />
+                {cartesVisibles
+                  .filter((id) => id.startsWith("apercu-"))
+                  .map((id) =>
+                    modePerso ? (
+                      <CarteReorganisable
+                        key={id}
+                        id={id}
+                        index={0}
+                        draggedId={draggedId}
+                        onDragStart={setDraggedId}
+                        onDragOver={setSurvolId}
+                        onDrop={handleDrop}
+                        onMasquer={masquerCarte}
+                      >
+                        {rendreCarte(id)}
+                      </CarteReorganisable>
+                    ) : (
+                      <div key={id}>{rendreCarte(id)}</div>
+                    )
+                  )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <MiniBarChart titre="Devis par statut" donnees={repartir(devis.map((d) => d.statut))} />
-                <MiniBarChart
-                  titre="Prospects par statut"
-                  donnees={repartir(prospects.map((p) => p.statut))}
-                />
-                <MiniBarChart
-                  titre="Factures par statut"
-                  donnees={repartir(factures.map((f) => f.statut))}
-                />
-                <MiniBarChart titre="Tâches par statut" donnees={repartir(taches.map((t) => t.statut))} />
+                {cartesVisibles
+                  .filter((id) => id.startsWith("graph-"))
+                  .map((id) =>
+                    modePerso ? (
+                      <CarteReorganisable
+                        key={id}
+                        id={id}
+                        index={0}
+                        draggedId={draggedId}
+                        onDragStart={setDraggedId}
+                        onDragOver={setSurvolId}
+                        onDrop={handleDrop}
+                        onMasquer={masquerCarte}
+                      >
+                        {rendreCarte(id)}
+                      </CarteReorganisable>
+                    ) : (
+                      <div key={id}>{rendreCarte(id)}</div>
+                    )
+                  )}
               </div>
             </div>
 
-            {/* Colonne latérale : Agent IA */}
-            <div className="h-[calc(100vh-160px)] lg:sticky lg:top-6">
-              <ChatAgentPanel compact />
-            </div>
+            {!modePerso && (
+              <div className="h-[calc(100vh-160px)] lg:sticky lg:top-6">
+                <ChatAgentPanel compact />
+              </div>
+            )}
           </div>
         )}
       </main>
