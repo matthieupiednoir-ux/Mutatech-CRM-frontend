@@ -19,21 +19,17 @@ import {
 import { Client, Devis, Facture, Tache, Prospect, RecapEcheances } from "@/lib/types";
 
 const COULEUR_BARRE: Record<string, string> = {
-  // Devis
   brouillon: "#77778A",
   envoye: "#F0B429",
   accepte: "#5fe0c0",
   refuse: "#EF4444",
-  // Factures
   envoyee: "#F0B429",
   payee: "#5fe0c0",
-  // Prospects
   a_contacter: "#77778A",
   contacte: "#a89eff",
   rdv_planifie: "#F0B429",
   converti: "#5fe0c0",
   perdu: "#EF4444",
-  // Tâches
   todo: "#77778A",
   prog: "#F0B429",
   done: "#5fe0c0",
@@ -66,7 +62,9 @@ function repartir(items: string[]): { statut: string; count: number }[] {
     .sort((a, b) => b.count - a.count);
 }
 
-// --- Identifiants stables des cartes (pour la personnalisation) ---
+// --- Cartes du dashboard : identifiants stables + taille par défaut ---
+type Taille = "small" | "normal" | "large";
+
 const ORDRE_PAR_DEFAUT = [
   "kpi-clients",
   "kpi-ca-signe",
@@ -84,6 +82,24 @@ const ORDRE_PAR_DEFAUT = [
   "graph-factures",
   "graph-taches",
 ];
+
+const TAILLE_PAR_DEFAUT: Record<string, Taille> = {
+  "kpi-clients": "small",
+  "kpi-ca-signe": "small",
+  "kpi-en-attente": "small",
+  "kpi-facture": "small",
+  "kpi-taches": "small",
+  "kpi-prospects": "small",
+  echeances: "large",
+  "apercu-devis": "normal",
+  "apercu-prospects": "normal",
+  "apercu-factures": "normal",
+  "apercu-taches": "normal",
+  "graph-devis": "normal",
+  "graph-prospects": "normal",
+  "graph-factures": "normal",
+  "graph-taches": "normal",
+};
 
 const TITRES_CARTES: Record<string, string> = {
   "kpi-clients": "KPI · Clients",
@@ -103,21 +119,45 @@ const TITRES_CARTES: Record<string, string> = {
   "graph-taches": "Graphique · Tâches par statut",
 };
 
-const STORAGE_KEY = "mutatech-dashboard-cartes-v1";
+const SPAN_CLASSE: Record<Taille, string> = {
+  small: "col-span-6 sm:col-span-3 lg:col-span-2",
+  normal: "col-span-6 lg:col-span-3",
+  large: "col-span-6",
+};
 
-function chargerConfig(): { ordre: string[]; masquees: string[] } {
-  if (typeof window === "undefined") return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
+const TAILLE_LABEL: Record<Taille, string> = {
+  small: "Petite",
+  normal: "Normale",
+  large: "Large",
+};
+
+const STORAGE_KEY = "mutatech-dashboard-cartes-v2";
+
+interface ConfigDashboard {
+  ordre: string[];
+  masquees: string[];
+  tailles: Record<string, Taille>;
+}
+
+function chargerConfig(): ConfigDashboard {
+  if (typeof window === "undefined") {
+    return { ordre: ORDRE_PAR_DEFAUT, masquees: [], tailles: TAILLE_PAR_DEFAUT };
+  }
   try {
     const brut = localStorage.getItem(STORAGE_KEY);
-    if (!brut) return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
+    if (!brut) return { ordre: ORDRE_PAR_DEFAUT, masquees: [], tailles: TAILLE_PAR_DEFAUT };
     const parsed = JSON.parse(brut);
     const ordreComplet = [
       ...parsed.ordre.filter((id: string) => ORDRE_PAR_DEFAUT.includes(id)),
       ...ORDRE_PAR_DEFAUT.filter((id) => !parsed.ordre.includes(id)),
     ];
-    return { ordre: ordreComplet, masquees: parsed.masquees || [] };
+    return {
+      ordre: ordreComplet,
+      masquees: parsed.masquees || [],
+      tailles: { ...TAILLE_PAR_DEFAUT, ...(parsed.tailles || {}) },
+    };
   } catch {
-    return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
+    return { ordre: ORDRE_PAR_DEFAUT, masquees: [], tailles: TAILLE_PAR_DEFAUT };
   }
 }
 
@@ -131,14 +171,14 @@ function MiniBarChart({
   const total = donnees.reduce((s, d) => s + d.count, 0);
   if (total === 0) {
     return (
-      <div className="rounded-xl border border-line bg-surface p-4">
+      <div>
         <h3 className="mb-3 font-display text-sm text-textPrimary">{titre}</h3>
         <p className="text-xs text-textMuted">Aucune donnée pour l'instant.</p>
       </div>
     );
   }
   return (
-    <div className="rounded-xl border border-line bg-surface p-4">
+    <div>
       <h3 className="mb-3 font-display text-sm text-textPrimary">{titre}</h3>
       <div className="space-y-2">
         {donnees.map((d) => (
@@ -177,7 +217,7 @@ function KpiCard({
   couleur?: string;
 }) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-4">
+    <div>
       <p className="text-[11px] uppercase tracking-wide text-textMuted">{label}</p>
       <p className={`mt-1 font-display text-2xl font-bold ${couleur}`}>{valeur}</p>
       {sousLabel && <p className="mt-0.5 text-[11px] text-textMuted">{sousLabel}</p>}
@@ -227,20 +267,14 @@ function AperculCard({
     </>
   );
 
-  if (modePerso) {
-    return <div className="rounded-xl border border-line bg-surface p-4">{contenu}</div>;
-  }
+  if (modePerso) return <div>{contenu}</div>;
   return (
-    <Link
-      href={lien}
-      className="block rounded-xl border border-line bg-surface p-4 transition hover:border-violet/50"
-    >
+    <Link href={lien} className="-m-4 block rounded-xl p-4 transition hover:bg-surfaceAlt/40">
       {contenu}
     </Link>
   );
 }
 
-// --- Widget Échéances & Relances ---
 function EcheancesCard({ modePerso }: { modePerso: boolean }) {
   const [recap, setRecap] = useState<RecapEcheances | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,7 +297,7 @@ function EcheancesCard({ modePerso }: { modePerso: boolean }) {
       await relancerFacture(factureId);
       charger();
     } catch {
-      // erreur affichée nulle part ici, volontairement discret sur le dashboard
+      // discret sur le dashboard
     } finally {
       setActionEnCours(null);
     }
@@ -275,7 +309,7 @@ function EcheancesCard({ modePerso }: { modePerso: boolean }) {
       await genererFactureMois(devisId);
       charger();
     } catch {
-      // idem
+      // discret
     } finally {
       setActionEnCours(null);
     }
@@ -287,14 +321,14 @@ function EcheancesCard({ modePerso }: { modePerso: boolean }) {
     (recap?.abonnements_a_facturer.length || 0);
 
   return (
-    <div className="rounded-xl border border-line bg-surface p-4 sm:col-span-2">
+    <div>
       <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances &amp; Relances</h3>
       {loading ? (
         <p className="text-xs text-textMuted">Chargement…</p>
       ) : total === 0 ? (
         <p className="text-xs text-textMuted">Tout est à jour — rien à signaler.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-4 sm:grid-cols-3">
           {recap!.en_retard.length > 0 && (
             <div>
               <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber">
@@ -387,47 +421,96 @@ function EcheancesCard({ modePerso }: { modePerso: boolean }) {
   );
 }
 
-function CarteReorganisable({
+// --- Enveloppe d'édition d'une carte : poignée de glisser-déposer,
+// taille, masquer, et boutons ↑/↓ en solution de repli (tactile, ou si
+// le glisser-déposer pose souci sur certains navigateurs). ---
+function CarteEditable({
   id,
+  taille,
   draggedId,
+  dropCibleId,
+  peutMonter,
+  peutDescendre,
   onDragStart,
   onDragOver,
+  onDragEnd,
   onDrop,
   onMasquer,
+  onChangerTaille,
+  onMonter,
+  onDescendre,
   children,
 }: {
   id: string;
+  taille: Taille;
   draggedId: string | null;
-  onDragStart: (id: string) => void;
-  onDragOver: (id: string) => void;
-  onDrop: () => void;
+  dropCibleId: string | null;
+  peutMonter: boolean;
+  peutDescendre: boolean;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragOver: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
+  onDrop: (e: React.DragEvent, id: string) => void;
   onMasquer: (id: string) => void;
+  onChangerTaille: (id: string) => void;
+  onMonter: (id: string) => void;
+  onDescendre: (id: string) => void;
   children: React.ReactNode;
 }) {
+  const enTrain = draggedId === id;
+  const survole = dropCibleId === id && draggedId !== id;
+
   return (
     <div
-      draggable
-      onDragStart={() => onDragStart(id)}
-      onDragOver={(e) => {
-        e.preventDefault();
-        onDragOver(id);
-      }}
-      onDrop={onDrop}
-      className={`relative rounded-xl ring-2 transition ${
-        draggedId === id ? "opacity-40 ring-violet" : "ring-transparent"
+      className={`${SPAN_CLASSE[taille]} rounded-xl border-2 border-dashed bg-surface/60 p-3 transition ${
+        enTrain ? "opacity-30" : survole ? "border-violet bg-violet/5" : "border-line/60"
       }`}
     >
-      <div className="pointer-events-none absolute -top-2 left-3 z-10 flex items-center gap-1.5 rounded-full border border-violet/40 bg-ink px-2 py-0.5 text-[10px] text-violet">
-        <span className="cursor-grab">⠿</span> Glisser
-      </div>
-      <button
-        onClick={() => onMasquer(id)}
-        className="absolute -top-2 right-3 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-amber/40 bg-ink text-[10px] text-amber hover:bg-amber/10"
-        title="Masquer cette carte"
+      <div
+        draggable
+        onDragStart={(e) => onDragStart(e, id)}
+        onDragOver={(e) => onDragOver(e, id)}
+        onDragEnd={onDragEnd}
+        onDrop={(e) => onDrop(e, id)}
+        className="mb-2 flex cursor-grab items-center justify-between gap-1 rounded-lg bg-surfaceAlt px-2 py-1.5 active:cursor-grabbing"
       >
-        ✕
-      </button>
-      {children}
+        <span className="flex items-center gap-1.5 text-[11px] text-textMuted">
+          <span className="text-sm leading-none">⠿</span> Glisser
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onMonter(id)}
+            disabled={!peutMonter}
+            title="Monter"
+            className="rounded px-1.5 py-0.5 text-[11px] text-textMuted hover:text-textPrimary disabled:opacity-20"
+          >
+            ↑
+          </button>
+          <button
+            onClick={() => onDescendre(id)}
+            disabled={!peutDescendre}
+            title="Descendre"
+            className="rounded px-1.5 py-0.5 text-[11px] text-textMuted hover:text-textPrimary disabled:opacity-20"
+          >
+            ↓
+          </button>
+          <button
+            onClick={() => onChangerTaille(id)}
+            title="Changer la taille"
+            className="rounded border border-line px-2 py-0.5 text-[10px] text-textMuted hover:text-textPrimary"
+          >
+            {TAILLE_LABEL[taille]}
+          </button>
+          <button
+            onClick={() => onMasquer(id)}
+            title="Masquer cette carte"
+            className="rounded px-1.5 py-0.5 text-[11px] text-amber hover:bg-amber/10"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+      <div className="rounded-xl border border-line bg-surface p-4">{children}</div>
     </div>
   );
 }
@@ -443,51 +526,112 @@ export default function DashboardPage() {
 
   const [ordre, setOrdre] = useState<string[]>(ORDRE_PAR_DEFAUT);
   const [masquees, setMasquees] = useState<string[]>([]);
+  const [tailles, setTailles] = useState<Record<string, Taille>>(TAILLE_PAR_DEFAUT);
   const [modePerso, setModePerso] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [survolId, setSurvolId] = useState<string | null>(null);
+  const [dropCibleId, setDropCibleId] = useState<string | null>(null);
 
   useEffect(() => {
     const config = chargerConfig();
     setOrdre(config.ordre);
     setMasquees(config.masquees);
+    setTailles(config.tailles);
   }, []);
 
-  function sauvegarder(nouvelOrdre: string[], nouvellesMasquees: string[]) {
+  function sauvegarder(
+    nouvelOrdre: string[],
+    nouvellesMasquees: string[],
+    nouvellesTailles: Record<string, Taille>
+  ) {
     setOrdre(nouvelOrdre);
     setMasquees(nouvellesMasquees);
+    setTailles(nouvellesTailles);
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ ordre: nouvelOrdre, masquees: nouvellesMasquees })
+      JSON.stringify({ ordre: nouvelOrdre, masquees: nouvellesMasquees, tailles: nouvellesTailles })
     );
   }
 
-  function handleDrop() {
-    if (!draggedId || !survolId || draggedId === survolId) {
-      setDraggedId(null);
-      setSurvolId(null);
+  // --- Glisser-déposer (HTML5 natif, mais correctement câblé cette fois) ---
+  function handleDragStart(e: React.DragEvent, id: string) {
+    e.dataTransfer.setData("text/plain", id); // indispensable pour que Firefox autorise le drop
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedId(id);
+  }
+
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault(); // indispensable pour autoriser le drop
+    e.dataTransfer.dropEffect = "move";
+    if (id !== dropCibleId) setDropCibleId(id);
+  }
+
+  function handleDragEnd() {
+    setDraggedId(null);
+    setDropCibleId(null);
+  }
+
+  function handleDrop(e: React.DragEvent, cibleId: string) {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData("text/plain") || draggedId;
+    if (!sourceId || sourceId === cibleId) {
+      handleDragEnd();
       return;
     }
     const nouvelOrdre = [...ordre];
-    const depuis = nouvelOrdre.indexOf(draggedId);
-    const vers = nouvelOrdre.indexOf(survolId);
+    const depuis = nouvelOrdre.indexOf(sourceId);
+    const vers = nouvelOrdre.indexOf(cibleId);
+    if (depuis === -1 || vers === -1) {
+      handleDragEnd();
+      return;
+    }
     nouvelOrdre.splice(depuis, 1);
-    nouvelOrdre.splice(vers, 0, draggedId);
-    sauvegarder(nouvelOrdre, masquees);
-    setDraggedId(null);
-    setSurvolId(null);
+    nouvelOrdre.splice(vers, 0, sourceId);
+    sauvegarder(nouvelOrdre, masquees, tailles);
+    handleDragEnd();
+  }
+
+  // --- Solution de repli fiable : monter/descendre d'un cran ---
+  function monter(id: string) {
+    const visibles = ordre.filter((x) => !masquees.includes(x));
+    const indexVisible = visibles.indexOf(id);
+    if (indexVisible <= 0) return;
+    const voisin = visibles[indexVisible - 1];
+    const nouvelOrdre = [...ordre];
+    const iId = nouvelOrdre.indexOf(id);
+    const iVoisin = nouvelOrdre.indexOf(voisin);
+    [nouvelOrdre[iId], nouvelOrdre[iVoisin]] = [nouvelOrdre[iVoisin], nouvelOrdre[iId]];
+    sauvegarder(nouvelOrdre, masquees, tailles);
+  }
+
+  function descendre(id: string) {
+    const visibles = ordre.filter((x) => !masquees.includes(x));
+    const indexVisible = visibles.indexOf(id);
+    if (indexVisible === -1 || indexVisible >= visibles.length - 1) return;
+    const voisin = visibles[indexVisible + 1];
+    const nouvelOrdre = [...ordre];
+    const iId = nouvelOrdre.indexOf(id);
+    const iVoisin = nouvelOrdre.indexOf(voisin);
+    [nouvelOrdre[iId], nouvelOrdre[iVoisin]] = [nouvelOrdre[iVoisin], nouvelOrdre[iId]];
+    sauvegarder(nouvelOrdre, masquees, tailles);
+  }
+
+  function changerTaille(id: string) {
+    const ordreTailles: Taille[] = ["small", "normal", "large"];
+    const actuelle = tailles[id] || "normal";
+    const suivante = ordreTailles[(ordreTailles.indexOf(actuelle) + 1) % ordreTailles.length];
+    sauvegarder(ordre, masquees, { ...tailles, [id]: suivante });
   }
 
   function masquerCarte(id: string) {
-    sauvegarder(ordre, [...masquees, id]);
+    sauvegarder(ordre, [...masquees, id], tailles);
   }
 
   function reafficherCarte(id: string) {
-    sauvegarder(ordre, masquees.filter((m) => m !== id));
+    sauvegarder(ordre, masquees.filter((m) => m !== id), tailles);
   }
 
   function reinitialiser() {
-    sauvegarder(ORDRE_PAR_DEFAUT, []);
+    sauvegarder(ORDRE_PAR_DEFAUT, [], TAILLE_PAR_DEFAUT);
   }
 
   useEffect(() => {
@@ -661,6 +805,14 @@ export default function DashboardPage() {
           </p>
         )}
 
+        {modePerso && (
+          <p className="mb-4 text-xs text-textMuted">
+            Glisse une carte par sa poignée <span className="text-sm">⠿</span> pour la
+            déplacer, ou utilise les flèches ↑↓ — change sa taille avec le bouton
+            dédié, ou masque-la avec ✕.
+          </p>
+        )}
+
         {modePerso && masquees.length > 0 && (
           <div className="mb-6 rounded-xl border border-dashed border-line bg-surface/50 p-4">
             <p className="mb-2 text-xs uppercase tracking-wide text-textMuted">
@@ -684,94 +836,37 @@ export default function DashboardPage() {
           <p className="text-sm text-textMuted">Chargement…</p>
         ) : (
           <div className={`grid gap-6 ${modePerso ? "" : "lg:grid-cols-[1fr_380px]"}`}>
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {cartesVisibles
-                  .filter((id) => id.startsWith("kpi-"))
-                  .map((id) =>
-                    modePerso ? (
-                      <CarteReorganisable
-                        key={id}
-                        id={id}
-                        draggedId={draggedId}
-                        onDragStart={setDraggedId}
-                        onDragOver={setSurvolId}
-                        onDrop={handleDrop}
-                        onMasquer={masquerCarte}
-                      >
-                        {rendreCarte(id)}
-                      </CarteReorganisable>
-                    ) : (
-                      <div key={id}>{rendreCarte(id)}</div>
-                    )
-                  )}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {cartesVisibles
-                  .filter((id) => id === "echeances")
-                  .map((id) =>
-                    modePerso ? (
-                      <CarteReorganisable
-                        key={id}
-                        id={id}
-                        draggedId={draggedId}
-                        onDragStart={setDraggedId}
-                        onDragOver={setSurvolId}
-                        onDrop={handleDrop}
-                        onMasquer={masquerCarte}
-                      >
-                        {rendreCarte(id)}
-                      </CarteReorganisable>
-                    ) : (
-                      <div key={id}>{rendreCarte(id)}</div>
-                    )
-                  )}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {cartesVisibles
-                  .filter((id) => id.startsWith("apercu-"))
-                  .map((id) =>
-                    modePerso ? (
-                      <CarteReorganisable
-                        key={id}
-                        id={id}
-                        draggedId={draggedId}
-                        onDragStart={setDraggedId}
-                        onDragOver={setSurvolId}
-                        onDrop={handleDrop}
-                        onMasquer={masquerCarte}
-                      >
-                        {rendreCarte(id)}
-                      </CarteReorganisable>
-                    ) : (
-                      <div key={id}>{rendreCarte(id)}</div>
-                    )
-                  )}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {cartesVisibles
-                  .filter((id) => id.startsWith("graph-"))
-                  .map((id) =>
-                    modePerso ? (
-                      <CarteReorganisable
-                        key={id}
-                        id={id}
-                        draggedId={draggedId}
-                        onDragStart={setDraggedId}
-                        onDragOver={setSurvolId}
-                        onDrop={handleDrop}
-                        onMasquer={masquerCarte}
-                      >
-                        {rendreCarte(id)}
-                      </CarteReorganisable>
-                    ) : (
-                      <div key={id}>{rendreCarte(id)}</div>
-                    )
-                  )}
-              </div>
+            <div className="grid grid-cols-6 gap-4">
+              {cartesVisibles.map((id, index) =>
+                modePerso ? (
+                  <CarteEditable
+                    key={id}
+                    id={id}
+                    taille={tailles[id] || "normal"}
+                    draggedId={draggedId}
+                    dropCibleId={dropCibleId}
+                    peutMonter={index > 0}
+                    peutDescendre={index < cartesVisibles.length - 1}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                    onDrop={handleDrop}
+                    onMasquer={masquerCarte}
+                    onChangerTaille={changerTaille}
+                    onMonter={monter}
+                    onDescendre={descendre}
+                  >
+                    {rendreCarte(id)}
+                  </CarteEditable>
+                ) : (
+                  <div
+                    key={id}
+                    className={`${SPAN_CLASSE[tailles[id] || "normal"]} rounded-xl border border-line bg-surface p-4`}
+                  >
+                    {rendreCarte(id)}
+                  </div>
+                )
+              )}
             </div>
 
             {!modePerso && (
