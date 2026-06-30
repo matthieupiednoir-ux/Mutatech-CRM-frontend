@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
+import CsvImportPanel from "@/components/CsvImportPanel";
 import { Prospect, ProspectInput } from "@/lib/types";
 import {
   getProspects,
@@ -10,487 +11,398 @@ import {
   supprimerProspect,
   convertirEnClient,
   importerProspectsLot,
-  ApiError,
 } from "@/lib/api";
 import { PROSPECTS_BRUTS, mapperProspect } from "@/lib/seed-prospects";
 
-const PROSPECT_VIDE: ProspectInput = {
-  nom: "",
-  secteur: "SSIAD",
-  email: "",
-  telephone: "",
-  adresse: "",
-  statut: "a_contacter",
-  notes: "",
-};
-
-const STATUT_LABEL: Record<string, string> = {
-  a_contacter: "À contacter",
-  contacte: "Contacté",
-  rdv_planifie: "RDV planifié",
-  converti: "Converti",
-  perdu: "Perdu",
-};
-
-const STATUT_COULEUR: Record<string, string> = {
-  a_contacter: "text-textMuted border-line",
-  contacte: "text-violet border-violet/40 bg-violet/10",
-  rdv_planifie: "text-amber border-amber/40 bg-amber/10",
-  converti: "text-teal border-teal/40 bg-teal/10",
-  perdu: "text-textMuted border-line opacity-60",
-};
-
-const FILTRES_NICHE = [
-  { id: "all", label: "Tous" },
-  { id: "SSIAD", label: "SSIAD" },
-  { id: "Cabinet médical", label: "Médical" },
-  { id: "PSDM", label: "PSDM" },
-  { id: "Artisan", label: "Artisans" },
+// --- Référentiels (souples : on n'impose rien côté backend, juste des options
+// pratiques côté UI) ---
+const SECTEURS = [
+  "SSIAD",
+  "Cabinet médical",
+  "IDEL",
+  "PSDM",
+  "Artisan-BTP",
+  "Artisan",
+  "Autre",
 ];
 
-// Couleurs des points sur la carte par secteur
-const COULEUR_CARTE: Record<string, string> = {
-  SSIAD: "#a89eff",
-  "Cabinet médical": "#a89eff",
-  PSDM: "#f0b429",
-  Artisan: "#5fe0c0",
-  PME: "#77778A",
-  Autre: "#77778A",
-};
+const STATUTS = [
+  { code: "a_contacter", label: "À contacter" },
+  { code: "contacte", label: "Contacté" },
+  { code: "rdv_planifie", label: "RDV planifié" },
+  { code: "en_discussion", label: "En discussion" },
+  { code: "converti", label: "Converti" },
+  { code: "perdu", label: "Perdu" },
+];
 
-declare global {
-  interface Window {
-    L: any;
-  }
+// Colonnes acceptées par l'import CSV. Doit refléter le modèle Prospect réel.
+const CSV_CHAMPS = [
+  { cle: "nom", label: "Nom", requis: true },
+  { cle: "secteur", label: "Secteur" },
+  { cle: "telephone", label: "Téléphone" },
+  { cle: "email", label: "Email" },
+  { cle: "adresse", label: "Adresse" },
+  { cle: "statut", label: "Statut" },
+  { cle: "notes", label: "Notes" },
+];
+
+function labelStatut(code: string) {
+  return STATUTS.find((s) => s.code === code)?.label ?? code;
 }
 
-export default function ProspectsPage() {
+function couleurSecteur(secteur?: string | null): string {
+  if (!secteur) return "#94a3b8";
+  const s = secteur.toLowerCase();
+  if (
+    s.includes("ssiad") ||
+    s.includes("idel") ||
+    s.includes("médical") ||
+    s.includes("medical") ||
+    s.includes("psdm") ||
+    s.includes("infirm") ||
+    s.includes("kiné") ||
+    s.includes("kine")
+  ) {
+    return "#6C63FF"; // violet — santé
+  }
+  if (s.includes("artisan") || s.includes("btp")) {
+    return "#00D4AA"; // teal — artisan/BTP
+  }
+  return "#94a3b8";
+}
+
+export default function PageProspects() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const [formOuvert, setFormOuvert] = useState(false);
-  const [prospectEnEdition, setProspectEnEdition] = useState<string | null>(null);
-  const [form, setForm] = useState<ProspectInput>({ ...PROSPECT_VIDE });
-  const [enregistrement, setEnregistrement] = useState(false);
-  const [conversionEnCours, setConversionEnCours] = useState<string | null>(null);
-  const [importEnCours, setImportEnCours] = useState(false);
-  const [filtreNiche, setFiltreNiche] = useState("all");
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
+
   const [vue, setVue] = useState<"liste" | "carte">("liste");
-  const [geoEnCours, setGeoEnCours] = useState(0);
+  const [filtreSecteur, setFiltreSecteur] = useState<string>("");
+  const [filtreStatut, setFiltreStatut] = useState<string>("");
 
-  const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const layerRef = useRef<any>(null);
-  const prospectsRef = useRef<Prospect[]>([]);
-  prospectsRef.current = prospects;
+  const [formOuvert, setFormOuvert] = useState(false);
+  const [prospectEdition, setProspectEdition] = useState<Prospect | null>(null);
 
-  function charger() {
-    setLoading(true);
-    getProspects()
-      .then(setProspects)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
-      .finally(() => setLoading(false));
+  const [csvOuvert, setCsvOuvert] = useState(false);
+  const [seedEnCours, setSeedEnCours] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  async function recharger() {
+    try {
+      setChargement(true);
+      const data = await getProspects();
+      setProspects(data);
+      setErreur(null);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur de chargement");
+    } finally {
+      setChargement(false);
+    }
   }
 
   useEffect(() => {
-    charger();
+    recharger();
   }, []);
 
-  // --- Carte (chargement Leaflet via CDN, géocodage à la volée) ---
-
-  function chargerLeaflet(): Promise<void> {
-    return new Promise((resolve) => {
-      if (window.L) {
-        resolve();
-        return;
-      }
-      const lien = document.createElement("link");
-      lien.rel = "stylesheet";
-      lien.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
-      document.head.appendChild(lien);
-
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
-      script.onload = () => resolve();
-      document.body.appendChild(script);
+  const prospectsFiltres = useMemo(() => {
+    return prospects.filter((p) => {
+      if (filtreSecteur && p.secteur !== filtreSecteur) return false;
+      if (filtreStatut && p.statut !== filtreStatut) return false;
+      return true;
     });
-  }
+  }, [prospects, filtreSecteur, filtreStatut]);
 
-  function initCarte() {
-    if (!window.L || !mapDivRef.current || mapRef.current) return;
-    mapRef.current = window.L.map(mapDivRef.current).setView([43.85, 7.28], 11);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
-      maxZoom: 19,
-    }).addTo(mapRef.current);
-    layerRef.current = window.L.layerGroup().addTo(mapRef.current);
-    rafraichirMarqueurs();
-  }
-
-  function rafraichirMarqueurs() {
-    if (!layerRef.current) return;
-    layerRef.current.clearLayers();
-    prospectsRef.current.forEach((p) => {
-      if (p.latitude == null || p.longitude == null) return;
-      const couleur = COULEUR_CARTE[p.secteur || "Autre"] || "#77778A";
-      const marker = window.L.circleMarker([p.latitude, p.longitude], {
-        radius: 8,
-        fillColor: couleur,
-        color: "#0A0A0E",
-        weight: 2,
-        fillOpacity: 0.95,
-      });
-      marker.bindPopup(
-        `<strong>${escapeHtml(p.nom)}</strong><br><span style="color:#666">${escapeHtml(p.secteur || "")}</span><br>${escapeHtml(p.adresse || "")}<br>${p.telephone ? `<a href="tel:${p.telephone}">📞 ${p.telephone}</a><br>` : ""}<em>${STATUT_LABEL[p.statut] || p.statut}</em>`
+  // --- Import du seed (les 120 prospects historiques) ---
+  async function handleSeedImport() {
+    if (
+      !confirm(
+        `Importer ${PROSPECTS_BRUTS.length} prospects depuis le seed historique ? ` +
+          `Les doublons éventuels seront créés en plus de l'existant (la déduplication est manuelle ensuite).`
+      )
+    ) {
+      return;
+    }
+    setSeedEnCours(true);
+    setImportMsg(null);
+    try {
+      const data: ProspectInput[] = PROSPECTS_BRUTS.map(
+        (p) => mapperProspect(p) as ProspectInput
       );
-      marker.addTo(layerRef.current);
-    });
-  }
-
-  function escapeHtml(str: string) {
-    const d = document.createElement("div");
-    d.textContent = str;
-    return d.innerHTML;
-  }
-
-  async function geocoderAdresse(adresse: string): Promise<{ lat: number; lng: number } | null> {
-    try {
-      const url =
-        "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
-        encodeURIComponent(adresse);
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data && data[0]) {
-        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      }
+      const crees = await importerProspectsLot(data);
+      setImportMsg(`✓ ${crees.length} prospect(s) importé(s) depuis le seed.`);
+      await recharger();
     } catch (e) {
-      console.warn("Géocodage impossible pour", adresse, e);
-    }
-    return null;
-  }
-
-  async function geocoderManquants() {
-    const manquants = prospectsRef.current.filter(
-      (p) => p.adresse && (p.latitude == null || p.longitude == null)
-    );
-    if (manquants.length === 0) return;
-    setGeoEnCours(manquants.length);
-
-    for (const p of manquants) {
-      const coords = await geocoderAdresse(p.adresse!);
-      if (coords) {
-        try {
-          await modifierProspect(p.id, {
-            nom: p.nom,
-            secteur: p.secteur || undefined,
-            email: p.email || undefined,
-            telephone: p.telephone || undefined,
-            adresse: p.adresse || undefined,
-            latitude: coords.lat,
-            longitude: coords.lng,
-            statut: p.statut,
-            notes: p.notes || undefined,
-          });
-          // Met à jour localement sans tout recharger, pour afficher le marqueur immédiatement
-          prospectsRef.current = prospectsRef.current.map((x) =>
-            x.id === p.id ? { ...x, latitude: coords.lat, longitude: coords.lng } : x
-          );
-          setProspects([...prospectsRef.current]);
-          rafraichirMarqueurs();
-        } catch (e) {
-          console.warn("Sauvegarde des coordonnées échouée pour", p.nom, e);
-        }
-      }
-      setGeoEnCours((n) => Math.max(0, n - 1));
-      // Respecte la limite d'1 requête/seconde de Nominatim (usage gratuit)
-      await new Promise((r) => setTimeout(r, 1100));
+      setImportMsg(`✗ ${e instanceof Error ? e.message : "Erreur"}`);
+    } finally {
+      setSeedEnCours(false);
     }
   }
 
-  useEffect(() => {
-    if (vue !== "carte") return;
-    chargerLeaflet().then(() => {
-      initCarte();
-      setTimeout(() => mapRef.current?.invalidateSize(), 50);
-      geocoderManquants();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vue]);
+  // --- Import CSV (appelé par CsvImportPanel après mapping) ---
+  async function handleCsvImport(lignes: Record<string, string>[]) {
+    if (lignes.length === 0) {
+      throw new Error("Le fichier ne contient aucune ligne.");
+    }
+    const data: ProspectInput[] = lignes
+      .map((l) => ({
+        nom: (l.nom || "").trim(),
+        secteur: l.secteur?.trim() || undefined,
+        telephone: l.telephone?.trim() || undefined,
+        email: l.email?.trim() || undefined,
+        adresse: l.adresse?.trim() || undefined,
+        statut: l.statut?.trim() || "a_contacter",
+        notes: l.notes?.trim() || undefined,
+      }))
+      .filter((p) => p.nom);
 
-  useEffect(() => {
-    if (vue === "carte") rafraichirMarqueurs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prospects]);
+    if (data.length === 0) {
+      throw new Error(
+        "Aucune ligne avec un nom valide — vérifie que la colonne « Nom » est bien associée."
+      );
+    }
 
-  // --- CRUD standard ---
-
-  function ouvrirNouveau() {
-    setForm({ ...PROSPECT_VIDE });
-    setProspectEnEdition(null);
-    setFormOuvert(true);
+    const crees = await importerProspectsLot(data);
+    setImportMsg(`✓ ${crees.length} prospect(s) importé(s) depuis le CSV.`);
+    setCsvOuvert(false);
+    await recharger();
   }
 
-  function ouvrirEdition(prospect: Prospect) {
-    setForm({
-      nom: prospect.nom,
-      secteur: prospect.secteur || "SSIAD",
-      email: prospect.email || "",
-      telephone: prospect.telephone || "",
-      adresse: prospect.adresse || "",
-      statut: prospect.statut,
-      notes: prospect.notes || "",
-    });
-    setProspectEnEdition(prospect.id);
-    setFormOuvert(true);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  // --- Formulaire (création + édition) ---
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setEnregistrement(true);
-    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const input: ProspectInput = {
+      nom: String(fd.get("nom") || "").trim(),
+      secteur: String(fd.get("secteur") || "").trim() || undefined,
+      telephone: String(fd.get("telephone") || "").trim() || undefined,
+      email: String(fd.get("email") || "").trim() || undefined,
+      adresse: String(fd.get("adresse") || "").trim() || undefined,
+      statut: String(fd.get("statut") || "a_contacter"),
+      notes: String(fd.get("notes") || "").trim() || undefined,
+    };
+    if (!input.nom) {
+      alert("Le nom est obligatoire.");
+      return;
+    }
     try {
-      if (prospectEnEdition) {
-        await modifierProspect(prospectEnEdition, form);
+      if (prospectEdition) {
+        await modifierProspect(prospectEdition.id, input);
       } else {
-        await creerProspect(form);
+        await creerProspect(input);
       }
       setFormOuvert(false);
-      charger();
+      setProspectEdition(null);
+      await recharger();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur d'enregistrement");
-    } finally {
-      setEnregistrement(false);
+      alert(e instanceof Error ? e.message : "Erreur d'enregistrement");
     }
   }
 
-  async function handleSupprimer(id: string) {
-    if (!confirm("Supprimer ce prospect ?")) return;
+  async function handleSupprimer(p: Prospect) {
+    if (!confirm(`Supprimer définitivement le prospect "${p.nom}" ?`)) return;
     try {
-      await supprimerProspect(id);
-      charger();
+      await supprimerProspect(p.id);
+      await recharger();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur de suppression");
+      alert(e instanceof Error ? e.message : "Erreur");
     }
   }
 
-  async function handleConvertir(prospect: Prospect) {
+  async function handleConvertir(p: Prospect) {
     if (
       !confirm(
-        `Transformer "${prospect.nom}" en client ? Cette action créera une nouvelle fiche client avec ses coordonnées.`
+        `Convertir "${p.nom}" en client ? Une fiche client sera créée avec ses coordonnées.`
       )
-    )
+    ) {
       return;
-    setConversionEnCours(prospect.id);
-    setError(null);
-    setInfo(null);
+    }
     try {
-      await convertirEnClient(prospect.id);
-      setInfo(`"${prospect.nom}" a été ajouté à tes clients !`);
-      charger();
+      await convertirEnClient(p.id);
+      setImportMsg(`✓ "${p.nom}" converti en client.`);
+      await recharger();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur de conversion");
-    } finally {
-      setConversionEnCours(null);
+      alert(e instanceof Error ? e.message : "Erreur");
     }
   }
-
-  async function handleImporter() {
-    if (
-      !confirm(
-        `Importer les ${PROSPECTS_BRUTS.length} prospects de l'ancien gestionnaire HTML ? À faire une seule fois.`
-      )
-    )
-      return;
-    setImportEnCours(true);
-    setError(null);
-    try {
-      const donnees = PROSPECTS_BRUTS.map(mapperProspect);
-      await importerProspectsLot(donnees);
-      charger();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur d'import");
-    } finally {
-      setImportEnCours(false);
-    }
-  }
-
-  const prospectsFiltres =
-    filtreNiche === "all"
-      ? prospects
-      : prospects.filter((p) => p.secteur === filtreNiche);
 
   return (
-    <>
+    <div className="min-h-screen bg-bg text-textPrimary">
       <NavBar />
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-display text-2xl text-textPrimary">
-            Prospects{" "}
-            {prospects.length > 0 && (
-              <span className="ml-2 font-mono text-sm font-normal text-textMuted">
-                ({prospects.length})
-              </span>
-            )}
-          </h1>
-          <div className="flex gap-2">
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="font-display text-3xl">Prospects</h1>
+            <p className="text-sm text-textMuted">
+              {prospects.length} prospect(s) au total
+              {prospectsFiltres.length !== prospects.length &&
+                ` — ${prospectsFiltres.length} affiché(s)`}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={handleImporter}
-              disabled={importEnCours}
-              className="rounded-lg border border-violet/40 px-4 py-2 text-sm font-medium text-violet hover:bg-violet/10 disabled:opacity-50"
+              onClick={() => setVue(vue === "liste" ? "carte" : "liste")}
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-surfaceAlt"
             >
-              {importEnCours
-                ? "Import en cours…"
-                : `Importer les ${PROSPECTS_BRUTS.length} prospects existants`}
+              {vue === "liste" ? "🗺️ Voir la carte" : "📋 Voir la liste"}
             </button>
             <button
-              onClick={ouvrirNouveau}
-              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
+              onClick={() => setCsvOuvert((v) => !v)}
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-surfaceAlt"
             >
-              + Nouveau prospect
+              📥 Importer CSV
+            </button>
+            <button
+              onClick={handleSeedImport}
+              disabled={seedEnCours}
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-surfaceAlt disabled:opacity-50"
+            >
+              {seedEnCours
+                ? "Import…"
+                : `📦 Importer le seed (${PROSPECTS_BRUTS.length})`}
+            </button>
+            <button
+              onClick={() => {
+                setProspectEdition(null);
+                setFormOuvert(true);
+              }}
+              className="rounded-lg bg-violet px-3 py-1.5 text-sm font-medium text-white hover:bg-violet/90"
+            >
+              + Nouveau
             </button>
           </div>
-        </div>
+        </header>
 
-        {error && (
-          <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
-            {error}
-          </p>
-        )}
-        {info && (
-          <p className="mb-4 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">
-            {info}
-          </p>
+        {importMsg && (
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-sm">
+            <span>{importMsg}</span>
+            <button
+              onClick={() => setImportMsg(null)}
+              className="ml-3 text-xs text-textMuted hover:text-textPrimary"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
-        {/* Onglets Liste / Carte */}
-        <div className="mb-5 flex gap-1 border-b border-line">
-          <button
-            onClick={() => setVue("liste")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 ${
-              vue === "liste"
-                ? "border-violet text-textPrimary"
-                : "border-transparent text-textMuted hover:text-textPrimary"
-            }`}
-          >
-            📋 Liste
-          </button>
-          <button
-            onClick={() => setVue("carte")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 ${
-              vue === "carte"
-                ? "border-violet text-textPrimary"
-                : "border-transparent text-textMuted hover:text-textPrimary"
-            }`}
-          >
-            🗺️ Carte
-          </button>
-        </div>
+        {erreur && (
+          <div className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-amber">
+            {erreur}
+          </div>
+        )}
+
+        {csvOuvert && (
+          <CsvImportPanel
+            titre="Prospects"
+            champs={CSV_CHAMPS}
+            modeleColonnes={[
+              "nom",
+              "secteur",
+              "telephone",
+              "email",
+              "adresse",
+              "statut",
+              "notes",
+            ]}
+            onImporter={handleCsvImport}
+            onFermer={() => setCsvOuvert(false)}
+          />
+        )}
 
         {formOuvert && (
           <form
             onSubmit={handleSubmit}
-            className="mb-8 space-y-4 rounded-xl border border-line bg-surface p-5"
+            className="mb-6 space-y-3 rounded-xl border border-line bg-surface p-5"
           >
-            <h2 className="font-display text-lg text-textPrimary">
-              {prospectEnEdition ? "Modifier le prospect" : "Nouveau prospect"}
+            <h2 className="font-display text-lg">
+              {prospectEdition ? "Modifier le prospect" : "Nouveau prospect"}
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Nom</span>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs text-textMuted">Nom *</span>
                 <input
+                  name="nom"
                   required
-                  value={form.nom}
-                  onChange={(e) => setForm({ ...form, nom: e.target.value })}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                  defaultValue={prospectEdition?.nom ?? ""}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
                 />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Secteur</span>
+              <label className="space-y-1">
+                <span className="text-xs text-textMuted">Secteur</span>
                 <select
-                  value={form.secteur}
-                  onChange={(e) => setForm({ ...form, secteur: e.target.value })}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                  name="secteur"
+                  defaultValue={prospectEdition?.secteur ?? ""}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
                 >
-                  <option value="SSIAD">SSIAD</option>
-                  <option value="PME">PME</option>
-                  <option value="Artisan">Artisan</option>
-                  <option value="Cabinet médical">Cabinet médical</option>
-                  <option value="PSDM">PSDM (prestataire / distributeur matériel)</option>
-                  <option value="Autre">Autre</option>
+                  <option value="">—</option>
+                  {SECTEURS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Email</span>
+              <label className="space-y-1">
+                <span className="text-xs text-textMuted">Téléphone</span>
+                <input
+                  name="telephone"
+                  defaultValue={prospectEdition?.telephone ?? ""}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-textMuted">Email</span>
                 <input
                   type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                  name="email"
+                  defaultValue={prospectEdition?.email ?? ""}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
                 />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">
-                  Téléphone
-                </span>
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-xs text-textMuted">Adresse</span>
                 <input
-                  value={form.telephone}
-                  onChange={(e) =>
-                    setForm({ ...form, telephone: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                  name="adresse"
+                  defaultValue={prospectEdition?.adresse ?? ""}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
                 />
               </label>
-              <label className="block sm:col-span-2">
-                <span className="mb-1 block text-sm text-textMuted">
-                  Adresse{" "}
-                  <span className="text-textMuted/60">
-                    (utilisée pour la localiser automatiquement sur la carte)
-                  </span>
-                </span>
-                <textarea
-                  value={form.adresse}
-                  onChange={(e) => setForm({ ...form, adresse: e.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">
-                  Statut
-                </span>
+              <label className="space-y-1">
+                <span className="text-xs text-textMuted">Statut</span>
                 <select
-                  value={form.statut}
-                  onChange={(e) => setForm({ ...form, statut: e.target.value })}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                  name="statut"
+                  defaultValue={prospectEdition?.statut ?? "a_contacter"}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
                 >
-                  <option value="a_contacter">À contacter</option>
-                  <option value="contacte">Contacté</option>
-                  <option value="rdv_planifie">RDV planifié</option>
-                  <option value="perdu">Perdu</option>
+                  {STATUTS.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.label}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <label className="block sm:col-span-2">
-                <span className="mb-1 block text-sm text-textMuted">Notes</span>
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-xs text-textMuted">Notes</span>
                 <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
+                  name="notes"
+                  rows={3}
+                  defaultValue={prospectEdition?.notes ?? ""}
+                  className="block w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm"
                 />
               </label>
             </div>
-            <div className="flex gap-3">
+            <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={enregistrement}
-                className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+                className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
               >
-                {enregistrement ? "Enregistrement…" : "Enregistrer"}
+                {prospectEdition ? "Enregistrer" : "Créer"}
               </button>
               <button
                 type="button"
-                onClick={() => setFormOuvert(false)}
+                onClick={() => {
+                  setFormOuvert(false);
+                  setProspectEdition(null);
+                }}
                 className="text-sm text-textMuted hover:text-textPrimary"
               >
                 Annuler
@@ -499,126 +411,325 @@ export default function ProspectsPage() {
           </form>
         )}
 
-        {vue === "carte" ? (
-          <div>
-            <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-textMuted">
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ background: "#a89eff" }}
-                />
-                Médical &amp; SSIAD
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ background: "#f0b429" }}
-                />
-                PSDM
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ background: "#5fe0c0" }}
-                />
-                Artisans &amp; BTP
-              </span>
-              {geoEnCours > 0 && (
-                <span className="text-amber">
-                  ⏳ Localisation de {geoEnCours} prospect(s) en cours…
-                </span>
-              )}
-            </div>
-            <div
-              ref={mapDivRef}
-              style={{ height: "560px" }}
-              className="overflow-hidden rounded-xl border border-line"
-            />
-          </div>
-        ) : (
-          <>
-            {prospects.length > 0 && (
-              <div className="mb-4 flex gap-2">
-                {FILTRES_NICHE.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setFiltreNiche(f.id)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                      filtreNiche === f.id
-                        ? "border-violet bg-violet text-white"
-                        : "border-line text-textMuted hover:text-textPrimary"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            )}
+        <div className="mb-4 flex flex-wrap gap-3">
+          <select
+            value={filtreSecteur}
+            onChange={(e) => setFiltreSecteur(e.target.value)}
+            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm"
+          >
+            <option value="">Tous les secteurs</option>
+            {SECTEURS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filtreStatut}
+            onChange={(e) => setFiltreStatut(e.target.value)}
+            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm"
+          >
+            <option value="">Tous les statuts</option>
+            {STATUTS.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            {loading ? (
-              <p className="text-sm text-textMuted">Chargement…</p>
-            ) : prospectsFiltres.length === 0 ? (
-              prospects.length > 0 && (
-                <p className="text-sm text-textMuted">
-                  Aucun prospect dans ce filtre.
-                </p>
-              )
-            ) : (
-              <div className="space-y-2">
-                {prospectsFiltres.map((prospect) => (
-                  <div
-                    key={prospect.id}
-                    className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface p-4"
-                  >
-                    <div className="flex-1">
-                      <p className="font-display text-sm font-bold text-textPrimary">
-                        {prospect.nom}{" "}
-                        <span className="ml-2 font-mono text-xs font-normal text-textMuted">
-                          {prospect.secteur}
-                        </span>
-                      </p>
-                      <p className="text-xs text-textMuted">
-                        {prospect.telephone || "—"}
-                        {prospect.notes ? ` · ${prospect.notes}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`whitespace-nowrap rounded border px-2 py-1 text-xs font-medium ${STATUT_COULEUR[prospect.statut]}`}
-                      >
-                        {STATUT_LABEL[prospect.statut]}
-                      </span>
-                      {prospect.statut !== "converti" && (
-                        <button
-                          onClick={() => handleConvertir(prospect)}
-                          disabled={conversionEnCours === prospect.id}
-                          className="whitespace-nowrap rounded bg-teal px-3 py-1.5 text-xs font-medium text-ink hover:bg-teal/90 disabled:opacity-50"
-                        >
-                          {conversionEnCours === prospect.id
-                            ? "…"
-                            : "Convertir en client"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => ouvrirEdition(prospect)}
-                        className="text-xs text-violet hover:text-teal"
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        onClick={() => handleSupprimer(prospect.id)}
-                        className="text-xs text-textMuted hover:text-amber"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+        {vue === "liste" ? (
+          <ListeProspects
+            prospects={prospectsFiltres}
+            chargement={chargement}
+            onModifier={(p) => {
+              setProspectEdition(p);
+              setFormOuvert(true);
+            }}
+            onSupprimer={handleSupprimer}
+            onConvertir={handleConvertir}
+          />
+        ) : (
+          <CarteProspects
+            prospects={prospectsFiltres}
+            onCoordsTrouvees={async (id, lat, lon) => {
+              const p = prospects.find((x) => x.id === id);
+              if (!p) return;
+              try {
+                await modifierProspect(id, {
+                  nom: p.nom,
+                  secteur: p.secteur ?? undefined,
+                  telephone: p.telephone ?? undefined,
+                  email: p.email ?? undefined,
+                  adresse: p.adresse ?? undefined,
+                  latitude: lat,
+                  longitude: lon,
+                  statut: p.statut,
+                  notes: p.notes ?? undefined,
+                });
+                setProspects((prev) =>
+                  prev.map((x) =>
+                    x.id === id ? { ...x, latitude: lat, longitude: lon } : x
+                  )
+                );
+              } catch {
+                // silencieux : tant pis pour ce prospect, on continue
+              }
+            }}
+          />
         )}
       </main>
-    </>
+    </div>
   );
+}
+
+// --- Liste --------------------------------------------------------------
+
+function ListeProspects(props: {
+  prospects: Prospect[];
+  chargement: boolean;
+  onModifier: (p: Prospect) => void;
+  onSupprimer: (p: Prospect) => void;
+  onConvertir: (p: Prospect) => void;
+}) {
+  if (props.chargement) {
+    return <p className="text-sm text-textMuted">Chargement…</p>;
+  }
+  if (props.prospects.length === 0) {
+    return (
+      <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-sm text-textMuted">
+        Aucun prospect — utilise « + Nouveau », l'import CSV ou le seed pour
+        démarrer.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {props.prospects.map((p) => (
+        <li
+          key={p.id}
+          className="rounded-xl border border-line bg-surface p-4 transition hover:border-violet/40"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-display text-base text-textPrimary">
+                  {p.nom}
+                </h3>
+                {p.secteur && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+                    style={{ background: couleurSecteur(p.secteur) }}
+                  >
+                    {p.secteur}
+                  </span>
+                )}
+                <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-textMuted">
+                  {labelStatut(p.statut)}
+                </span>
+              </div>
+              {p.adresse && (
+                <p className="mt-1 text-xs text-textMuted">📍 {p.adresse}</p>
+              )}
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted">
+                {p.telephone && <span>📞 {p.telephone}</span>}
+                {p.email && <span>✉️ {p.email}</span>}
+              </div>
+              {p.notes && (
+                <p className="mt-2 text-xs text-textMuted">{p.notes}</p>
+              )}
+            </div>
+            <div className="flex flex-shrink-0 gap-2">
+              {p.statut !== "converti" && (
+                <button
+                  onClick={() => props.onConvertir(p)}
+                  className="rounded-lg border border-teal/40 bg-teal/10 px-2.5 py-1 text-xs text-teal hover:bg-teal/20"
+                >
+                  → Client
+                </button>
+              )}
+              <button
+                onClick={() => props.onModifier(p)}
+                className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-textPrimary"
+              >
+                Modifier
+              </button>
+              <button
+                onClick={() => props.onSupprimer(p)}
+                className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-amber"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// --- Carte (Leaflet via CDN, géocodage Nominatim 1 req/sec) -------------
+
+function CarteProspects(props: {
+  prospects: Prospect[];
+  onCoordsTrouvees: (
+    id: string,
+    lat: number,
+    lon: number
+  ) => void | Promise<void>;
+}) {
+  const [pretLeaflet, setPretLeaflet] = useState(false);
+  const [geocodingRestant, setGeocodingRestant] = useState(0);
+
+  // Charge Leaflet via CDN une seule fois (pas de dépendance npm à ajouter)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).L) {
+      setPretLeaflet(true);
+      return;
+    }
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(css);
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.async = true;
+    script.onload = () => setPretLeaflet(true);
+    document.head.appendChild(script);
+  }, []);
+
+  // Géocode les prospects sans coordonnées (1 requête/seconde — limite Nominatim)
+  useEffect(() => {
+    const aGeocoder = props.prospects.filter(
+      (p) => p.adresse && (p.latitude == null || p.longitude == null)
+    );
+    setGeocodingRestant(aGeocoder.length);
+    if (aGeocoder.length === 0) return;
+
+    let annule = false;
+    (async () => {
+      for (const p of aGeocoder) {
+        if (annule) return;
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+            p.adresse!
+          )}`;
+          const res = await fetch(url, {
+            headers: { "Accept-Language": "fr" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data[0]) {
+              const lat = parseFloat(data[0].lat);
+              const lon = parseFloat(data[0].lon);
+              if (!isNaN(lat) && !isNaN(lon)) {
+                await props.onCoordsTrouvees(p.id, lat, lon);
+              }
+            }
+          }
+        } catch {
+          // ignore, on continue
+        }
+        setGeocodingRestant((n) => Math.max(0, n - 1));
+        await new Promise((r) => setTimeout(r, 1100));
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.prospects.length, pretLeaflet]);
+
+  // Rendu de la carte (re-rendu à chaque changement de liste filtrée)
+  useEffect(() => {
+    if (!pretLeaflet) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const L = (window as any).L;
+    if (!L) return;
+    const el = document.getElementById("carte-prospects");
+    if (!el) return;
+
+    // Leaflet n'aime pas être initialisé 2x sur la même div : on réinitialise
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((el as any)._leaflet_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (el as any)._leaflet_id = null;
+      el.innerHTML = "";
+    }
+
+    const pointsValides = props.prospects.filter(
+      (p) => p.latitude != null && p.longitude != null
+    );
+    const centreParDefaut: [number, number] = [43.95, 7.3]; // Vésubie/Lantosque
+    const centre: [number, number] =
+      pointsValides.length > 0
+        ? [pointsValides[0].latitude!, pointsValides[0].longitude!]
+        : centreParDefaut;
+
+    const map = L.map(el).setView(centre, pointsValides.length > 0 ? 10 : 9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap",
+      maxZoom: 19,
+    }).addTo(map);
+
+    pointsValides.forEach((p) => {
+      const couleur = couleurSecteur(p.secteur);
+      const marker = L.circleMarker([p.latitude!, p.longitude!], {
+        radius: 8,
+        fillColor: couleur,
+        color: "#fff",
+        weight: 2,
+        fillOpacity: 0.9,
+      }).addTo(map);
+      marker.bindPopup(
+        `<strong>${escapeHtml(p.nom)}</strong><br/>${escapeHtml(
+          p.secteur ?? ""
+        )}<br/>${escapeHtml(p.adresse ?? "")}<br/>${escapeHtml(
+          p.telephone ?? ""
+        )}`
+      );
+    });
+
+    if (pointsValides.length > 1) {
+      const bounds = L.latLngBounds(
+        pointsValides.map((p) => [p.latitude!, p.longitude!])
+      );
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+
+    return () => {
+      map.remove();
+    };
+  }, [pretLeaflet, props.prospects]);
+
+  return (
+    <div>
+      {geocodingRestant > 0 && (
+        <p className="mb-2 text-xs text-textMuted">
+          ⏳ Localisation de {geocodingRestant} prospect(s) en cours… (1
+          adresse/seconde via OpenStreetMap)
+        </p>
+      )}
+      <div
+        id="carte-prospects"
+        className="rounded-xl border border-line"
+        style={{ height: "600px", width: "100%" }}
+      />
+      <p className="mt-2 text-xs text-textMuted">
+        Points violets : médical / SSIAD / IDEL / PSDM · Points turquoise :
+        artisans / BTP
+      </p>
+    </div>
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
