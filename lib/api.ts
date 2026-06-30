@@ -46,6 +46,11 @@ export const modifierClient = (id: string, data: ClientInput) =>
   requete<Client>(`/api/clients/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const supprimerClient = (id: string) =>
   requete<{ statut: string }>(`/api/clients/${id}`, { method: "DELETE" });
+export const importerClientsLot = (data: ClientInput[]) =>
+  requete<Client[]>("/api/clients/import-lot", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 // --- Devis ---
 export const getDevisListe = () => requete<Devis[]>("/api/devis");
@@ -137,6 +142,11 @@ export const modifierDepense = (id: string, data: DepenseInput) =>
   requete<Depense>(`/api/depenses/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const supprimerDepense = (id: string) =>
   requete<{ statut: string }>(`/api/depenses/${id}`, { method: "DELETE" });
+export const importerDepensesLot = (data: DepenseInput[]) =>
+  requete<Depense[]>("/api/depenses/import-lot", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 // --- Agent IA ---
 export interface AgentChatResponse {
