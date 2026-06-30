@@ -50,6 +50,8 @@ export const getDevisListe = () => requete<Devis[]>("/api/devis");
 export const getDevis = (id: string) => requete<Devis>(`/api/devis/${id}`);
 export const creerDevis = (data: DevisInput) =>
   requete<Devis>("/api/devis", { method: "POST", body: JSON.stringify(data) });
+export const modifierDevis = (id: string, data: DevisInput) =>
+  requete<Devis>(`/api/devis/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const envoyerDevisPourSignature = (id: string) =>
   requete<Devis>(`/api/devis/${id}/envoyer`, { method: "POST" });
 export const supprimerDevis = (id: string) =>
@@ -69,6 +71,8 @@ export const getFacturesListe = () => requete<Facture[]>("/api/factures");
 export const getFacture = (id: string) => requete<Facture>(`/api/factures/${id}`);
 export const creerFacture = (data: FactureInput) =>
   requete<Facture>("/api/factures", { method: "POST", body: JSON.stringify(data) });
+export const modifierFacture = (id: string, data: FactureInput) =>
+  requete<Facture>(`/api/factures/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const envoyerFacture = (id: string) =>
   requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
 export const marquerFacturePayee = (id: string) =>

@@ -9,6 +9,7 @@ import {
   getDevisListe,
   getFacturesListe,
   creerFacture,
+  modifierFacture,
   envoyerFacture,
   marquerFacturePayee,
   supprimerFacture,
@@ -34,6 +35,7 @@ export default function FacturesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
+  const [factureEnEdition, setFactureEnEdition] = useState<Facture | null>(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
   const [paiementEnCours, setPaiementEnCours] = useState<string | null>(null);
@@ -65,12 +67,24 @@ export default function FacturesPage() {
   }, []);
 
   function ouvrirNouveau() {
+    setFactureEnEdition(null);
     setOrigineDevisId("");
     setClientId(clients[0]?.id || "");
     setObjet("");
     setTauxTva(20);
     setDateEcheance("");
     setLignes([{ description: "", quantite: 1, prix_unitaire: 0 }]);
+    setFormOuvert(true);
+  }
+
+  function ouvrirEdition(facture: Facture) {
+    setFactureEnEdition(facture);
+    setOrigineDevisId(facture.devis_id || "");
+    setClientId(facture.client_id);
+    setObjet(facture.objet || "");
+    setTauxTva(facture.taux_tva);
+    setDateEcheance(facture.date_echeance || "");
+    setLignes(facture.lignes.map((l) => ({ ...l })));
     setFormOuvert(true);
   }
 
@@ -91,15 +105,21 @@ export default function FacturesPage() {
     setEnregistrement(true);
     setError(null);
     try {
-      await creerFacture({
+      const donnees = {
         client_id: clientId,
         devis_id: origineDevisId || undefined,
         objet,
         taux_tva: tauxTva,
         date_echeance: dateEcheance || undefined,
         lignes: lignes.filter((l) => l.description.trim() !== ""),
-      });
+      };
+      if (factureEnEdition) {
+        await modifierFacture(factureEnEdition.id, donnees);
+      } else {
+        await creerFacture(donnees);
+      }
       setFormOuvert(false);
+      setFactureEnEdition(null);
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur d'enregistrement");
@@ -176,7 +196,7 @@ export default function FacturesPage() {
             className="mb-8 space-y-5 rounded-xl border border-line bg-surface p-5"
           >
             <h2 className="font-display text-lg text-textPrimary">
-              Nouvelle facture
+              {factureEnEdition ? `Modifier ${factureEnEdition.numero}` : "Nouvelle facture"}
             </h2>
 
             <label className="block">
@@ -250,11 +270,18 @@ export default function FacturesPage() {
                 disabled={enregistrement}
                 className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
               >
-                {enregistrement ? "Génération…" : "Générer la facture (PDF + Drive)"}
+                {enregistrement
+                  ? "Enregistrement…"
+                  : factureEnEdition
+                  ? "Enregistrer les modifications (PDF + Drive)"
+                  : "Générer la facture (PDF + Drive)"}
               </button>
               <button
                 type="button"
-                onClick={() => setFormOuvert(false)}
+                onClick={() => {
+                  setFormOuvert(false);
+                  setFactureEnEdition(null);
+                }}
                 className="text-sm text-textMuted hover:text-textPrimary"
               >
                 Annuler
@@ -271,6 +298,7 @@ export default function FacturesPage() {
           <div className="space-y-2">
             {factures.map((facture) => {
               const { totalTtc } = calculerTotaux(facture.lignes, facture.taux_tva);
+              const estModifiable = facture.statut === "brouillon";
               return (
                 <div
                   key={facture.id}
@@ -308,6 +336,14 @@ export default function FacturesPage() {
                       >
                         PDF (Drive) →
                       </a>
+                    )}
+                    {estModifiable && (
+                      <button
+                        onClick={() => ouvrirEdition(facture)}
+                        className="text-xs text-violet hover:text-teal"
+                      >
+                        Modifier
+                      </button>
                     )}
                     {facture.statut === "brouillon" && (
                       <button

@@ -4,7 +4,16 @@ import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import LigneEditor from "@/components/LigneEditor";
 import { Client, Devis, Ligne } from "@/lib/types";
-import { getClients, getDevisListe, creerDevis, envoyerDevisPourSignature, supprimerDevis, calculerTotaux, ApiError } from "@/lib/api";
+import {
+  getClients,
+  getDevisListe,
+  creerDevis,
+  modifierDevis,
+  envoyerDevisPourSignature,
+  supprimerDevis,
+  calculerTotaux,
+  ApiError,
+} from "@/lib/api";
 
 export default function DevisPage() {
   const [devisListe, setDevisListe] = useState<Devis[]>([]);
@@ -12,6 +21,7 @@ export default function DevisPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
+  const [devisEnEdition, setDevisEnEdition] = useState<Devis | null>(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
   const [suppressionEnCours, setSuppressionEnCours] = useState<string | null>(null);
@@ -42,6 +52,7 @@ export default function DevisPage() {
   }, []);
 
   function ouvrirNouveau() {
+    setDevisEnEdition(null);
     setClientId(clients[0]?.id || "");
     setObjet("");
     setContexte("");
@@ -50,19 +61,35 @@ export default function DevisPage() {
     setFormOuvert(true);
   }
 
+  function ouvrirEdition(devis: Devis) {
+    setDevisEnEdition(devis);
+    setClientId(devis.client_id);
+    setObjet(devis.objet || "");
+    setContexte(devis.contexte || "");
+    setTauxTva(devis.taux_tva);
+    setLignes(devis.lignes.map((l) => ({ ...l })));
+    setFormOuvert(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setEnregistrement(true);
     setError(null);
     try {
-      await creerDevis({
+      const donnees = {
         client_id: clientId,
         objet,
         contexte: contexte || undefined,
         taux_tva: tauxTva,
         lignes: lignes.filter((l) => l.description.trim() !== ""),
-      });
+      };
+      if (devisEnEdition) {
+        await modifierDevis(devisEnEdition.id, donnees);
+      } else {
+        await creerDevis(donnees);
+      }
       setFormOuvert(false);
+      setDevisEnEdition(null);
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur d'enregistrement");
@@ -131,7 +158,7 @@ export default function DevisPage() {
             className="mb-8 space-y-5 rounded-xl border border-line bg-surface p-5"
           >
             <h2 className="font-display text-lg text-textPrimary">
-              Nouveau devis
+              {devisEnEdition ? `Modifier ${devisEnEdition.numero}` : "Nouveau devis"}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
@@ -193,11 +220,18 @@ export default function DevisPage() {
                 disabled={enregistrement}
                 className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
               >
-                {enregistrement ? "Génération…" : "Générer le devis (PDF + Drive)"}
+                {enregistrement
+                  ? "Enregistrement…"
+                  : devisEnEdition
+                  ? "Enregistrer les modifications (PDF + Drive)"
+                  : "Générer le devis (PDF + Drive)"}
               </button>
               <button
                 type="button"
-                onClick={() => setFormOuvert(false)}
+                onClick={() => {
+                  setFormOuvert(false);
+                  setDevisEnEdition(null);
+                }}
                 className="text-sm text-textMuted hover:text-textPrimary"
               >
                 Annuler
@@ -214,6 +248,7 @@ export default function DevisPage() {
           <div className="space-y-2">
             {devisListe.map((devis) => {
               const { totalTtc } = calculerTotaux(devis.lignes, devis.taux_tva);
+              const estModifiable = devis.statut === "brouillon";
               return (
                 <div
                   key={devis.id}
@@ -247,6 +282,14 @@ export default function DevisPage() {
                       <span className="text-xs text-textMuted">
                         Pas encore sur Drive
                       </span>
+                    )}
+                    {estModifiable && (
+                      <button
+                        onClick={() => ouvrirEdition(devis)}
+                        className="text-xs text-violet hover:text-teal"
+                      >
+                        Modifier
+                      </button>
                     )}
                     {devis.signe_le ? (
                       <span className="rounded bg-teal/10 px-2 py-1 text-xs font-medium text-teal">
