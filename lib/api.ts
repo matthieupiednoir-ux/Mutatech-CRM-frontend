@@ -141,6 +141,17 @@ export const chatAgent = (
     body: JSON.stringify({ message, history }),
   });
 
+export interface AgentMessageHistorique {
+  role: string;
+  content: string;
+  actions_effectuees: string[];
+  cree_le: string;
+}
+export const getAgentHistorique = () =>
+  requete<AgentMessageHistorique[]>("/api/agent/history");
+export const effacerAgentHistorique = () =>
+  requete<{ statut: string }>("/api/agent/history", { method: "DELETE" });
+
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {
   const totalHt = lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { chatAgent, ApiError } from "@/lib/api";
+import { chatAgent, getAgentHistorique, effacerAgentHistorique, ApiError } from "@/lib/api";
 
 interface MessageAffiche {
   role: "user" | "assistant";
@@ -15,18 +15,19 @@ const SUGGESTIONS = [
   "Combien de devis sont en attente de signature ?",
 ];
 
+const MESSAGE_ACCUEIL: MessageAffiche = {
+  role: "assistant",
+  content:
+    "Salut Matthieu ! Je peux consulter et modifier tes tâches, prospects, clients, devis et factures. Pour toute action qui change quelque chose, je te décris d'abord ce que je vais faire et j'attends ta confirmation avant d'agir. Qu'est-ce que je peux faire pour toi ?",
+};
+
 export default function ChatAgentPanel({
   compact = false,
 }: {
   compact?: boolean;
 }) {
-  const [messages, setMessages] = useState<MessageAffiche[]>([
-    {
-      role: "assistant",
-      content:
-        "Salut Matthieu ! Je peux consulter et modifier tes tâches, prospects, clients, devis et factures. Pour toute action qui change quelque chose, je te décris d'abord ce que je vais faire et j'attends ta confirmation avant d'agir. Qu'est-ce que je peux faire pour toi ?",
-    },
-  ]);
+  const [messages, setMessages] = useState<MessageAffiche[]>([MESSAGE_ACCUEIL]);
+  const [chargementHistorique, setChargementHistorique] = useState(true);
   const [saisie, setSaisie] = useState("");
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,26 @@ export default function ChatAgentPanel({
 
   const finRef = useRef<HTMLDivElement>(null);
   const reconnaissanceRef = useRef<any>(null);
+
+  // Charge les 5 derniers jours de conversation au montage du composant.
+  useEffect(() => {
+    getAgentHistorique()
+      .then((historique) => {
+        if (historique.length > 0) {
+          setMessages(
+            historique.map((m) => ({
+              role: m.role === "user" ? "user" : "assistant",
+              content: m.content,
+              actions: m.actions_effectuees,
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        // Best effort — si l'historique ne charge pas, on reste sur le message d'accueil.
+      })
+      .finally(() => setChargementHistorique(false));
+  }, []);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -77,6 +98,16 @@ export default function ChatAgentPanel({
       setError(e instanceof ApiError ? e.message : "Erreur de connexion à l'agent.");
     } finally {
       setEnvoiEnCours(false);
+    }
+  }
+
+  async function handleEffacerHistorique() {
+    if (!confirm("Effacer tout l'historique de conversation avec l'agent ?")) return;
+    try {
+      await effacerAgentHistorique();
+      setMessages([MESSAGE_ACCUEIL]);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors de l'effacement.");
     }
   }
 
@@ -137,15 +168,28 @@ export default function ChatAgentPanel({
   return (
     <div className="flex h-full flex-col">
       {!compact && (
-        <>
-          <h2 className="mb-1 font-display text-lg text-textPrimary">Agent IA</h2>
-          <p className="mb-3 text-xs text-textMuted">
-            Confirmation demandée avant toute modification.
-          </p>
-        </>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-lg text-textPrimary">Agent IA</h2>
+            <p className="text-xs text-textMuted">
+              Confirmation demandée avant toute modification · mémoire 5 jours
+            </p>
+          </div>
+          {messages.length > 1 && (
+            <button
+              onClick={handleEffacerHistorique}
+              className="text-xs text-textMuted hover:text-amber"
+            >
+              Effacer l'historique
+            </button>
+          )}
+        </div>
       )}
 
       <div className="flex-1 space-y-3 overflow-y-auto rounded-xl border border-line bg-surface p-3">
+        {chargementHistorique && (
+          <p className="text-center text-xs text-textMuted">Chargement de l'historique…</p>
+        )}
         {messages.map((m, i) => (
           <div
             key={i}
