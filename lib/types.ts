@@ -42,6 +42,12 @@ export interface Devis {
   signe_le?: string | null;
   lignes: Ligne[];
   client?: Client | null;
+
+  type_facturation: string; // "ponctuelle" | "abonnement"
+  montant_mensuel?: number | null;
+  duree_mois?: number | null;
+  date_debut_abonnement?: string | null;
+  premier_versement?: number | null;
 }
 
 export interface DevisPublic {
@@ -55,6 +61,12 @@ export interface DevisPublic {
   signe_le?: string | null;
   lignes: Ligne[];
   client_nom: string;
+
+  type_facturation: string;
+  montant_mensuel?: number | null;
+  duree_mois?: number | null;
+  date_debut_abonnement?: string | null;
+  premier_versement?: number | null;
 }
 
 export interface DevisInput {
@@ -63,6 +75,12 @@ export interface DevisInput {
   contexte?: string;
   taux_tva: number;
   lignes: Ligne[];
+
+  type_facturation?: string; // "ponctuelle" | "abonnement" — défaut backend: ponctuelle
+  montant_mensuel?: number;
+  duree_mois?: number;
+  date_debut_abonnement?: string;
+  premier_versement?: number;
 }
 
 export interface Facture {

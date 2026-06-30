@@ -34,6 +34,13 @@ export default function DevisPage() {
     { description: "", quantite: 1, prix_unitaire: 0 },
   ]);
 
+  const [typeFacturation, setTypeFacturation] = useState<"ponctuelle" | "abonnement">("ponctuelle");
+  const [montantMensuel, setMontantMensuel] = useState("");
+  const [dureeMois, setDureeMois] = useState("");
+  const [dateDebutAbonnement, setDateDebutAbonnement] = useState("");
+  const [premierVersementDiffere, setPremierVersementDiffere] = useState(false);
+  const [premierVersement, setPremierVersement] = useState("");
+
   const clientSelectionne = clients.find((c) => c.id === clientId);
 
   function charger() {
@@ -51,13 +58,23 @@ export default function DevisPage() {
     charger();
   }, []);
 
-  function ouvrirNouveau() {
-    setDevisEnEdition(null);
+  function reinitialiserFormulaire() {
     setClientId(clients[0]?.id || "");
     setObjet("");
     setContexte("");
     setTauxTva(20);
     setLignes([{ description: "", quantite: 1, prix_unitaire: 0 }]);
+    setTypeFacturation("ponctuelle");
+    setMontantMensuel("");
+    setDureeMois("");
+    setDateDebutAbonnement(new Date().toISOString().slice(0, 10));
+    setPremierVersementDiffere(false);
+    setPremierVersement("");
+  }
+
+  function ouvrirNouveau() {
+    setDevisEnEdition(null);
+    reinitialiserFormulaire();
     setFormOuvert(true);
   }
 
@@ -68,6 +85,13 @@ export default function DevisPage() {
     setContexte(devis.contexte || "");
     setTauxTva(devis.taux_tva);
     setLignes(devis.lignes.map((l) => ({ ...l })));
+    setTypeFacturation(devis.type_facturation === "abonnement" ? "abonnement" : "ponctuelle");
+    setMontantMensuel(devis.montant_mensuel != null ? String(devis.montant_mensuel) : "");
+    setDureeMois(devis.duree_mois != null ? String(devis.duree_mois) : "");
+    setDateDebutAbonnement(devis.date_debut_abonnement || "");
+    const versementDiffere = devis.premier_versement != null && devis.premier_versement !== devis.montant_mensuel;
+    setPremierVersementDiffere(versementDiffere);
+    setPremierVersement(versementDiffere ? String(devis.premier_versement) : "");
     setFormOuvert(true);
   }
 
@@ -76,13 +100,24 @@ export default function DevisPage() {
     setEnregistrement(true);
     setError(null);
     try {
-      const donnees = {
+      const donnees: Parameters<typeof creerDevis>[0] = {
         client_id: clientId,
         objet,
         contexte: contexte || undefined,
         taux_tva: tauxTva,
         lignes: lignes.filter((l) => l.description.trim() !== ""),
+        type_facturation: typeFacturation,
       };
+      if (typeFacturation === "abonnement") {
+        donnees.montant_mensuel = montantMensuel ? parseFloat(montantMensuel) : undefined;
+        donnees.duree_mois = dureeMois ? parseInt(dureeMois, 10) : undefined;
+        donnees.date_debut_abonnement = dateDebutAbonnement || undefined;
+        donnees.premier_versement =
+          premierVersementDiffere && premierVersement
+            ? parseFloat(premierVersement)
+            : undefined;
+      }
+
       if (devisEnEdition) {
         await modifierDevis(devisEnEdition.id, donnees);
       } else {
@@ -124,6 +159,15 @@ export default function DevisPage() {
       setSuppressionEnCours(null);
     }
   }
+
+  // Aperçu du total si réglé en une fois, pour aider à la saisie
+  const montantMensuelNum = parseFloat(montantMensuel) || 0;
+  const dureeMoisNum = parseInt(dureeMois, 10) || 0;
+  const premierNum = premierVersementDiffere && premierVersement
+    ? parseFloat(premierVersement) || 0
+    : montantMensuelNum;
+  const totalAbonnementApercu =
+    dureeMoisNum > 0 ? premierNum + montantMensuelNum * (dureeMoisNum - 1) : null;
 
   return (
     <>
@@ -214,6 +258,119 @@ export default function DevisPage() {
               onTauxTvaChange={setTauxTva}
             />
 
+            {/* --- Mode de facturation : ponctuel ou abonnement --- */}
+            <div className="rounded-lg border border-line bg-surfaceAlt p-4">
+              <span className="mb-2 block text-sm font-medium text-textPrimary">
+                Mode de facturation
+              </span>
+              <div className="mb-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTypeFacturation("ponctuelle")}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                    typeFacturation === "ponctuelle"
+                      ? "border-violet bg-violet text-white"
+                      : "border-line text-textMuted hover:text-textPrimary"
+                  }`}
+                >
+                  Ponctuel (montant total classique)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTypeFacturation("abonnement")}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                    typeFacturation === "abonnement"
+                      ? "border-violet bg-violet text-white"
+                      : "border-line text-textMuted hover:text-textPrimary"
+                  }`}
+                >
+                  Abonnement (engagement mensuel)
+                </button>
+              </div>
+
+              {typeFacturation === "abonnement" && (
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-textMuted">
+                        Montant mensuel (€ HT)
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={montantMensuel}
+                        onChange={(e) => setMontantMensuel(e.target.value)}
+                        placeholder="ex: 350"
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/60"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-textMuted">
+                        Durée (mois, optionnel)
+                      </span>
+                      <input
+                        type="number"
+                        value={dureeMois}
+                        onChange={(e) => setDureeMois(e.target.value)}
+                        placeholder="ex: 12"
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/60"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-textMuted">
+                        Date de début
+                      </span>
+                      <input
+                        type="date"
+                        value={dateDebutAbonnement}
+                        onChange={(e) => setDateDebutAbonnement(e.target.value)}
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-textMuted">
+                    <input
+                      type="checkbox"
+                      checked={premierVersementDiffere}
+                      onChange={(e) => setPremierVersementDiffere(e.target.checked)}
+                    />
+                    Le premier versement diffère du montant mensuel (ex: frais de mise en
+                    place inclus)
+                  </label>
+
+                  {premierVersementDiffere && (
+                    <label className="block max-w-xs">
+                      <span className="mb-1 block text-xs text-textMuted">
+                        Montant du premier versement (€ HT)
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={premierVersement}
+                        onChange={(e) => setPremierVersement(e.target.value)}
+                        placeholder="ex: 850"
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/60"
+                      />
+                    </label>
+                  )}
+
+                  {montantMensuelNum > 0 && (
+                    <p className="text-xs text-teal">
+                      Le client pourra payer {montantMensuelNum.toFixed(2)} € HT/mois
+                      {totalAbonnementApercu !== null && (
+                        <>
+                          {" "}
+                          ou {totalAbonnementApercu.toFixed(2)} € HT en une fois pour les{" "}
+                          {dureeMoisNum} mois.
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <button
                 type="submit"
@@ -249,6 +406,7 @@ export default function DevisPage() {
             {devisListe.map((devis) => {
               const { totalTtc } = calculerTotaux(devis.lignes, devis.taux_tva);
               const estModifiable = devis.statut === "brouillon";
+              const estAbonnement = devis.type_facturation === "abonnement";
               return (
                 <div
                   key={devis.id}
@@ -260,14 +418,30 @@ export default function DevisPage() {
                       <span className="ml-2 font-mono text-xs font-normal text-textMuted">
                         {devis.statut}
                       </span>
+                      {estAbonnement && (
+                        <span className="ml-2 rounded bg-violet/10 px-2 py-0.5 text-xs font-medium text-violet">
+                          Abonnement
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-textMuted">
                       {devis.client?.nom || "—"} {devis.objet ? `· ${devis.objet}` : ""}
                     </p>
+                    {estAbonnement && devis.montant_mensuel != null && (
+                      <p className="mt-0.5 text-[11px] text-violet">
+                        {devis.montant_mensuel.toFixed(2)} € HT / mois
+                        {devis.duree_mois ? ` · ${devis.duree_mois} mois` : ""}
+                        {devis.date_debut_abonnement
+                          ? ` · à partir du ${new Date(devis.date_debut_abonnement).toLocaleDateString("fr-FR")}`
+                          : ""}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-display text-sm text-teal">
-                      {totalTtc.toFixed(2)} €
+                      {estAbonnement
+                        ? `${devis.montant_mensuel?.toFixed(2) ?? "0.00"} € HT/mois`
+                        : `${totalTtc.toFixed(2)} €`}
                     </span>
                     {devis.drive_file_url ? (
                       <a
