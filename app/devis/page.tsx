@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import LigneEditor from "@/components/LigneEditor";
 import { Client, Devis, Ligne } from "@/lib/types";
-import { getClients, getDevisListe, creerDevis, envoyerDevisPourSignature, calculerTotaux, ApiError } from "@/lib/api";
+import { getClients, getDevisListe, creerDevis, envoyerDevisPourSignature, supprimerDevis, calculerTotaux, ApiError } from "@/lib/api";
 
 export default function DevisPage() {
   const [devisListe, setDevisListe] = useState<Devis[]>([]);
@@ -14,6 +14,7 @@ export default function DevisPage() {
   const [formOuvert, setFormOuvert] = useState(false);
   const [enregistrement, setEnregistrement] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
+  const [suppressionEnCours, setSuppressionEnCours] = useState<string | null>(null);
 
   const [clientId, setClientId] = useState("");
   const [objet, setObjet] = useState("");
@@ -80,6 +81,20 @@ export default function DevisPage() {
       setError(e instanceof ApiError ? e.message : "Erreur d'envoi");
     } finally {
       setEnvoiEnCours(null);
+    }
+  }
+
+  async function handleSupprimer(devis: Devis) {
+    if (!confirm(`Supprimer définitivement le devis ${devis.numero} ?`)) return;
+    setSuppressionEnCours(devis.id);
+    setError(null);
+    try {
+      await supprimerDevis(devis.id);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur de suppression");
+    } finally {
+      setSuppressionEnCours(null);
     }
   }
 
@@ -202,7 +217,7 @@ export default function DevisPage() {
               return (
                 <div
                   key={devis.id}
-                  className="flex items-center justify-between rounded-lg border border-line bg-surface p-4"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface p-4"
                 >
                   <div>
                     <p className="font-display text-sm font-bold text-textPrimary">
@@ -215,7 +230,7 @@ export default function DevisPage() {
                       {devis.client?.nom || "—"} {devis.objet ? `· ${devis.objet}` : ""}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <span className="font-display text-sm text-teal">
                       {totalTtc.toFixed(2)} €
                     </span>
@@ -248,6 +263,13 @@ export default function DevisPage() {
                           : "Envoyer pour signature"}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleSupprimer(devis)}
+                      disabled={suppressionEnCours === devis.id}
+                      className="text-xs text-textMuted hover:text-amber disabled:opacity-50"
+                    >
+                      {suppressionEnCours === devis.id ? "…" : "✕"}
+                    </button>
                   </div>
                 </div>
               );

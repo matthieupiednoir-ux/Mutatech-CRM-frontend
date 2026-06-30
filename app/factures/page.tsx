@@ -11,6 +11,7 @@ import {
   creerFacture,
   envoyerFacture,
   marquerFacturePayee,
+  supprimerFacture,
   calculerTotaux,
   ApiError,
 } from "@/lib/api";
@@ -36,6 +37,7 @@ export default function FacturesPage() {
   const [enregistrement, setEnregistrement] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
   const [paiementEnCours, setPaiementEnCours] = useState<string | null>(null);
+  const [suppressionEnCours, setSuppressionEnCours] = useState<string | null>(null);
 
   const [origineDevisId, setOrigineDevisId] = useState<string>("");
   const [clientId, setClientId] = useState("");
@@ -130,6 +132,20 @@ export default function FacturesPage() {
       setError(e instanceof ApiError ? e.message : "Erreur de mise à jour");
     } finally {
       setPaiementEnCours(null);
+    }
+  }
+
+  async function handleSupprimer(facture: Facture) {
+    if (!confirm(`Supprimer définitivement la facture ${facture.numero} ?`)) return;
+    setSuppressionEnCours(facture.id);
+    setError(null);
+    try {
+      await supprimerFacture(facture.id);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur de suppression");
+    } finally {
+      setSuppressionEnCours(null);
     }
   }
 
@@ -311,6 +327,13 @@ export default function FacturesPage() {
                         {paiementEnCours === facture.id ? "…" : "Marquer payée"}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleSupprimer(facture)}
+                      disabled={suppressionEnCours === facture.id}
+                      className="text-xs text-textMuted hover:text-amber disabled:opacity-50"
+                    >
+                      {suppressionEnCours === facture.id ? "…" : "✕"}
+                    </button>
                   </div>
                 </div>
               );

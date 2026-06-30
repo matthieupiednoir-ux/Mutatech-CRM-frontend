@@ -10,6 +10,7 @@ const ONGLETS = [
   { href: "/clients", label: "Clients" },
   { href: "/devis", label: "Devis" },
   { href: "/factures", label: "Factures" },
+  { href: "/depenses", label: "Dépenses" },
   { href: "/taches", label: "Tâches" },
   { href: "/prospects", label: "Prospects" },
   { href: "/comptabilite", label: "Comptabilité" },

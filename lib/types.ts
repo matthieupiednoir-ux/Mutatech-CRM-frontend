@@ -136,3 +136,30 @@ export interface ProspectInput {
   statut: string;
   notes?: string;
 }
+
+export interface Depense {
+  id: string;
+  libelle: string;
+  categorie?: string | null;
+  montant: number;
+  type: string; // "ponctuelle" | "recurrente"
+  date_depense?: string | null;
+  frequence?: string | null; // "mensuelle" | "annuelle"
+  date_debut?: string | null;
+  date_fin?: string | null;
+  actif: boolean;
+  notes?: string | null;
+}
+
+export interface DepenseInput {
+  libelle: string;
+  categorie?: string;
+  montant: number;
+  type: string;
+  date_depense?: string;
+  frequence?: string;
+  date_debut?: string;
+  date_fin?: string;
+  actif: boolean;
+  notes?: string;
+}

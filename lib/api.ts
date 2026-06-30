@@ -12,6 +12,8 @@ import {
   TacheInput,
   Prospect,
   ProspectInput,
+  Depense,
+  DepenseInput,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -50,6 +52,8 @@ export const creerDevis = (data: DevisInput) =>
   requete<Devis>("/api/devis", { method: "POST", body: JSON.stringify(data) });
 export const envoyerDevisPourSignature = (id: string) =>
   requete<Devis>(`/api/devis/${id}/envoyer`, { method: "POST" });
+export const supprimerDevis = (id: string) =>
+  requete<{ statut: string }>(`/api/devis/${id}`, { method: "DELETE" });
 
 // --- Signature publique (token secret, pas d'auth TOTP) ---
 export const getDevisPublic = (token: string) =>
@@ -69,6 +73,8 @@ export const envoyerFacture = (id: string) =>
   requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
 export const marquerFacturePayee = (id: string) =>
   requete<Facture>(`/api/factures/${id}/marquer-payee`, { method: "POST" });
+export const supprimerFacture = (id: string) =>
+  requete<{ statut: string }>(`/api/factures/${id}`, { method: "DELETE" });
 
 // --- Google ---
 export const getGoogleStatus = () =>
@@ -107,6 +113,15 @@ export const importerProspectsLot = (data: ProspectInput[]) =>
     method: "POST",
     body: JSON.stringify(data),
   });
+
+// --- Dépenses ---
+export const getDepenses = () => requete<Depense[]>("/api/depenses");
+export const creerDepense = (data: DepenseInput) =>
+  requete<Depense>("/api/depenses", { method: "POST", body: JSON.stringify(data) });
+export const modifierDepense = (id: string, data: DepenseInput) =>
+  requete<Depense>(`/api/depenses/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const supprimerDepense = (id: string) =>
+  requete<{ statut: string }>(`/api/depenses/${id}`, { method: "DELETE" });
 
 // --- Agent IA ---
 export interface AgentChatResponse {
