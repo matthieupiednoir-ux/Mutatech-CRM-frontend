@@ -44,6 +44,7 @@ const FILTRES_NICHE = [
   { id: "all", label: "Tous" },
   { id: "SSIAD", label: "SSIAD" },
   { id: "Cabinet médical", label: "Médical" },
+  { id: "PSDM", label: "PSDM" },
   { id: "Artisan", label: "Artisans" },
 ];
 
@@ -51,6 +52,7 @@ const FILTRES_NICHE = [
 const COULEUR_CARTE: Record<string, string> = {
   SSIAD: "#a89eff",
   "Cabinet médical": "#a89eff",
+  PSDM: "#f0b429",
   Artisan: "#5fe0c0",
   PME: "#77778A",
   Autre: "#77778A",
@@ -414,6 +416,7 @@ export default function ProspectsPage() {
                   <option value="PME">PME</option>
                   <option value="Artisan">Artisan</option>
                   <option value="Cabinet médical">Cabinet médical</option>
+                  <option value="PSDM">PSDM (prestataire / distributeur matériel)</option>
                   <option value="Autre">Autre</option>
                 </select>
               </label>
@@ -505,6 +508,13 @@ export default function ProspectsPage() {
                   style={{ background: "#a89eff" }}
                 />
                 Médical &amp; SSIAD
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ background: "#f0b429" }}
+                />
+                PSDM
               </span>
               <span className="flex items-center gap-1.5">
                 <span

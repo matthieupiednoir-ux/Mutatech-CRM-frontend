@@ -16,6 +16,8 @@ import {
   ApiError,
 } from "@/lib/api";
 
+const SECTEURS_SANTE = ["SSIAD", "Cabinet médical", "PSDM"];
+
 export default function DevisPage() {
   const [devisListe, setDevisListe] = useState<Devis[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -223,12 +225,13 @@ export default function DevisPage() {
                     </option>
                   ))}
                 </select>
-                {clientSelectionne?.secteur === "SSIAD" && (
-                  <p className="mt-1 text-xs text-amber">
-                    ⚠ Secteur SSIAD — la mention HDS/RGPD santé sera ajoutée
-                    automatiquement au PDF.
-                  </p>
-                )}
+                {clientSelectionne?.secteur &&
+                  SECTEURS_SANTE.includes(clientSelectionne.secteur) && (
+                    <p className="mt-1 text-xs text-amber">
+                      ⚠ Secteur {clientSelectionne.secteur} — la mention HDS/RGPD
+                      santé sera ajoutée automatiquement au PDF.
+                    </p>
+                  )}
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Objet</span>

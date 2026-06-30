@@ -143,6 +143,7 @@ export default function ClientsPage() {
                   <option value="PME">PME</option>
                   <option value="Artisan">Artisan</option>
                   <option value="Cabinet médical">Cabinet médical</option>
+                  <option value="PSDM">PSDM (prestataire / distributeur matériel)</option>
                   <option value="Autre">Autre</option>
                 </select>
               </label>
