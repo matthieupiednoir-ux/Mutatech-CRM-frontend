@@ -14,6 +14,8 @@ import {
   ProspectInput,
   Depense,
   DepenseInput,
+  MoisAbonnement,
+  RecapEcheances,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -57,6 +59,12 @@ export const envoyerDevisPourSignature = (id: string) =>
 export const supprimerDevis = (id: string) =>
   requete<{ statut: string }>(`/api/devis/${id}`, { method: "DELETE" });
 
+// --- Suivi & génération des mensualités d'un devis abonnement ---
+export const getAbonnementSuivi = (devisId: string) =>
+  requete<MoisAbonnement[]>(`/api/devis/${devisId}/abonnement-suivi`);
+export const genererFactureMois = (devisId: string) =>
+  requete<Facture>(`/api/devis/${devisId}/generer-facture-mois`, { method: "POST" });
+
 // --- Signature publique (token secret, pas d'auth TOTP) ---
 export const getDevisPublic = (token: string) =>
   requete<DevisPublic>(`/api/devis/public/${token}`);
@@ -77,8 +85,11 @@ export const envoyerFacture = (id: string) =>
   requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
 export const marquerFacturePayee = (id: string) =>
   requete<Facture>(`/api/factures/${id}/marquer-payee`, { method: "POST" });
+export const relancerFacture = (id: string) =>
+  requete<Facture>(`/api/factures/${id}/relancer`, { method: "POST" });
 export const supprimerFacture = (id: string) =>
   requete<{ statut: string }>(`/api/factures/${id}`, { method: "DELETE" });
+export const getEcheances = () => requete<RecapEcheances>("/api/factures/echeances");
 
 // --- Google ---
 export const getGoogleStatus = () =>

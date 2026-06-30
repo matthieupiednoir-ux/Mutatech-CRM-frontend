@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import LigneEditor from "@/components/LigneEditor";
+import SuiviAbonnement from "@/components/SuiviAbonnement";
 import { Client, Devis, Ligne } from "@/lib/types";
 import {
   getClients,
@@ -25,6 +26,7 @@ export default function DevisPage() {
   const [enregistrement, setEnregistrement] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
   const [suppressionEnCours, setSuppressionEnCours] = useState<string | null>(null);
+  const [suiviOuvert, setSuiviOuvert] = useState<string | null>(null);
 
   const [clientId, setClientId] = useState("");
   const [objet, setObjet] = useState("");
@@ -407,87 +409,104 @@ export default function DevisPage() {
               const { totalTtc } = calculerTotaux(devis.lignes, devis.taux_tva);
               const estModifiable = devis.statut === "brouillon";
               const estAbonnement = devis.type_facturation === "abonnement";
+              const suiviVisible = suiviOuvert === devis.id;
               return (
                 <div
                   key={devis.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface p-4"
+                  className="rounded-lg border border-line bg-surface p-4"
                 >
-                  <div>
-                    <p className="font-display text-sm font-bold text-textPrimary">
-                      {devis.numero}{" "}
-                      <span className="ml-2 font-mono text-xs font-normal text-textMuted">
-                        {devis.statut}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-display text-sm font-bold text-textPrimary">
+                        {devis.numero}{" "}
+                        <span className="ml-2 font-mono text-xs font-normal text-textMuted">
+                          {devis.statut}
+                        </span>
+                        {estAbonnement && (
+                          <span className="ml-2 rounded bg-violet/10 px-2 py-0.5 text-xs font-medium text-violet">
+                            Abonnement
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-textMuted">
+                        {devis.client?.nom || "—"} {devis.objet ? `· ${devis.objet}` : ""}
+                      </p>
+                      {estAbonnement && devis.montant_mensuel != null && (
+                        <p className="mt-0.5 text-[11px] text-violet">
+                          {devis.montant_mensuel.toFixed(2)} € HT / mois
+                          {devis.duree_mois ? ` · ${devis.duree_mois} mois` : ""}
+                          {devis.date_debut_abonnement
+                            ? ` · à partir du ${new Date(devis.date_debut_abonnement).toLocaleDateString("fr-FR")}`
+                            : ""}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-display text-sm text-teal">
+                        {estAbonnement
+                          ? `${devis.montant_mensuel?.toFixed(2) ?? "0.00"} € HT/mois`
+                          : `${totalTtc.toFixed(2)} €`}
                       </span>
-                      {estAbonnement && (
-                        <span className="ml-2 rounded bg-violet/10 px-2 py-0.5 text-xs font-medium text-violet">
-                          Abonnement
+                      {devis.drive_file_url ? (
+                        <a
+                          href={devis.drive_file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-violet hover:text-teal"
+                        >
+                          Voir le PDF (Drive) →
+                        </a>
+                      ) : (
+                        <span className="text-xs text-textMuted">
+                          Pas encore sur Drive
                         </span>
                       )}
-                    </p>
-                    <p className="text-xs text-textMuted">
-                      {devis.client?.nom || "—"} {devis.objet ? `· ${devis.objet}` : ""}
-                    </p>
-                    {estAbonnement && devis.montant_mensuel != null && (
-                      <p className="mt-0.5 text-[11px] text-violet">
-                        {devis.montant_mensuel.toFixed(2)} € HT / mois
-                        {devis.duree_mois ? ` · ${devis.duree_mois} mois` : ""}
-                        {devis.date_debut_abonnement
-                          ? ` · à partir du ${new Date(devis.date_debut_abonnement).toLocaleDateString("fr-FR")}`
-                          : ""}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-display text-sm text-teal">
-                      {estAbonnement
-                        ? `${devis.montant_mensuel?.toFixed(2) ?? "0.00"} € HT/mois`
-                        : `${totalTtc.toFixed(2)} €`}
-                    </span>
-                    {devis.drive_file_url ? (
-                      <a
-                        href={devis.drive_file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-violet hover:text-teal"
-                      >
-                        Voir le PDF (Drive) →
-                      </a>
-                    ) : (
-                      <span className="text-xs text-textMuted">
-                        Pas encore sur Drive
-                      </span>
-                    )}
-                    {estModifiable && (
+                      {estModifiable && (
+                        <button
+                          onClick={() => ouvrirEdition(devis)}
+                          className="text-xs text-violet hover:text-teal"
+                        >
+                          Modifier
+                        </button>
+                      )}
+                      {devis.signe_le ? (
+                        <span className="rounded bg-teal/10 px-2 py-1 text-xs font-medium text-teal">
+                          ✓ Signé
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleEnvoyer(devis.id)}
+                          disabled={envoiEnCours === devis.id}
+                          className="rounded bg-violet px-3 py-1.5 text-xs font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+                        >
+                          {envoiEnCours === devis.id
+                            ? "Envoi…"
+                            : "Envoyer pour signature"}
+                        </button>
+                      )}
                       <button
-                        onClick={() => ouvrirEdition(devis)}
-                        className="text-xs text-violet hover:text-teal"
+                        onClick={() => handleSupprimer(devis)}
+                        disabled={suppressionEnCours === devis.id}
+                        className="text-xs text-textMuted hover:text-amber disabled:opacity-50"
                       >
-                        Modifier
+                        {suppressionEnCours === devis.id ? "…" : "✕"}
                       </button>
-                    )}
-                    {devis.signe_le ? (
-                      <span className="rounded bg-teal/10 px-2 py-1 text-xs font-medium text-teal">
-                        ✓ Signé
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleEnvoyer(devis.id)}
-                        disabled={envoiEnCours === devis.id}
-                        className="rounded bg-violet px-3 py-1.5 text-xs font-medium text-white hover:bg-violet/90 disabled:opacity-50"
-                      >
-                        {envoiEnCours === devis.id
-                          ? "Envoi…"
-                          : "Envoyer pour signature"}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleSupprimer(devis)}
-                      disabled={suppressionEnCours === devis.id}
-                      className="text-xs text-textMuted hover:text-amber disabled:opacity-50"
-                    >
-                      {suppressionEnCours === devis.id ? "…" : "✕"}
-                    </button>
+                    </div>
                   </div>
+
+                  {estAbonnement && devis.signe_le && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() =>
+                          setSuiviOuvert(suiviVisible ? null : devis.id)
+                        }
+                        className="text-[11px] text-textMuted hover:text-textPrimary"
+                      >
+                        {suiviVisible ? "▾ Masquer" : "▸ Voir"} le suivi des mensualités
+                      </button>
+                      {suiviVisible && <SuiviAbonnement devisId={devis.id} />}
+                    </div>
+                  )}
                 </div>
               );
             })}

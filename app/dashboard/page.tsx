@@ -10,10 +10,13 @@ import {
   getFacturesListe,
   getTaches,
   getProspects,
+  getEcheances,
+  relancerFacture,
+  genererFactureMois,
   calculerTotaux,
   ApiError,
 } from "@/lib/api";
-import { Client, Devis, Facture, Tache, Prospect } from "@/lib/types";
+import { Client, Devis, Facture, Tache, Prospect, RecapEcheances } from "@/lib/types";
 
 const COULEUR_BARRE: Record<string, string> = {
   // Devis
@@ -71,6 +74,7 @@ const ORDRE_PAR_DEFAUT = [
   "kpi-facture",
   "kpi-taches",
   "kpi-prospects",
+  "echeances",
   "apercu-devis",
   "apercu-prospects",
   "apercu-factures",
@@ -88,6 +92,7 @@ const TITRES_CARTES: Record<string, string> = {
   "kpi-facture": "KPI · Facturé",
   "kpi-taches": "KPI · Tâches accomplies",
   "kpi-prospects": "KPI · Prospects actifs",
+  echeances: "Échéances & Relances",
   "apercu-devis": "Aperçu · Devis",
   "apercu-prospects": "Aperçu · Prospects",
   "apercu-factures": "Aperçu · Factures",
@@ -106,8 +111,6 @@ function chargerConfig(): { ordre: string[]; masquees: string[] } {
     const brut = localStorage.getItem(STORAGE_KEY);
     if (!brut) return { ordre: ORDRE_PAR_DEFAUT, masquees: [] };
     const parsed = JSON.parse(brut);
-    // Ajoute en fin de liste toute nouvelle carte qui n'existerait pas encore
-    // dans la config sauvegardée (ex: après une mise à jour du dashboard).
     const ordreComplet = [
       ...parsed.ordre.filter((id: string) => ORDRE_PAR_DEFAUT.includes(id)),
       ...ORDRE_PAR_DEFAUT.filter((id) => !parsed.ordre.includes(id)),
@@ -237,10 +240,155 @@ function AperculCard({
   );
 }
 
-// --- Carte de personnalisation : poignée de déplacement + bouton masquer ---
+// --- Widget Échéances & Relances ---
+function EcheancesCard({ modePerso }: { modePerso: boolean }) {
+  const [recap, setRecap] = useState<RecapEcheances | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionEnCours, setActionEnCours] = useState<string | null>(null);
+
+  function charger() {
+    getEcheances()
+      .then(setRecap)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    charger();
+  }, []);
+
+  async function handleRelancer(factureId: string) {
+    setActionEnCours(factureId);
+    try {
+      await relancerFacture(factureId);
+      charger();
+    } catch {
+      // erreur affichée nulle part ici, volontairement discret sur le dashboard
+    } finally {
+      setActionEnCours(null);
+    }
+  }
+
+  async function handleGenererMois(devisId: string) {
+    setActionEnCours(devisId);
+    try {
+      await genererFactureMois(devisId);
+      charger();
+    } catch {
+      // idem
+    } finally {
+      setActionEnCours(null);
+    }
+  }
+
+  const total =
+    (recap?.en_retard.length || 0) +
+    (recap?.a_venir.length || 0) +
+    (recap?.abonnements_a_facturer.length || 0);
+
+  return (
+    <div className="rounded-xl border border-line bg-surface p-4 sm:col-span-2">
+      <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances &amp; Relances</h3>
+      {loading ? (
+        <p className="text-xs text-textMuted">Chargement…</p>
+      ) : total === 0 ? (
+        <p className="text-xs text-textMuted">Tout est à jour — rien à signaler.</p>
+      ) : (
+        <div className="space-y-3">
+          {recap!.en_retard.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber">
+                En retard
+              </p>
+              <div className="space-y-1.5">
+                {recap!.en_retard.map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-center justify-between rounded-lg bg-amber/10 px-2.5 py-1.5"
+                  >
+                    <span className="truncate text-xs text-textPrimary">
+                      {f.numero} — {f.client_nom}{" "}
+                      <span className="text-textMuted">
+                        ({f.jours} j) · {f.montant_ttc.toFixed(0)} €
+                      </span>
+                    </span>
+                    {!modePerso && (
+                      <button
+                        onClick={() => handleRelancer(f.id)}
+                        disabled={actionEnCours === f.id}
+                        className="ml-2 shrink-0 rounded bg-amber px-2 py-0.5 text-[10px] font-medium text-ink hover:opacity-90 disabled:opacity-50"
+                      >
+                        {actionEnCours === f.id ? "…" : "Relancer"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {recap!.a_venir.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-textMuted">
+                À venir (14 jours)
+              </p>
+              <div className="space-y-1.5">
+                {recap!.a_venir.map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5"
+                  >
+                    <span className="truncate text-xs text-textPrimary">
+                      {f.numero} — {f.client_nom}
+                    </span>
+                    <span className="ml-2 shrink-0 text-[11px] text-textMuted">
+                      dans {-f.jours} j · {f.montant_ttc.toFixed(0)} €
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {recap!.abonnements_a_facturer.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-violet">
+                Abonnements à facturer ce mois
+              </p>
+              <div className="space-y-1.5">
+                {recap!.abonnements_a_facturer.map((a) => (
+                  <div
+                    key={a.devis_id}
+                    className="flex items-center justify-between rounded-lg bg-violet/10 px-2.5 py-1.5"
+                  >
+                    <span className="truncate text-xs text-textPrimary">
+                      {a.devis_numero} — {a.client_nom}{" "}
+                      <span className="text-textMuted">
+                        (mois {a.mois_index}) · {a.montant.toFixed(0)} €
+                      </span>
+                    </span>
+                    {!modePerso && (
+                      <button
+                        onClick={() => handleGenererMois(a.devis_id)}
+                        disabled={actionEnCours === a.devis_id}
+                        className="ml-2 shrink-0 rounded bg-violet px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {actionEnCours === a.devis_id ? "…" : "Générer"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CarteReorganisable({
   id,
-  index,
   draggedId,
   onDragStart,
   onDragOver,
@@ -249,7 +397,6 @@ function CarteReorganisable({
   children,
 }: {
   id: string;
-  index: number;
   draggedId: string | null;
   onDragStart: (id: string) => void;
   onDragOver: (id: string) => void;
@@ -405,8 +552,6 @@ export default function DashboardPage() {
     couleur: COULEUR_BARRE[t.statut],
   }));
 
-  // Rendu de chaque carte par son identifiant — un seul endroit à modifier
-  // si on ajoute une nouvelle carte un jour.
   function rendreCarte(id: string): React.ReactNode {
     switch (id) {
       case "kpi-clients":
@@ -441,6 +586,8 @@ export default function DashboardPage() {
             sousLabel={`${tauxConversion}% de conversion`}
           />
         );
+      case "echeances":
+        return <EcheancesCard modePerso={modePerso} />;
       case "apercu-devis":
         return <AperculCard titre="Devis" lien="/devis" items={apercuDevis} modePerso={modePerso} />;
       case "apercu-prospects":
@@ -546,7 +693,28 @@ export default function DashboardPage() {
                       <CarteReorganisable
                         key={id}
                         id={id}
-                        index={0}
+                        draggedId={draggedId}
+                        onDragStart={setDraggedId}
+                        onDragOver={setSurvolId}
+                        onDrop={handleDrop}
+                        onMasquer={masquerCarte}
+                      >
+                        {rendreCarte(id)}
+                      </CarteReorganisable>
+                    ) : (
+                      <div key={id}>{rendreCarte(id)}</div>
+                    )
+                  )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {cartesVisibles
+                  .filter((id) => id === "echeances")
+                  .map((id) =>
+                    modePerso ? (
+                      <CarteReorganisable
+                        key={id}
+                        id={id}
                         draggedId={draggedId}
                         onDragStart={setDraggedId}
                         onDragOver={setSurvolId}
@@ -569,7 +737,6 @@ export default function DashboardPage() {
                       <CarteReorganisable
                         key={id}
                         id={id}
-                        index={0}
                         draggedId={draggedId}
                         onDragStart={setDraggedId}
                         onDragOver={setSurvolId}
@@ -592,7 +759,6 @@ export default function DashboardPage() {
                       <CarteReorganisable
                         key={id}
                         id={id}
-                        index={0}
                         draggedId={draggedId}
                         onDragStart={setDraggedId}
                         onDragOver={setSurvolId}

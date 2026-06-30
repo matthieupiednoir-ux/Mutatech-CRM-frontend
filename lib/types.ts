@@ -83,6 +83,15 @@ export interface DevisInput {
   premier_versement?: number;
 }
 
+export interface MoisAbonnement {
+  mois_index: number;
+  date_prevue: string;
+  montant: number;
+  facture_id?: string | null;
+  facture_numero?: string | null;
+  statut: string; // "a_venir" | "a_generer" | "brouillon" | "envoyee" | "payee"
+}
+
 export interface Facture {
   id: string;
   numero: string;
@@ -96,6 +105,7 @@ export interface Facture {
   drive_file_url?: string | null;
   envoyee_le?: string | null;
   payee_le?: string | null;
+  derniere_relance_le?: string | null;
   lignes: Ligne[];
   client?: Client | null;
 }
@@ -107,6 +117,31 @@ export interface FactureInput {
   taux_tva: number;
   date_echeance?: string;
   lignes: Ligne[];
+}
+
+export interface EcheanceFacture {
+  id: string;
+  numero: string;
+  client_nom: string;
+  montant_ttc: number;
+  date_echeance: string;
+  jours: number; // positif = jours de retard, négatif = jours restants
+  derniere_relance_le?: string | null;
+}
+
+export interface AbonnementAFacturer {
+  devis_id: string;
+  devis_numero: string;
+  client_nom: string;
+  mois_index: number;
+  montant: number;
+  date_prevue: string;
+}
+
+export interface RecapEcheances {
+  en_retard: EcheanceFacture[];
+  a_venir: EcheanceFacture[];
+  abonnements_a_facturer: AbonnementAFacturer[];
 }
 
 export interface GoogleStatus {
