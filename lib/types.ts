@@ -1,3 +1,30 @@
+// types.ts — Types TypeScript pour le CRM Mutatech SaaS
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user_id: string;
+  tenant_id: string | null;
+  role: string;
+  nom: string | null;
+  email: string;
+}
+
+export interface UserMe {
+  id: string;
+  email: string;
+  nom: string | null;
+  role: string;
+  tenant_id: string | null;
+}
+
+export interface TenantConfig {
+  nom_entreprise: string | null;
+  logo_url: string | null;
+  couleur_primaire: string | null;
+  couleur_secondaire: string | null;
+}
+
 export interface Client {
   id: string;
   nom: string;
@@ -42,8 +69,7 @@ export interface Devis {
   signe_le?: string | null;
   lignes: Ligne[];
   client?: Client | null;
-
-  type_facturation: string; // "ponctuelle" | "abonnement"
+  type_facturation: string;
   montant_mensuel?: number | null;
   duree_mois?: number | null;
   date_debut_abonnement?: string | null;
@@ -61,7 +87,6 @@ export interface DevisPublic {
   signe_le?: string | null;
   lignes: Ligne[];
   client_nom: string;
-
   type_facturation: string;
   montant_mensuel?: number | null;
   duree_mois?: number | null;
@@ -75,8 +100,7 @@ export interface DevisInput {
   contexte?: string;
   taux_tva: number;
   lignes: Ligne[];
-
-  type_facturation?: string; // "ponctuelle" | "abonnement" — défaut backend: ponctuelle
+  type_facturation?: string;
   montant_mensuel?: number;
   duree_mois?: number;
   date_debut_abonnement?: string;
@@ -89,7 +113,7 @@ export interface MoisAbonnement {
   montant: number;
   facture_id?: string | null;
   facture_numero?: string | null;
-  statut: string; // "a_venir" | "a_generer" | "brouillon" | "envoyee" | "payee"
+  statut: string;
 }
 
 export interface Facture {
@@ -125,7 +149,7 @@ export interface EcheanceFacture {
   client_nom: string;
   montant_ttc: number;
   date_echeance: string;
-  jours: number; // positif = jours de retard, négatif = jours restants
+  jours: number;
   derniere_relance_le?: string | null;
 }
 
@@ -195,9 +219,9 @@ export interface Depense {
   libelle: string;
   categorie?: string | null;
   montant: number;
-  type: string; // "ponctuelle" | "recurrente"
+  type: string;
   date_depense?: string | null;
-  frequence?: string | null; // "mensuelle" | "annuelle"
+  frequence?: string | null;
   date_debut?: string | null;
   date_fin?: string | null;
   actif: boolean;

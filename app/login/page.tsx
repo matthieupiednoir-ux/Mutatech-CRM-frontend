@@ -1,82 +1,237 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { loginCrm, registerCrm, loginGoogle, getTenantConfig, ApiError } from "@/lib/api";
+import { estConnecte, appliquerCouleursTenant } from "@/lib/auth";
+
+type Mode = "login" | "register";
 
 export default function LoginPage() {
-  const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [mode, setMode] = useState<Mode>("login");
+  const [email, setEmail] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
+  const [nom, setNom] = useState("");
+  const [nomEntreprise, setNomEntreprise] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Si déjà connecté → rediriger directement
+  useEffect(() => {
+    if (estConnecte()) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
+  // Charge le SDK Google Identity Services au montage
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
+
+  async function chargerConfigEtRediriger() {
+    try {
+      const config = await getTenantConfig();
+      appliquerCouleursTenant();
+    } catch {
+      // Config non bloquante
+    }
+    const next = searchParams.get("next") || "/dashboard";
+    router.replace(next);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    if (!/^\d{6}$/.test(code)) {
-      setError("Entre les 6 chiffres du code.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const res = await fetch("/api/verify-totp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
-
-      if (data.valid) {
-        router.push("/");
-        router.refresh();
+      if (mode === "login") {
+        await loginCrm({ email, mot_de_passe: motDePasse });
       } else {
-        setError("Code incorrect. Réessaie.");
-        setCode("");
+        await registerCrm({
+          email,
+          mot_de_passe: motDePasse,
+          nom: nom || undefined,
+          nom_entreprise: nomEntreprise || undefined,
+        });
       }
-    } catch {
-      setError("Erreur de connexion. Réessaie.");
+      await chargerConfigEtRediriger();
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? JSON.parse(e.message)?.detail || e.message
+          : "Erreur de connexion."
+      );
     } finally {
       setLoading(false);
     }
   }
 
+  function handleGoogleClick() {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId || !(window as any).google) {
+      setError("Google n'est pas disponible pour le moment. Utilise email + mot de passe.");
+      return;
+    }
+    setGoogleLoading(true);
+    setError(null);
+    (window as any).google.accounts.id.initialize({
+      client_id: clientId,
+      callback: async (response: any) => {
+        try {
+          await loginGoogle(response.credential);
+          await chargerConfigEtRediriger();
+        } catch (e) {
+          setError(e instanceof ApiError ? e.message : "Erreur Google.");
+          setGoogleLoading(false);
+        }
+      },
+    });
+    (window as any).google.accounts.id.prompt();
+  }
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-line bg-surface text-2xl">
-        🔒
-      </div>
-      <h1 className="font-display text-2xl font-bold text-textPrimary">
-        Espace Collaborateur
-      </h1>
-      <p className="mb-8 mt-3 max-w-sm text-sm text-textMuted">
-        Entre le code à 6 chiffres affiché dans Google Authenticator.
-      </p>
-      <form
-        onSubmit={handleSubmit}
-        className="flex w-full max-w-xs flex-col items-center gap-4"
-      >
-        <input
-          type="text"
-          inputMode="numeric"
-          maxLength={6}
-          autoComplete="one-time-code"
-          value={code}
-          onChange={(e) =>
-            setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-          }
-          placeholder="000000"
-          className="w-full rounded-xl border-2 border-line bg-surface px-4 py-4 text-center font-mono text-3xl font-bold tracking-[0.3em] text-textPrimary focus:border-violet focus:outline-none"
-        />
-        <p className="min-h-[18px] text-sm text-amber">{error}</p>
+    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <span className="font-display text-2xl font-bold text-textPrimary">
+            Muta<span className="text-violet">tech</span>
+          </span>
+          <p className="mt-1 text-sm text-textMuted">CRM · Espace client</p>
+        </div>
+
+        {/* Onglets login / register */}
+        <div className="mb-6 flex rounded-lg border border-line bg-surface p-1">
+          <button
+            onClick={() => { setMode("login"); setError(null); }}
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
+              mode === "login"
+                ? "bg-violet text-white"
+                : "text-textMuted hover:text-textPrimary"
+            }`}
+          >
+            Se connecter
+          </button>
+          <button
+            onClick={() => { setMode("register"); setError(null); }}
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
+              mode === "register"
+                ? "bg-violet text-white"
+                : "text-textMuted hover:text-textPrimary"
+            }`}
+          >
+            Créer un compte
+          </button>
+        </div>
+
+        {/* Formulaire */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "register" && (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-sm text-textMuted">Votre nom</span>
+                <input
+                  type="text"
+                  value={nom}
+                  onChange={(e) => setNom(e.target.value)}
+                  placeholder="ex: Marie Dupont"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-textMuted">Nom de votre entreprise</span>
+                <input
+                  type="text"
+                  value={nomEntreprise}
+                  onChange={(e) => setNomEntreprise(e.target.value)}
+                  placeholder="ex: Cabinet Dupont"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
+                />
+              </label>
+            </>
+          )}
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-textMuted">Email</span>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="vous@exemple.fr"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-textMuted">Mot de passe</span>
+            <input
+              type="password"
+              required
+              value={motDePasse}
+              onChange={(e) => setMotDePasse(e.target.value)}
+              placeholder="••••••••"
+              minLength={8}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
+            />
+            {mode === "register" && (
+              <p className="mt-1 text-[11px] text-textMuted">8 caractères minimum</p>
+            )}
+          </label>
+
+          {error && (
+            <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-amber">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-violet py-3 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+          >
+            {loading
+              ? mode === "login" ? "Connexion…" : "Création du compte…"
+              : mode === "login" ? "Se connecter" : "Créer mon espace CRM"}
+          </button>
+        </form>
+
+        {/* Séparateur */}
+        <div className="my-4 flex items-center gap-3">
+          <div className="flex-1 border-t border-line" />
+          <span className="text-xs text-textMuted">ou</span>
+          <div className="flex-1 border-t border-line" />
+        </div>
+
+        {/* Bouton Google */}
         <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-violet px-6 py-3 font-display font-medium text-white transition hover:bg-violet/90 disabled:opacity-50"
+          onClick={handleGoogleClick}
+          disabled={googleLoading}
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-line bg-surface py-3 text-sm font-medium text-textPrimary hover:border-violet/40 disabled:opacity-50 transition"
         >
-          {loading ? "Vérification…" : "Se connecter"}
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          {googleLoading ? "Connexion Google…" : "Continuer avec Google"}
         </button>
-      </form>
+
+        <p className="mt-6 text-center text-[11px] text-textMuted">
+          En créant un compte vous acceptez les conditions d'utilisation de Mutatech.
+          <br />
+          Besoin d'aide ? <a href="mailto:matthieu.piednoir@mutatech.fr" className="text-violet">Contactez-nous</a>
+        </p>
+      </div>
     </main>
   );
 }
