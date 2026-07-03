@@ -11,16 +11,18 @@ import {
   ApiError,
 } from "@/lib/api";
 
-const SECTEURS = [
-  // Médical / Paramédical
+const SECTEURS_SANTE = [
   { value: "IDEL", label: "IDEL — Infirmier(ère) libéral(e)" },
   { value: "SSIAD", label: "SSIAD — Service de soins infirmiers à domicile" },
+  { value: "PSDM", label: "PSDM — Prestataire de santé à domicile" },
   { value: "Cabinet médical", label: "Cabinet médical" },
   { value: "Cabinet paramédical", label: "Cabinet paramédical (kiné, ortho…)" },
   { value: "Clinique", label: "Clinique / Hôpital privé" },
   { value: "EHPAD", label: "EHPAD / Maison de retraite" },
   { value: "Pharmacie", label: "Pharmacie" },
-  // Artisans / BTP
+];
+
+const SECTEURS_ARTISANS = [
   { value: "Plomberie", label: "Plomberie / Chauffage" },
   { value: "Électricité", label: "Électricité" },
   { value: "Maçonnerie", label: "Maçonnerie / Gros œuvre" },
@@ -28,7 +30,9 @@ const SECTEURS = [
   { value: "Peinture", label: "Peinture / Revêtements" },
   { value: "Toiture", label: "Toiture / Couverture" },
   { value: "Climatisation", label: "Climatisation / VMC" },
-  // Commerce / Services
+];
+
+const SECTEURS_COMMERCE = [
   { value: "Commerce", label: "Commerce / Retail" },
   { value: "Restauration", label: "Restauration / Hôtellerie" },
   { value: "Immobilier", label: "Immobilier" },
@@ -37,11 +41,10 @@ const SECTEURS = [
   { value: "Autre", label: "Autre" },
 ];
 
-// Secteurs qui déclenchent la mention HDS/RGPD santé dans les PDFs
-const SECTEURS_SANTE = ["IDEL", "SSIAD", "Cabinet médical", "Cabinet paramédical", "Clinique", "EHPAD", "Pharmacie"];
+const SECTEURS_SANTE_VALUES = SECTEURS_SANTE.map((s) => s.value);
 
 function estSecteurSante(secteur?: string | null): boolean {
-  return !!secteur && SECTEURS_SANTE.includes(secteur);
+  return !!secteur && SECTEURS_SANTE_VALUES.includes(secteur);
 }
 
 const VIDE: ClientInput = {
@@ -55,6 +58,15 @@ const VIDE: ClientInput = {
   activite_description: "",
 };
 
+function placeholderActivite(secteur: string): string {
+  switch (secteur) {
+    case "IDEL": return "ex: Utilise Albus, 45 patients actifs, zone Nice Nord";
+    case "SSIAD": return "ex: 8 IDE, 120 patients, secteur 06";
+    case "PSDM": return "ex: Matériel respiratoire, 200 patients, HAD";
+    default: return "ex: 3 associés, spécialité cardiologie";
+  }
+}
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +76,6 @@ export default function ClientsPage() {
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppressionEnCours, setSuppressionEnCours] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
-
   const [form, setForm] = useState<ClientInput>(VIDE);
 
   function charger() {
@@ -199,22 +210,18 @@ export default function ClientsPage() {
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                 >
                   <option value="">— Sélectionner un secteur —</option>
-                  <optgroup label="Médical / Paramédical">
-                    {SECTEURS.filter((s) => SECTEURS_SANTE.includes(s.value)).map((s) => (
+                  <optgroup label="Médical / Paramédical / Santé à domicile">
+                    {SECTEURS_SANTE.map((s) => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </optgroup>
                   <optgroup label="Artisans / BTP">
-                    {SECTEURS.filter((s) =>
-                      ["Plomberie", "Électricité", "Maçonnerie", "Menuiserie", "Peinture", "Toiture", "Climatisation"].includes(s.value)
-                    ).map((s) => (
+                    {SECTEURS_ARTISANS.map((s) => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </optgroup>
                   <optgroup label="Commerce / Services">
-                    {SECTEURS.filter((s) =>
-                      ["Commerce", "Restauration", "Immobilier", "Juridique", "Comptabilité", "Autre"].includes(s.value)
-                    ).map((s) => (
+                    {SECTEURS_COMMERCE.map((s) => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </optgroup>
@@ -225,8 +232,13 @@ export default function ClientsPage() {
                   </p>
                 )}
                 {form.secteur === "IDEL" && (
-                  <p className="mt-1 text-[11px] text-violet">
+                  <p className="mt-0.5 text-[11px] text-violet">
                     💡 Ce client peut bénéficier de la plateforme IDEL Mutatech (pipeline ordonnances + cotation NGAP).
+                  </p>
+                )}
+                {form.secteur === "PSDM" && (
+                  <p className="mt-0.5 text-[11px] text-violet">
+                    💡 Prestataire de santé à domicile — matériel médical, HAD, télésurveillance.
                   </p>
                 )}
               </label>
@@ -275,19 +287,11 @@ export default function ClientsPage() {
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">
                   Description activité
-                  {form.secteur === "IDEL" && " (LPS utilisé, nombre de patients…)"}
-                  {form.secteur === "SSIAD" && " (nombre de patients, équipe…)"}
                 </span>
                 <input
                   value={form.activite_description}
                   onChange={(e) => setForm({ ...form, activite_description: e.target.value })}
-                  placeholder={
-                    form.secteur === "IDEL"
-                      ? "ex: Utilise Albus, 45 patients actifs"
-                      : form.secteur === "SSIAD"
-                      ? "ex: 8 IDE, 120 patients"
-                      : "ex: 3 associés, spécialité cardiologie"
-                  }
+                  placeholder={placeholderActivite(form.secteur || "")}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary placeholder:text-textMuted/50"
                 />
               </label>
@@ -327,7 +331,6 @@ export default function ClientsPage() {
           </form>
         )}
 
-        {/* Recherche */}
         {!loading && clients.length > 0 && (
           <div className="mb-4">
             <input
@@ -358,6 +361,8 @@ export default function ClientsPage() {
                     {client.secteur && (
                       <span className={`ml-2 rounded px-2 py-0.5 text-[10px] font-medium ${
                         client.secteur === "IDEL"
+                          ? "bg-violet/10 text-violet"
+                          : client.secteur === "PSDM"
                           ? "bg-violet/10 text-violet"
                           : estSecteurSante(client.secteur)
                           ? "bg-teal/10 text-teal"
