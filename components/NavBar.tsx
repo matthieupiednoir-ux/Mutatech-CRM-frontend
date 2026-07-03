@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { getGoogleStatus, urlConnexionGoogle } from "@/lib/api";
+import { deconnecter, getUser } from "@/lib/auth";
 
 const ONGLETS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -30,6 +31,7 @@ function NavBarInterieur() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [googleConnecte, setGoogleConnecte] = useState<boolean | null>(null);
+  const user = getUser();
 
   useEffect(() => {
     getGoogleStatus()
@@ -37,8 +39,8 @@ function NavBarInterieur() {
       .catch(() => setGoogleConnecte(false));
   }, [searchParams]);
 
-  async function handleLogout() {
-    await fetch("/api/logout", { method: "POST" });
+  function handleLogout() {
+    deconnecter();
     router.push("/login");
   }
 
@@ -77,9 +79,11 @@ function NavBarInterieur() {
           )}
           {googleConnecte === true && (
             <span className="flex items-center gap-1.5 text-xs text-teal">
-              <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Google
-              connecté
+              <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Google connecté
             </span>
+          )}
+          {user?.email && (
+            <span className="text-xs text-textMuted">{user.email}</span>
           )}
           <button
             onClick={handleLogout}
