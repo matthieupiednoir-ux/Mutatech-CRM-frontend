@@ -1,10 +1,5 @@
 // lib/auth.ts
 // Gestion du token JWT côté client (localStorage + cookie marqueur).
-//
-// Le cookie "mutatech_crm_has_token" est un marqueur léger (pas le JWT
-// lui-même) que le middleware Next.js peut lire côté Edge Runtime pour
-// protéger les routes sans exposer le token dans les cookies.
-// La validation réelle du JWT reste exclusivement côté backend FastAPI.
 
 import { AuthResponse, TenantConfig } from "./types";
 
@@ -15,13 +10,21 @@ const COOKIE_PRESENCE = "mutatech_crm_has_token";
 
 function poserCookieMarqueur(): void {
   if (typeof document === "undefined") return;
-  // Cookie de session (expire à la fermeture du navigateur), SameSite=Strict
   document.cookie = `${COOKIE_PRESENCE}=1; path=/; SameSite=Strict`;
 }
 
 function supprimerCookieMarqueur(): void {
   if (typeof document === "undefined") return;
   document.cookie = `${COOKIE_PRESENCE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict`;
+}
+
+export interface UserSession {
+  user_id: string;
+  tenant_id: string | null;
+  role: string;
+  produit: string; // "crm" | "idel" | "crm+idel"
+  nom: string | null;
+  email: string;
 }
 
 export function sauvegarderAuth(auth: AuthResponse): void {
@@ -33,9 +36,10 @@ export function sauvegarderAuth(auth: AuthResponse): void {
       user_id: auth.user_id,
       tenant_id: auth.tenant_id,
       role: auth.role,
+      produit: auth.produit || "crm",
       nom: auth.nom,
       email: auth.email,
-    })
+    } satisfies UserSession)
   );
   poserCookieMarqueur();
 }
@@ -45,12 +49,12 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function getUser(): Omit<AuthResponse, "access_token" | "token_type"> | null {
+export function getUser(): UserSession | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as UserSession;
   } catch {
     return null;
   }
@@ -58,6 +62,10 @@ export function getUser(): Omit<AuthResponse, "access_token" | "token_type"> | n
 
 export function estConnecte(): boolean {
   return !!getToken();
+}
+
+export function getProduit(): string {
+  return getUser()?.produit || "crm";
 }
 
 export function deconnecter(): void {
@@ -92,8 +100,6 @@ export function getCouleurs(): { primaire: string; secondaire: string } {
   };
 }
 
-// Applique les couleurs du tenant comme CSS custom properties sur <html>
-// — appelé au montage du layout racine après chargement de la config.
 export function appliquerCouleursTenant(): void {
   if (typeof window === "undefined") return;
   const { primaire, secondaire } = getCouleurs();

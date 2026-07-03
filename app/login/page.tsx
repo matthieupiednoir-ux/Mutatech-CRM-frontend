@@ -2,27 +2,32 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { loginCrm, registerCrm, loginGoogle, getTenantConfig, ApiError } from "@/lib/api";
-import { estConnecte, appliquerCouleursTenant } from "@/lib/auth";
+import { loginCrm, loginGoogle, getTenantConfig, ApiError } from "@/lib/api";
+import { estConnecte, getUser, appliquerCouleursTenant } from "@/lib/auth";
 
-type Mode = "login" | "register";
+// Retourne la destination selon le produit du compte
+function destinationProduit(produit: string, next?: string | null): string {
+  if (next && next !== "/") return next;
+  switch (produit) {
+    case "idel": return "/idel";
+    case "crm+idel": return "/choix-produit";
+    default: return "/dashboard";
+  }
+}
 
-// Composant interne qui utilise useSearchParams — doit être dans <Suspense>
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
-  const [nom, setNom] = useState("");
-  const [nomEntreprise, setNomEntreprise] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (estConnecte()) {
-      router.replace("/dashboard");
+      const user = getUser();
+      router.replace(destinationProduit(user?.produit || "crm"));
     }
   }, [router]);
 
@@ -35,13 +40,13 @@ function LoginForm() {
     return () => { document.head.removeChild(script); };
   }, []);
 
-  async function chargerConfigEtRediriger() {
+  async function chargerConfigEtRediriger(produit: string) {
     try {
       await getTenantConfig();
       appliquerCouleursTenant();
     } catch { /* non bloquant */ }
-    const next = searchParams.get("next") || "/dashboard";
-    router.replace(next);
+    const next = searchParams.get("next");
+    router.replace(destinationProduit(produit, next));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -49,19 +54,10 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      if (mode === "login") {
-        await loginCrm({ email, mot_de_passe: motDePasse });
-      } else {
-        await registerCrm({
-          email,
-          mot_de_passe: motDePasse,
-          nom: nom || undefined,
-          nom_entreprise: nomEntreprise || undefined,
-        });
-      }
-      await chargerConfigEtRediriger();
+      const auth = await loginCrm({ email, mot_de_passe: motDePasse });
+      await chargerConfigEtRediriger(auth.produit);
     } catch (e) {
-      let msg = "Erreur de connexion.";
+      let msg = "Email ou mot de passe incorrect.";
       if (e instanceof ApiError) {
         try { msg = JSON.parse(e.message)?.detail || e.message; } catch { msg = e.message; }
       }
@@ -83,8 +79,8 @@ function LoginForm() {
       client_id: clientId,
       callback: async (response: any) => {
         try {
-          await loginGoogle(response.credential);
-          await chargerConfigEtRediriger();
+          const auth = await loginGoogle(response.credential);
+          await chargerConfigEtRediriger(auth.produit);
         } catch (e) {
           setError(e instanceof ApiError ? e.message : "Erreur Google.");
           setGoogleLoading(false);
@@ -100,54 +96,10 @@ function LoginForm() {
         <span className="font-display text-2xl font-bold text-textPrimary">
           Muta<span className="text-violet">tech</span>
         </span>
-        <p className="mt-1 text-sm text-textMuted">CRM · Espace client</p>
-      </div>
-
-      <div className="mb-6 flex rounded-lg border border-line bg-surface p-1">
-        <button
-          onClick={() => { setMode("login"); setError(null); }}
-          className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
-            mode === "login" ? "bg-violet text-white" : "text-textMuted hover:text-textPrimary"
-          }`}
-        >
-          Se connecter
-        </button>
-        <button
-          onClick={() => { setMode("register"); setError(null); }}
-          className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
-            mode === "register" ? "bg-violet text-white" : "text-textMuted hover:text-textPrimary"
-          }`}
-        >
-          Créer un compte
-        </button>
+        <p className="mt-1 text-sm text-textMuted">Mon espace</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {mode === "register" && (
-          <>
-            <label className="block">
-              <span className="mb-1 block text-sm text-textMuted">Votre nom</span>
-              <input
-                type="text"
-                value={nom}
-                onChange={(e) => setNom(e.target.value)}
-                placeholder="ex: Marie Dupont"
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm text-textMuted">Nom de votre entreprise</span>
-              <input
-                type="text"
-                value={nomEntreprise}
-                onChange={(e) => setNomEntreprise(e.target.value)}
-                placeholder="ex: Cabinet Dupont"
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
-              />
-            </label>
-          </>
-        )}
-
         <label className="block">
           <span className="mb-1 block text-sm text-textMuted">Email</span>
           <input
@@ -168,12 +120,8 @@ function LoginForm() {
             value={motDePasse}
             onChange={(e) => setMotDePasse(e.target.value)}
             placeholder="••••••••"
-            minLength={8}
             className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-textPrimary placeholder:text-textMuted/50 focus:border-violet focus:outline-none"
           />
-          {mode === "register" && (
-            <p className="mt-1 text-[11px] text-textMuted">8 caractères minimum</p>
-          )}
         </label>
 
         {error && (
@@ -187,9 +135,7 @@ function LoginForm() {
           disabled={loading}
           className="w-full rounded-lg bg-violet py-3 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
         >
-          {loading
-            ? mode === "login" ? "Connexion…" : "Création du compte…"
-            : mode === "login" ? "Se connecter" : "Créer mon espace CRM"}
+          {loading ? "Connexion…" : "Accéder à mon espace"}
         </button>
       </form>
 
@@ -214,23 +160,19 @@ function LoginForm() {
       </button>
 
       <p className="mt-6 text-center text-[11px] text-textMuted">
-        Besoin d'aide ?{" "}
+        Votre accès est créé par Mutatech.{" "}
         <a href="mailto:matthieu.piednoir@mutatech.fr" className="text-violet">
-          Contactez-nous
+          Besoin d'aide ?
         </a>
       </p>
     </div>
   );
 }
 
-// Page racine — enveloppe le formulaire dans <Suspense> pour satisfaire
-// Next.js 14 qui exige un boundary autour de useSearchParams().
 export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
-      <Suspense fallback={
-        <div className="text-sm text-textMuted">Chargement…</div>
-      }>
+      <Suspense fallback={<div className="text-sm text-textMuted">Chargement…</div>}>
         <LoginForm />
       </Suspense>
     </main>

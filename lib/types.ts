@@ -6,6 +6,7 @@ export interface AuthResponse {
   user_id: string;
   tenant_id: string | null;
   role: string;
+  produit: string; // "crm" | "idel" | "crm+idel"
   nom: string | null;
   email: string;
 }
@@ -16,6 +17,7 @@ export interface UserMe {
   nom: string | null;
   role: string;
   tenant_id: string | null;
+  produit: string;
 }
 
 export interface TenantConfig {
@@ -25,6 +27,24 @@ export interface TenantConfig {
   couleur_secondaire: string | null;
 }
 
+// --- Admin : création de comptes clients ---
+export interface CreerClientInput {
+  email: string;
+  nom?: string;
+  nom_entreprise?: string;
+  produit: string; // "crm" | "idel" | "crm+idel"
+  envoyer_email?: boolean;
+}
+
+export interface ClientCreeOut {
+  tenant_id: string;
+  user_id: string;
+  email: string;
+  mot_de_passe_temporaire: string;
+  produit: string;
+}
+
+// --- CRM ---
 export interface Client {
   id: string;
   nom: string;
@@ -239,4 +259,40 @@ export interface DepenseInput {
   date_fin?: string;
   actif: boolean;
   notes?: string;
+}
+
+// --- IDEL ---
+export interface IdelPatient {
+  id: string;
+  nom: string;
+  prenom: string;
+  date_naissance?: string | null;
+  numero_secu?: string | null;
+  adresse?: string | null;
+}
+
+export interface IdelOrdonnance {
+  id: string;
+  statut: string; // "reception" | "en_cours" | "traite"
+  medecin_prescripteur?: string | null;
+  date_prescription?: string | null;
+  acte_prescrit_texte?: string | null;
+  confiance_ocr?: number | null;
+  necessite_validation: boolean;
+  date_reception: string;
+  patient?: IdelPatient | null;
+  cotations: IdelCotation[];
+}
+
+export interface IdelCotation {
+  id: string;
+  code_acte: string;
+  libelle?: string | null;
+  coefficient?: number | null;
+  quantite: number;
+  majoration_dimanche_ferie: boolean;
+  majoration_nuit: boolean;
+  montant_unitaire?: number | null;
+  montant_total?: number | null;
+  valide_par_idel: boolean;
 }

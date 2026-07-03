@@ -8,26 +8,30 @@ import {
   Depense, DepenseInput,
   MoisAbonnement, RecapEcheances,
   AuthResponse, UserMe, TenantConfig,
+  CreerClientInput, ClientCreeOut,
+  IdelOrdonnance, IdelPatient,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const IDEL_API_URL = process.env.NEXT_PUBLIC_IDEL_API_URL || "http://localhost:8001";
 
 export class ApiError extends Error {}
 
-async function requete<T>(chemin: string, options?: RequestInit): Promise<T> {
+async function requete<T>(
+  chemin: string,
+  options?: RequestInit,
+  baseUrl: string = API_URL
+): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options?.headers as Record<string, string>),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${chemin}`, { ...options, headers });
+  const res = await fetch(`${baseUrl}${chemin}`, { ...options, headers });
 
-  // Token expiré → déconnexion automatique et redirection vers login
   if (res.status === 401 && typeof window !== "undefined" && !chemin.includes("/auth/crm/")) {
     deconnecter();
     window.location.href = "/login";
@@ -41,28 +45,27 @@ async function requete<T>(chemin: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// --- Auth CRM (multi-tenant) ---
+// Requête vers le backend IDEL séparé
+function requeteIdel<T>(chemin: string, options?: RequestInit): Promise<T> {
+  return requete<T>(chemin, options, IDEL_API_URL);
+}
+
+// --- Auth CRM ---
 export const registerCrm = async (data: {
-  email: string;
-  mot_de_passe: string;
-  nom?: string;
-  nom_entreprise?: string;
+  email: string; mot_de_passe: string; nom?: string; nom_entreprise?: string; produit?: string;
 }): Promise<AuthResponse> => {
   const auth = await requete<AuthResponse>("/api/auth/crm/register", {
-    method: "POST",
-    body: JSON.stringify(data),
+    method: "POST", body: JSON.stringify(data),
   });
   sauvegarderAuth(auth);
   return auth;
 };
 
 export const loginCrm = async (data: {
-  email: string;
-  mot_de_passe: string;
+  email: string; mot_de_passe: string;
 }): Promise<AuthResponse> => {
   const auth = await requete<AuthResponse>("/api/auth/crm/login", {
-    method: "POST",
-    body: JSON.stringify(data),
+    method: "POST", body: JSON.stringify(data),
   });
   sauvegarderAuth(auth);
   return auth;
@@ -70,8 +73,7 @@ export const loginCrm = async (data: {
 
 export const loginGoogle = async (id_token: string): Promise<AuthResponse> => {
   const auth = await requete<AuthResponse>("/api/auth/crm/google", {
-    method: "POST",
-    body: JSON.stringify({ id_token }),
+    method: "POST", body: JSON.stringify({ id_token }),
   });
   sauvegarderAuth(auth);
   return auth;
@@ -87,9 +89,17 @@ export const getTenantConfig = async (): Promise<TenantConfig> => {
 
 export const updateTenantConfig = (data: Partial<TenantConfig>) =>
   requete<TenantConfig>("/api/auth/crm/config", {
-    method: "PUT",
-    body: JSON.stringify(data),
+    method: "PUT", body: JSON.stringify(data),
   });
+
+// --- Admin : création de comptes clients (Matthieu uniquement) ---
+export const creerCompteClient = (data: CreerClientInput) =>
+  requete<ClientCreeOut>("/api/auth/crm/clients", {
+    method: "POST", body: JSON.stringify(data),
+  });
+
+export const listerComptesClients = () =>
+  requete<UserMe[]>("/api/auth/crm/clients");
 
 // --- Clients ---
 export const getClients = () => requete<Client[]>("/api/clients");
@@ -122,8 +132,7 @@ export const getDevisPublic = (token: string) =>
   requete<DevisPublic>(`/api/devis/public/${token}`);
 export const signerDevisPublic = (token: string, signatureImage: string) =>
   requete<DevisPublic>(`/api/devis/public/${token}/signer`, {
-    method: "POST",
-    body: JSON.stringify({ signature_image: signatureImage }),
+    method: "POST", body: JSON.stringify({ signature_image: signatureImage }),
   });
 
 // --- Factures ---
@@ -143,7 +152,7 @@ export const supprimerFacture = (id: string) =>
   requete<{ statut: string }>(`/api/factures/${id}`, { method: "DELETE" });
 export const getEcheances = () => requete<RecapEcheances>("/api/factures/echeances");
 
-// --- Google (Matthieu) ---
+// --- Google ---
 export const getGoogleStatus = () => requete<GoogleStatus>("/api/auth/google/status");
 export const urlConnexionGoogle = () => `${API_URL}/api/auth/google/login`;
 
@@ -189,13 +198,39 @@ export interface AgentMessageHistorique {
 }
 export const chatAgent = (message: string, history: { role: string; content: string }[]) =>
   requete<AgentChatResponse>("/api/agent/chat", {
-    method: "POST",
-    body: JSON.stringify({ message, history }),
+    method: "POST", body: JSON.stringify({ message, history }),
   });
 export const getAgentHistorique = () =>
   requete<AgentMessageHistorique[]>("/api/agent/history");
 export const effacerAgentHistorique = () =>
   requete<{ statut: string }>("/api/agent/history", { method: "DELETE" });
+
+// --- IDEL (backend séparé) ---
+export const idelGetOrdonnances = (statut?: string) =>
+  requeteIdel<IdelOrdonnance[]>(`/api/reception${statut ? `?statut=${statut}` : ""}`);
+export const idelGetPatients = () =>
+  requeteIdel<IdelPatient[]>("/api/patients");
+export const idelUploaderOrdonnance = (formData: FormData) => {
+  const token = getToken();
+  return fetch(`${IDEL_API_URL}/api/reception/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  }).then((r) => {
+    if (!r.ok) throw new ApiError(`Erreur ${r.status}`);
+    return r.json() as Promise<IdelOrdonnance>;
+  });
+};
+export const idelValiderCotation = (ordonnanceId: string, data: object) =>
+  requeteIdel<IdelOrdonnance>(`/api/encours/${ordonnanceId}/valider`, {
+    method: "POST", body: JSON.stringify(data),
+  });
+export const idelExporterCsv = (ordonnanceId: string) =>
+  `${IDEL_API_URL}/api/encours/${ordonnanceId}/export-csv`;
+export const idelMarquerTransmis = (ordonnanceId: string) =>
+  requeteIdel<IdelOrdonnance>(`/api/traite/${ordonnanceId}/marquer-transmis`, {
+    method: "POST",
+  });
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {
