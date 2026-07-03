@@ -32,7 +32,7 @@ async function requete<T>(
 
   const res = await fetch(`${baseUrl}${chemin}`, { ...options, headers });
 
-  if (res.status === 401 && typeof window !== "undefined" && !chemin.includes("/auth/crm/")) {
+  if (res.status === 401 && typeof window !== "undefined" && !chemin.includes("/auth/")) {
     deconnecter();
     window.location.href = "/login";
     throw new ApiError("Session expirée.");
@@ -45,9 +45,43 @@ async function requete<T>(
   return res.json();
 }
 
-// Requête vers le backend IDEL séparé
+// Requête multipart vers le backend IDEL (pour upload fichier)
+async function requeteIdelFormData<T>(chemin: string, formData: FormData): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${IDEL_API_URL}${chemin}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const corps = await res.text();
+    throw new ApiError(corps || `Erreur ${res.status}`);
+  }
+  return res.json();
+}
+
 function requeteIdel<T>(chemin: string, options?: RequestInit): Promise<T> {
-  return requete<T>(chemin, options, IDEL_API_URL);
+  // Ne pas passer Content-Type pour les requêtes IDEL GET (pas de body)
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (!options?.body || typeof options.body === "string") {
+    headers["Content-Type"] = "application/json";
+  }
+
+  return fetch(`${IDEL_API_URL}${chemin}`, { ...options, headers }).then(async (res) => {
+    if (!res.ok) {
+      const corps = await res.text();
+      throw new ApiError(corps || `Erreur ${res.status}`);
+    }
+    return res.json() as Promise<T>;
+  });
 }
 
 // --- Auth CRM ---
@@ -92,7 +126,7 @@ export const updateTenantConfig = (data: Partial<TenantConfig>) =>
     method: "PUT", body: JSON.stringify(data),
   });
 
-// --- Admin : création de comptes clients (Matthieu uniquement) ---
+// --- Admin ---
 export const creerCompteClient = (data: CreerClientInput) =>
   requete<ClientCreeOut>("/api/auth/crm/clients", {
     method: "POST", body: JSON.stringify(data),
@@ -126,8 +160,6 @@ export const getAbonnementSuivi = (devisId: string) =>
   requete<MoisAbonnement[]>(`/api/devis/${devisId}/abonnement-suivi`);
 export const genererFactureMois = (devisId: string) =>
   requete<Facture>(`/api/devis/${devisId}/generer-facture-mois`, { method: "POST" });
-
-// --- Signature publique ---
 export const getDevisPublic = (token: string) =>
   requete<DevisPublic>(`/api/devis/public/${token}`);
 export const signerDevisPublic = (token: string, signatureImage: string) =>
@@ -205,32 +237,99 @@ export const getAgentHistorique = () =>
 export const effacerAgentHistorique = () =>
   requete<{ statut: string }>("/api/agent/history", { method: "DELETE" });
 
-// --- IDEL (backend séparé) ---
-export const idelGetOrdonnances = (statut?: string) =>
-  requeteIdel<IdelOrdonnance[]>(`/api/reception${statut ? `?statut=${statut}` : ""}`);
-export const idelGetPatients = () =>
-  requeteIdel<IdelPatient[]>("/api/patients");
-export const idelUploaderOrdonnance = (formData: FormData) => {
-  const token = getToken();
-  return fetch(`${IDEL_API_URL}/api/reception/upload`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
-  }).then((r) => {
-    if (!r.ok) throw new ApiError(`Erreur ${r.status}`);
-    return r.json() as Promise<IdelOrdonnance>;
-  });
-};
-export const idelValiderCotation = (ordonnanceId: string, data: object) =>
-  requeteIdel<IdelOrdonnance>(`/api/encours/${ordonnanceId}/valider`, {
+// ── IDEL — routes exactes du backend (voir /docs) ───────────────────────
+
+// Auth IDEL (backend IDEL a son propre système d'auth)
+export const idelRegister = (data: {
+  email: string; password: string; nom: string; prenom: string;
+  numero_adeli_rpps?: string; lps_utilise?: string; ville?: string; telephone?: string;
+}) => requeteIdel<{ id: string; email: string }>("/api/auth/register", {
+  method: "POST", body: JSON.stringify(data),
+});
+
+export const idelLogin = (data: { email: string; password: string }) =>
+  requeteIdel<{ access_token: string; token_type: string }>("/api/auth/login", {
     method: "POST", body: JSON.stringify(data),
   });
+
+// Patients
+export const idelGetPatients = () =>
+  requeteIdel<IdelPatient[]>("/api/patients");
+
+export const idelCreerPatient = (data: {
+  nom: string; prenom: string; date_naissance?: string;
+  numero_secu?: string; adresse?: string;
+}) => requeteIdel<IdelPatient>("/api/patients", {
+  method: "POST", body: JSON.stringify(data),
+});
+
+// Réception — GET /api/reception/ordonnances + POST /api/reception/ordonnances (multipart)
+export const idelGetOrdonnancesReception = () =>
+  requeteIdel<IdelOrdonnance[]>("/api/reception/ordonnances");
+
+export const idelUploaderOrdonnance = (formData: FormData) =>
+  requeteIdelFormData<IdelOrdonnance>("/api/reception/ordonnances", formData);
+  // Note : le champ fichier doit s'appeler "file" dans le FormData (nom du paramètre FastAPI)
+
+// En cours — GET /api/encours/ordonnances
+export const idelGetOrdonnancesEnCours = () =>
+  requeteIdel<IdelOrdonnance[]>("/api/encours/ordonnances");
+
+export const idelGetPropositionCotation = (ordonnanceId: string) =>
+  requeteIdel<any>(`/api/encours/ordonnances/${ordonnanceId}/proposition-cotation`);
+
+export const idelValiderCotation = (ordonnanceId: string, data: {
+  patient_id: string;
+  lignes: Array<{
+    code_acte: string; libelle?: string; coefficient: number; quantite: number;
+    majoration_dimanche_ferie?: boolean; majoration_nuit?: boolean;
+    distance_km?: number; zone_montagne?: boolean;
+  }>;
+}) => requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${ordonnanceId}/valider-cotation`, {
+  method: "POST", body: JSON.stringify(data),
+});
+
 export const idelExporterCsv = (ordonnanceId: string) =>
-  `${IDEL_API_URL}/api/encours/${ordonnanceId}/export-csv`;
+  `${IDEL_API_URL}/api/encours/ordonnances/${ordonnanceId}/export-csv`;
+
+export const idelFicheReprise = (ordonnanceId: string) =>
+  `${IDEL_API_URL}/api/encours/ordonnances/${ordonnanceId}/fiche-reprise`;
+
+// Traité — GET /api/traite/ordonnances + POST /api/traite/ordonnances/{id}/marquer-transmis
+export const idelGetOrdonnancesTraitees = () =>
+  requeteIdel<IdelOrdonnance[]>("/api/traite/ordonnances");
+
 export const idelMarquerTransmis = (ordonnanceId: string) =>
-  requeteIdel<IdelOrdonnance>(`/api/traite/${ordonnanceId}/marquer-transmis`, {
-    method: "POST",
+  requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${ordonnanceId}/marquer-transmis`, {
+    method: "POST", body: JSON.stringify({}),
   });
+
+export const idelRetourNoemie = (ordonnanceId: string, data: {
+  statut_fse: string; retour_noemie?: string; date_paiement?: string;
+}) => requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${ordonnanceId}/retour-noemie`, {
+  method: "POST", body: JSON.stringify(data),
+});
+
+// Toutes les ordonnances (toutes colonnes combinées)
+export const idelGetOrdonnances = async (): Promise<IdelOrdonnance[]> => {
+  const [reception, encours, traite] = await Promise.all([
+    idelGetOrdonnancesReception(),
+    idelGetOrdonnancesEnCours(),
+    idelGetOrdonnancesTraitees(),
+  ]);
+  return [...reception, ...encours, ...traite];
+};
+
+// Comptabilité
+export const idelGetTableauDeBord = () =>
+  requeteIdel<{
+    total_facture: number; total_paye: number;
+    total_en_attente: number; total_rejete: number;
+    nb_factures: number; taux_rejet_pct: number;
+  }>("/api/compta/tableau-de-bord");
+
+export const idelGetFactures = () =>
+  requeteIdel<any[]>("/api/compta/factures");
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {
