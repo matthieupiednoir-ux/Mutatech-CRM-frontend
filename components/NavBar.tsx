@@ -40,19 +40,25 @@ function NavBarInterieur() {
 
   const produit = user?.produit || "crm";
   const estIdel = pathname.startsWith("/idel");
+  const estAdmin = pathname.startsWith("/admin");
   const aAccesCrm = produit === "crm" || produit === "crm+idel";
   const aAccesIdel = produit === "idel" || produit === "crm+idel";
+  const estRoleAdmin = user?.role === "admin";
+
   const onglets = estIdel ? ONGLETS_IDEL : ONGLETS_CRM;
-  const labelProduit = estIdel ? "Mutatech / IDEL 🩺" : "Mutatech / CRM 🧭";
+  const labelProduit = estAdmin
+    ? "Mutatech / Admin ⚙"
+    : estIdel
+    ? "Mutatech / IDEL 🩺"
+    : "Mutatech / CRM 🧭";
 
   useEffect(() => {
-    // Ne charger Google status que sur les pages CRM (pas IDEL)
-    if (!estIdel) {
+    if (!estIdel && !estAdmin) {
       getGoogleStatus()
         .then((s) => setGoogleConnecte(s.connecte))
         .catch(() => setGoogleConnecte(false));
     }
-  }, [searchParams, estIdel]);
+  }, [searchParams, estIdel, estAdmin]);
 
   function handleLogout() {
     deconnecter();
@@ -63,29 +69,41 @@ function NavBarInterieur() {
     <header className="border-b border-line">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div className="flex flex-wrap items-center gap-6">
-          <span className={`font-display text-sm font-bold ${estIdel ? "text-teal" : "text-teal"}`}>
+          <span className="font-display text-sm font-bold text-teal">
             {labelProduit}
           </span>
-          <nav className="flex flex-wrap gap-4">
-            {onglets.map((onglet) => (
-              <Link
-                key={onglet.href}
-                href={onglet.href}
-                className={`text-sm font-medium transition ${
-                  pathname === onglet.href || (onglet.href !== "/idel" && pathname.startsWith(onglet.href))
-                    ? "text-violet"
-                    : "text-textMuted hover:text-textPrimary"
-                }`}
-              >
-                {onglet.label}
-              </Link>
-            ))}
-          </nav>
+
+          {/* Onglets principaux — masqués sur la page admin */}
+          {!estAdmin && (
+            <nav className="flex flex-wrap gap-4">
+              {onglets.map((onglet) => (
+                <Link
+                  key={onglet.href}
+                  href={onglet.href}
+                  className={`text-sm font-medium transition ${
+                    pathname === onglet.href ||
+                    (onglet.href !== "/idel" && onglet.href !== "/dashboard" && pathname.startsWith(onglet.href))
+                      ? "text-violet"
+                      : "text-textMuted hover:text-textPrimary"
+                  }`}
+                >
+                  {onglet.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+
+          {/* Fil d'Ariane sur la page admin */}
+          {estAdmin && (
+            <Link href="/dashboard" className="text-sm text-textMuted hover:text-textPrimary">
+              ← Retour au CRM
+            </Link>
+          )}
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Switcher CRM ↔ IDEL pour les comptes crm+idel */}
-          {produit === "crm+idel" && (
+        <div className="flex items-center gap-3">
+          {/* Switcher CRM ↔ IDEL */}
+          {produit === "crm+idel" && !estAdmin && (
             <Link
               href={estIdel ? "/dashboard" : "/idel"}
               className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-textMuted hover:border-violet hover:text-textPrimary transition"
@@ -94,15 +112,18 @@ function NavBarInterieur() {
             </Link>
           )}
 
-          {/* Lien vers l'espace IDEL pour les comptes idel seul */}
-          {produit === "idel" && !estIdel && (
-            <Link href="/idel" className="text-xs text-teal hover:underline">
-              Espace IDEL →
+          {/* Lien admin — visible uniquement pour le rôle admin */}
+          {estRoleAdmin && !estAdmin && (
+            <Link
+              href="/admin"
+              className="rounded-lg border border-violet/30 bg-violet/5 px-3 py-1.5 text-xs font-medium text-violet hover:bg-violet/10 transition"
+            >
+              ⚙ Admin
             </Link>
           )}
 
           {/* Google status (CRM seulement) */}
-          {!estIdel && googleConnecte === false && (
+          {!estIdel && !estAdmin && googleConnecte === false && (
             <a
               href={urlConnexionGoogle()}
               className="rounded-lg bg-violet px-3 py-1.5 text-xs font-medium text-white hover:bg-violet/90"
@@ -110,20 +131,21 @@ function NavBarInterieur() {
               Connecter Google
             </a>
           )}
-          {!estIdel && googleConnecte === true && (
+          {!estIdel && !estAdmin && googleConnecte === true && (
             <span className="flex items-center gap-1.5 text-xs text-teal">
               <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Google connecté
             </span>
           )}
 
           {user?.email && (
-            <span className="text-xs text-textMuted">{user.email}</span>
+            <span className="hidden text-xs text-textMuted sm:block">{user.email}</span>
           )}
+
           <button
             onClick={handleLogout}
-            className="text-xs text-textMuted hover:text-amber"
+            className="text-xs text-textMuted hover:text-amber transition"
           >
-            Se déconnecter
+            Déconnexion
           </button>
         </div>
       </div>
