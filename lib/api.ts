@@ -9,7 +9,7 @@ import {
   MoisAbonnement, RecapEcheances,
   AuthResponse, UserMe, TenantConfig,
   CreerClientInput, ClientCreeOut,
-  IdelOrdonnance, IdelPatient,
+  IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
 
@@ -45,7 +45,6 @@ async function requete<T>(
   return res.json();
 }
 
-// Requête multipart vers le backend IDEL (pour upload fichier)
 async function requeteIdelFormData<T>(chemin: string, formData: FormData): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {};
@@ -65,7 +64,6 @@ async function requeteIdelFormData<T>(chemin: string, formData: FormData): Promi
 }
 
 function requeteIdel<T>(chemin: string, options?: RequestInit): Promise<T> {
-  // Ne pas passer Content-Type pour les requêtes IDEL GET (pas de body)
   const token = getToken();
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string>),
@@ -150,21 +148,14 @@ export const getDevisListe = () => requete<Devis[]>("/api/devis");
 export const getDevis = (id: string) => requete<Devis>(`/api/devis/${id}`);
 export const creerDevis = (data: DevisInput) =>
   requete<Devis>("/api/devis", { method: "POST", body: JSON.stringify(data) });
-export const modifierDevis = (id: string, data: DevisInput) =>
-  requete<Devis>(`/api/devis/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const envoyerDevisPourSignature = (id: string) =>
   requete<Devis>(`/api/devis/${id}/envoyer`, { method: "POST" });
-export const supprimerDevis = (id: string) =>
-  requete<{ statut: string }>(`/api/devis/${id}`, { method: "DELETE" });
-export const getAbonnementSuivi = (devisId: string) =>
-  requete<MoisAbonnement[]>(`/api/devis/${devisId}/abonnement-suivi`);
-export const genererFactureMois = (devisId: string) =>
-  requete<Facture>(`/api/devis/${devisId}/generer-facture-mois`, { method: "POST" });
 export const getDevisPublic = (token: string) =>
   requete<DevisPublic>(`/api/devis/public/${token}`);
 export const signerDevisPublic = (token: string, signatureImage: string) =>
   requete<DevisPublic>(`/api/devis/public/${token}/signer`, {
-    method: "POST", body: JSON.stringify({ signature_image: signatureImage }),
+    method: "POST",
+    body: JSON.stringify({ signature_image: signatureImage }),
   });
 
 // --- Factures ---
@@ -172,17 +163,19 @@ export const getFacturesListe = () => requete<Facture[]>("/api/factures");
 export const getFacture = (id: string) => requete<Facture>(`/api/factures/${id}`);
 export const creerFacture = (data: FactureInput) =>
   requete<Facture>("/api/factures", { method: "POST", body: JSON.stringify(data) });
-export const modifierFacture = (id: string, data: FactureInput) =>
-  requete<Facture>(`/api/factures/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const envoyerFacture = (id: string) =>
   requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
-export const marquerFacturePayee = (id: string) =>
-  requete<Facture>(`/api/factures/${id}/marquer-payee`, { method: "POST" });
-export const relancerFacture = (id: string) =>
-  requete<Facture>(`/api/factures/${id}/relancer`, { method: "POST" });
-export const supprimerFacture = (id: string) =>
-  requete<{ statut: string }>(`/api/factures/${id}`, { method: "DELETE" });
-export const getEcheances = () => requete<RecapEcheances>("/api/factures/echeances");
+
+// --- Dépenses ---
+export const getDepenses = () => requete<Depense[]>("/api/depenses");
+export const creerDepense = (data: DepenseInput) =>
+  requete<Depense>("/api/depenses", { method: "POST", body: JSON.stringify(data) });
+export const modifierDepense = (id: string, data: DepenseInput) =>
+  requete<Depense>(`/api/depenses/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const supprimerDepense = (id: string) =>
+  requete<{ statut: string }>(`/api/depenses/${id}`, { method: "DELETE" });
+export const getMoisAbonnements = () => requete<MoisAbonnement[]>("/api/depenses/abonnements/mois");
+export const getRecapEcheances = () => requete<RecapEcheances>("/api/depenses/abonnements/recap");
 
 // --- Google ---
 export const getGoogleStatus = () => requete<GoogleStatus>("/api/auth/google/status");
@@ -197,7 +190,9 @@ export const modifierTache = (id: string, data: TacheInput) =>
 export const supprimerTache = (id: string) =>
   requete<{ statut: string }>(`/api/taches/${id}`, { method: "DELETE" });
 export const importerTachesLot = (data: TacheInput[]) =>
-  requete<Tache[]>("/api/taches/import-lot", { method: "POST", body: JSON.stringify(data) });
+  requete<Tache[]>("/api/taches/import-lot", {
+    method: "POST", body: JSON.stringify(data),
+  });
 
 // --- Prospects ---
 export const getProspects = () => requete<Prospect[]>("/api/prospects");
@@ -209,127 +204,57 @@ export const supprimerProspect = (id: string) =>
   requete<{ statut: string }>(`/api/prospects/${id}`, { method: "DELETE" });
 export const convertirEnClient = (id: string) =>
   requete<{ statut: string; client_id: string }>(
-    `/api/prospects/${id}/convertir-en-client`, { method: "POST" }
+    `/api/prospects/${id}/convertir-en-client`,
+    { method: "POST" }
   );
 export const importerProspectsLot = (data: ProspectInput[]) =>
-  requete<Prospect[]>("/api/prospects/import-lot", { method: "POST", body: JSON.stringify(data) });
-
-// --- Dépenses ---
-export const getDepenses = () => requete<Depense[]>("/api/depenses");
-export const creerDepense = (data: DepenseInput) =>
-  requete<Depense>("/api/depenses", { method: "POST", body: JSON.stringify(data) });
-export const modifierDepense = (id: string, data: DepenseInput) =>
-  requete<Depense>(`/api/depenses/${id}`, { method: "PUT", body: JSON.stringify(data) });
-export const supprimerDepense = (id: string) =>
-  requete<{ statut: string }>(`/api/depenses/${id}`, { method: "DELETE" });
-
-// --- Agent IA ---
-export interface AgentChatResponse { reply: string; actions_effectuees: string[]; }
-export interface AgentMessageHistorique {
-  role: string; content: string; actions_effectuees: string[]; cree_le: string;
-}
-export const chatAgent = (message: string, history: { role: string; content: string }[]) =>
-  requete<AgentChatResponse>("/api/agent/chat", {
-    method: "POST", body: JSON.stringify({ message, history }),
-  });
-export const getAgentHistorique = () =>
-  requete<AgentMessageHistorique[]>("/api/agent/history");
-export const effacerAgentHistorique = () =>
-  requete<{ statut: string }>("/api/agent/history", { method: "DELETE" });
-
-// ── IDEL — routes exactes du backend (voir /docs) ───────────────────────
-
-// Auth IDEL (backend IDEL a son propre système d'auth)
-export const idelRegister = (data: {
-  email: string; password: string; nom: string; prenom: string;
-  numero_adeli_rpps?: string; lps_utilise?: string; ville?: string; telephone?: string;
-}) => requeteIdel<{ id: string; email: string }>("/api/auth/register", {
-  method: "POST", body: JSON.stringify(data),
-});
-
-export const idelLogin = (data: { email: string; password: string }) =>
-  requeteIdel<{ access_token: string; token_type: string }>("/api/auth/login", {
+  requete<Prospect[]>("/api/prospects/import-lot", {
     method: "POST", body: JSON.stringify(data),
   });
 
-// Patients
-export const idelGetPatients = () =>
-  requeteIdel<IdelPatient[]>("/api/patients");
-
-export const idelCreerPatient = (data: {
-  nom: string; prenom: string; date_naissance?: string;
-  numero_secu?: string; adresse?: string;
-}) => requeteIdel<IdelPatient>("/api/patients", {
-  method: "POST", body: JSON.stringify(data),
-});
-
-// Réception — GET /api/reception/ordonnances + POST /api/reception/ordonnances (multipart)
-export const idelGetOrdonnancesReception = () =>
-  requeteIdel<IdelOrdonnance[]>("/api/reception/ordonnances");
+// --- IDEL ---
+export const idelGetOrdonnances = () =>
+  requeteIdel<IdelOrdonnance[]>("/api/encours/ordonnances")
+    .then((encours) =>
+      Promise.all([
+        requeteIdel<IdelOrdonnance[]>("/api/reception/ordonnances"),
+        Promise.resolve(encours),
+        requeteIdel<IdelOrdonnance[]>("/api/traite/ordonnances"),
+      ])
+    )
+    .then(([reception, encours, traite]) => [...reception, ...encours, ...traite]);
 
 export const idelUploaderOrdonnance = (formData: FormData) =>
   requeteIdelFormData<IdelOrdonnance>("/api/reception/ordonnances", formData);
-  // Note : le champ fichier doit s'appeler "file" dans le FormData (nom du paramètre FastAPI)
 
-// En cours — GET /api/encours/ordonnances
-export const idelGetOrdonnancesEnCours = () =>
-  requeteIdel<IdelOrdonnance[]>("/api/encours/ordonnances");
+export const idelProposerCotation = (id: string) =>
+  requeteIdel<CotationOut[]>(`/api/encours/ordonnances/${id}/proposition-cotation`);
 
-export const idelGetPropositionCotation = (ordonnanceId: string) =>
-  requeteIdel<any>(`/api/encours/ordonnances/${ordonnanceId}/proposition-cotation`);
-
-export const idelValiderCotation = (ordonnanceId: string, data: {
-  patient_id: string;
-  lignes: Array<{
-    code_acte: string; libelle?: string; coefficient: number; quantite: number;
-    majoration_dimanche_ferie?: boolean; majoration_nuit?: boolean;
-    distance_km?: number; zone_montagne?: boolean;
-  }>;
-}) => requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${ordonnanceId}/valider-cotation`, {
-  method: "POST", body: JSON.stringify(data),
-});
-
-export const idelExporterCsv = (ordonnanceId: string) =>
-  `${IDEL_API_URL}/api/encours/ordonnances/${ordonnanceId}/export-csv`;
-
-export const idelFicheReprise = (ordonnanceId: string) =>
-  `${IDEL_API_URL}/api/encours/ordonnances/${ordonnanceId}/fiche-reprise`;
-
-// Traité — GET /api/traite/ordonnances + POST /api/traite/ordonnances/{id}/marquer-transmis
-export const idelGetOrdonnancesTraitees = () =>
-  requeteIdel<IdelOrdonnance[]>("/api/traite/ordonnances");
-
-export const idelMarquerTransmis = (ordonnanceId: string) =>
-  requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${ordonnanceId}/marquer-transmis`, {
-    method: "POST", body: JSON.stringify({}),
+export const idelValiderCotation = (id: string, items: CotationValidationItem[]) =>
+  requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${id}/valider-cotation`, {
+    method: "POST",
+    body: JSON.stringify({ cotations: items }),
   });
 
-export const idelRetourNoemie = (ordonnanceId: string, data: {
-  statut_fse: string; retour_noemie?: string; date_paiement?: string;
-}) => requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${ordonnanceId}/retour-noemie`, {
-  method: "POST", body: JSON.stringify(data),
-});
+export const idelMarquerTransmis = (id: string) =>
+  requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${id}/marquer-transmis`, {
+    method: "POST",
+    body: JSON.stringify({ lps_choisi: "logiciel_metier" }),
+  });
 
-// Toutes les ordonnances (toutes colonnes combinées)
-export const idelGetOrdonnances = async (): Promise<IdelOrdonnance[]> => {
-  const [reception, encours, traite] = await Promise.all([
-    idelGetOrdonnancesReception(),
-    idelGetOrdonnancesEnCours(),
-    idelGetOrdonnancesTraitees(),
-  ]);
-  return [...reception, ...encours, ...traite];
-};
+export const idelExporterCsv = (id: string) =>
+  `${IDEL_API_URL}/api/encours/ordonnances/${id}/export-csv`;
 
-// Comptabilité
-export const idelGetTableauDeBord = () =>
-  requeteIdel<{
-    total_facture: number; total_paye: number;
-    total_en_attente: number; total_rejete: number;
-    nb_factures: number; taux_rejet_pct: number;
-  }>("/api/compta/tableau-de-bord");
+export const idelFicheReprise = (id: string) =>
+  `${IDEL_API_URL}/api/encours/ordonnances/${id}/fiche-reprise`;
 
-export const idelGetFactures = () =>
-  requeteIdel<any[]>("/api/compta/factures");
+export const idelGetPatients = () =>
+  requeteIdel<IdelPatient[]>("/api/patients");
+
+export const idelCreerPatient = (data: Partial<IdelPatient>) =>
+  requeteIdel<IdelPatient>("/api/patients", {
+    method: "POST", body: JSON.stringify(data),
+  });
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[], tauxTva: number) {

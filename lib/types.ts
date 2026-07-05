@@ -6,7 +6,7 @@ export interface AuthResponse {
   user_id: string;
   tenant_id: string | null;
   role: string;
-  produit: string; // "crm" | "idel" | "crm+idel"
+  produit: string;
   nom: string | null;
   email: string;
 }
@@ -27,12 +27,12 @@ export interface TenantConfig {
   couleur_secondaire: string | null;
 }
 
-// --- Admin : création de comptes clients ---
+// --- Admin ---
 export interface CreerClientInput {
   email: string;
   nom?: string;
   nom_entreprise?: string;
-  produit: string; // "crm" | "idel" | "crm+idel"
+  produit: string;
   envoyer_email?: boolean;
 }
 
@@ -192,6 +192,29 @@ export interface GoogleStatus {
   connecte: boolean;
 }
 
+export interface Depense {
+  id: string;
+  libelle: string;
+  montant: number;
+  categorie: string;
+  date_depense: string;
+  recurrente: boolean;
+  periodicite?: string | null;
+  date_fin?: string | null;
+  notes?: string | null;
+}
+
+export interface DepenseInput {
+  libelle: string;
+  montant: number;
+  categorie: string;
+  date_depense: string;
+  recurrente: boolean;
+  periodicite?: string;
+  date_fin?: string;
+  notes?: string;
+}
+
 export interface Tache {
   id: string;
   pilier: number;
@@ -234,33 +257,6 @@ export interface ProspectInput {
   notes?: string;
 }
 
-export interface Depense {
-  id: string;
-  libelle: string;
-  categorie?: string | null;
-  montant: number;
-  type: string;
-  date_depense?: string | null;
-  frequence?: string | null;
-  date_debut?: string | null;
-  date_fin?: string | null;
-  actif: boolean;
-  notes?: string | null;
-}
-
-export interface DepenseInput {
-  libelle: string;
-  categorie?: string;
-  montant: number;
-  type: string;
-  date_depense?: string;
-  frequence?: string;
-  date_debut?: string;
-  date_fin?: string;
-  actif: boolean;
-  notes?: string;
-}
-
 // --- IDEL ---
 export interface IdelPatient {
   id: string;
@@ -269,30 +265,35 @@ export interface IdelPatient {
   date_naissance?: string | null;
   numero_secu?: string | null;
   adresse?: string | null;
+  telephone?: string | null;
+  medecin_traitant?: string | null;
+}
+
+export interface CotationOut {
+  code_acte: string;
+  libelle: string;
+  coefficient?: number | null;
+  quantite?: number | null;
+  modificateurs?: string[] | null;
+  montant_unitaire?: number | null;
+  montant_total?: number | null;
+}
+
+export interface CotationValidationItem {
+  code_acte: string;
+  quantite: number;
+  modificateurs: string[];
 }
 
 export interface IdelOrdonnance {
   id: string;
-  statut: string; // "reception" | "en_cours" | "traite"
+  statut: string;
+  patient?: IdelPatient | null;
   medecin_prescripteur?: string | null;
   date_prescription?: string | null;
   acte_prescrit_texte?: string | null;
   confiance_ocr?: number | null;
-  necessite_validation: boolean;
-  date_reception: string;
-  patient?: IdelPatient | null;
-  cotations: IdelCotation[];
-}
-
-export interface IdelCotation {
-  id: string;
-  code_acte: string;
-  libelle?: string | null;
-  coefficient?: number | null;
-  quantite: number;
-  majoration_dimanche_ferie: boolean;
-  majoration_nuit: boolean;
-  montant_unitaire?: number | null;
-  montant_total?: number | null;
-  valide_par_idel: boolean;
+  necessite_validation?: boolean;
+  cotations?: CotationOut[] | null;
+  created_at?: string | null;
 }

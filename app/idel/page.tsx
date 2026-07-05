@@ -5,12 +5,14 @@ import NavBar from "@/components/NavBar";
 import {
   idelGetOrdonnances,
   idelUploaderOrdonnance,
+  idelProposerCotation,
+  idelValiderCotation,
   idelMarquerTransmis,
   idelExporterCsv,
   idelFicheReprise,
   ApiError,
 } from "@/lib/api";
-import { IdelOrdonnance } from "@/lib/types";
+import { IdelOrdonnance, CotationOut } from "@/lib/types";
 
 const STATUT_LABEL: Record<string, string> = {
   reception: "Réception",
@@ -32,6 +34,12 @@ export default function IdelDashboard() {
   const [panneau, setPanneau] = useState<IdelOrdonnance | null>(null);
   const [actionEnCours, setActionEnCours] = useState<string | null>(null);
 
+  // État cotation
+  const [cotationProposee, setCotationProposee] = useState<CotationOut[] | null>(null);
+  const [cotationLoading, setCotationLoading] = useState(false);
+  const [cotationError, setCotationError] = useState<string | null>(null);
+  const [cotationValidee, setCotationValidee] = useState(false);
+
   function charger() {
     setLoading(true);
     setError(null);
@@ -43,6 +51,13 @@ export default function IdelDashboard() {
 
   useEffect(() => { charger(); }, []);
 
+  function ouvrirPanneau(o: IdelOrdonnance) {
+    setPanneau(o);
+    setCotationProposee(null);
+    setCotationError(null);
+    setCotationValidee(false);
+  }
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -50,7 +65,6 @@ export default function IdelDashboard() {
     setError(null);
     try {
       const formData = new FormData();
-      // Le backend FastAPI attend le champ nommé "file" (paramètre UploadFile = File(...))
       formData.append("file", file);
       await idelUploaderOrdonnance(formData);
       charger();
@@ -59,6 +73,44 @@ export default function IdelDashboard() {
     } finally {
       setUpload(false);
       e.target.value = "";
+    }
+  }
+
+  async function handleProposerCotation(id: string) {
+    setCotationLoading(true);
+    setCotationError(null);
+    setCotationProposee(null);
+    try {
+      const proposition = await idelProposerCotation(id);
+      setCotationProposee(proposition);
+    } catch (e) {
+      setCotationError(e instanceof ApiError ? e.message : "Erreur lors de la proposition");
+    } finally {
+      setCotationLoading(false);
+    }
+  }
+
+  async function handleValiderCotation(id: string) {
+    if (!cotationProposee) return;
+    setActionEnCours(id);
+    setCotationError(null);
+    try {
+      const items = cotationProposee.map((c) => ({
+        code_acte: c.code_acte,
+        quantite: c.quantite ?? 1,
+        modificateurs: c.modificateurs ?? [],
+      }));
+      await idelValiderCotation(id, items);
+      setCotationValidee(true);
+      charger();
+      // Recharger l'ordonnance mise à jour dans le panneau
+      setTimeout(() => {
+        charger();
+      }, 500);
+    } catch (e) {
+      setCotationError(e instanceof ApiError ? e.message : "Erreur de validation");
+    } finally {
+      setActionEnCours(null);
     }
   }
 
@@ -78,6 +130,8 @@ export default function IdelDashboard() {
   }
 
   const colonnes: Array<"reception" | "en_cours" | "traite"> = ["reception", "en_cours", "traite"];
+  const totalCotation = cotationProposee?.reduce((s, c) => s + (c.montant_total ?? 0), 0) ?? 0;
+  const totalCotationExistante = panneau?.cotations?.reduce((s, c) => s + (c.montant_total ?? 0), 0) ?? 0;
 
   return (
     <>
@@ -132,7 +186,7 @@ export default function IdelDashboard() {
                     {items.map((o) => (
                       <button
                         key={o.id}
-                        onClick={() => setPanneau(o)}
+                        onClick={() => ouvrirPanneau(o)}
                         className={`w-full rounded-lg border p-3 text-left transition hover:border-violet/40 ${STATUT_COULEUR[o.statut]}`}
                       >
                         <p className="text-xs font-medium text-textPrimary">
@@ -171,21 +225,19 @@ export default function IdelDashboard() {
 
         {/* Panneau latéral détail ordonnance */}
         {panneau && (
-          <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-center">
-            <div className="w-full max-w-md rounded-t-2xl bg-surface p-6 sm:rounded-2xl sm:m-4">
+          <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-center" onClick={(e) => { if (e.target === e.currentTarget) setPanneau(null); }}>
+            <div className="w-full max-w-lg rounded-t-2xl bg-surface p-6 sm:rounded-2xl sm:m-4 max-h-[90vh] overflow-y-auto">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-display text-lg font-bold text-textPrimary">
                   Détail ordonnance
                 </h3>
-                <button
-                  onClick={() => setPanneau(null)}
-                  className="text-textMuted hover:text-textPrimary"
-                >
+                <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary">
                   ✕
                 </button>
               </div>
 
               <div className="space-y-3 text-sm">
+                {/* Patient */}
                 <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Patient</p>
                   <p className="text-textPrimary font-medium">
@@ -195,6 +247,7 @@ export default function IdelDashboard() {
                   </p>
                 </div>
 
+                {/* Prescripteur */}
                 <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Prescripteur</p>
                   <p className="text-textPrimary">{panneau.medecin_prescripteur || "—"}</p>
@@ -205,6 +258,7 @@ export default function IdelDashboard() {
                   )}
                 </div>
 
+                {/* Acte prescrit */}
                 {panneau.acte_prescrit_texte && (
                   <div className="rounded-lg bg-surfaceAlt p-3">
                     <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Acte prescrit</p>
@@ -214,17 +268,18 @@ export default function IdelDashboard() {
                   </div>
                 )}
 
+                {/* Cotation existante (déjà validée) */}
                 {panneau.cotations && panneau.cotations.length > 0 && (
                   <div className="rounded-lg bg-surfaceAlt p-3">
                     <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">
-                      Cotation NGAP
+                      Cotation NGAP validée
                     </p>
                     <div className="space-y-1">
                       {panneau.cotations.map((c, i) => (
-                        <div key={i} className="flex justify-between text-xs">
-                          <span className="text-textPrimary font-medium">{c.code_acte}</span>
-                          <span className="text-textMuted">{c.libelle}</span>
-                          <span className="text-teal font-medium">
+                        <div key={i} className="flex justify-between text-xs gap-2">
+                          <span className="text-textPrimary font-medium shrink-0">{c.code_acte}</span>
+                          <span className="text-textMuted flex-1 truncate">{c.libelle}</span>
+                          <span className="text-teal font-medium shrink-0">
                             {c.montant_total?.toFixed(2)} €
                           </span>
                         </div>
@@ -232,12 +287,83 @@ export default function IdelDashboard() {
                     </div>
                     <div className="mt-2 border-t border-line pt-2 flex justify-between text-xs font-bold">
                       <span className="text-textPrimary">Total</span>
-                      <span className="text-teal">
-                        {panneau.cotations
-                          .reduce((s, c) => s + (c.montant_total || 0), 0)
-                          .toFixed(2)} €
-                      </span>
+                      <span className="text-teal">{totalCotationExistante.toFixed(2)} €</span>
                     </div>
+                  </div>
+                )}
+
+                {/* Zone cotation NGAP — seulement si en_cours et pas encore de cotation */}
+                {panneau.statut === "en_cours" && (!panneau.cotations || panneau.cotations.length === 0) && (
+                  <div className="rounded-lg border border-violet/20 bg-violet/5 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">
+                      Cotation NGAP
+                    </p>
+
+                    {!cotationProposee && !cotationLoading && !cotationValidee && (
+                      <button
+                        onClick={() => handleProposerCotation(panneau.id)}
+                        className="w-full rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
+                      >
+                        🤖 Proposer une cotation NGAP
+                      </button>
+                    )}
+
+                    {cotationLoading && (
+                      <p className="text-xs text-textMuted text-center py-2">
+                        Analyse en cours par l'IA…
+                      </p>
+                    )}
+
+                    {cotationError && (
+                      <p className="text-xs text-amber mt-2">{cotationError}</p>
+                    )}
+
+                    {cotationProposee && !cotationValidee && (
+                      <div className="space-y-2">
+                        <div className="space-y-1">
+                          {cotationProposee.map((c, i) => (
+                            <div key={i} className="flex justify-between text-xs gap-2 py-1 border-b border-line last:border-0">
+                              <span className="text-textPrimary font-bold shrink-0">{c.code_acte}</span>
+                              <span className="text-textMuted flex-1 text-[11px]">{c.libelle}</span>
+                              {c.quantite && c.quantite > 1 && (
+                                <span className="text-textMuted text-[11px] shrink-0">×{c.quantite}</span>
+                              )}
+                              <span className="text-teal font-medium shrink-0">
+                                {c.montant_total?.toFixed(2)} €
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between text-xs font-bold pt-1">
+                          <span className="text-textPrimary">Total estimé</span>
+                          <span className="text-teal">{totalCotation.toFixed(2)} €</span>
+                        </div>
+                        <p className="text-[11px] text-textMuted">
+                          Vérifiez la proposition avant de valider. La cotation NGAP est indicative.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setCotationProposee(null)}
+                            className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textMuted hover:text-textPrimary"
+                          >
+                            Relancer
+                          </button>
+                          <button
+                            onClick={() => handleValiderCotation(panneau.id)}
+                            disabled={actionEnCours === panneau.id}
+                            className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-ink hover:opacity-90 disabled:opacity-50"
+                          >
+                            {actionEnCours === panneau.id ? "Validation…" : "✓ Valider la cotation"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {cotationValidee && (
+                      <p className="text-xs text-teal text-center py-2">
+                        ✓ Cotation validée — recharge pour voir les exports.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -267,9 +393,7 @@ export default function IdelDashboard() {
                       disabled={actionEnCours === panneau.id}
                       className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50"
                     >
-                      {actionEnCours === panneau.id
-                        ? "Traitement…"
-                        : "✓ J'ai transmis depuis mon LPS"}
+                      {actionEnCours === panneau.id ? "Traitement…" : "✓ J'ai transmis depuis mon LPS"}
                     </button>
                   </>
                 )}
