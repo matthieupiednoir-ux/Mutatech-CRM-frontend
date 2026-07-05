@@ -19,12 +19,12 @@ function supprimerCookieMarqueur(): void {
 }
 
 export interface UserSession {
-  user_id: string;
-  tenant_id: string | null;
-  role: string;
-  produit: string; // "crm" | "idel" | "crm+idel"
-  nom: string | null;
-  email: string;
+  user_id?: string;
+  tenant_id?: string | null;
+  role?: string;
+  produit: string;
+  nom?: string | null;
+  email?: string;
 }
 
 export function sauvegarderAuth(auth: AuthResponse): void {
@@ -95,7 +95,7 @@ export function getConfig(): TenantConfig | null {
 export function getCouleurs(): { primaire: string; secondaire: string } {
   const config = getConfig();
   return {
-    primaire: config?.couleur_primaire || "#6C63FF",
+    primaire: config?.couleur_primaire || config?.couleur_principale || "#6C63FF",
     secondaire: config?.couleur_secondaire || "#00D4AA",
   };
 }
