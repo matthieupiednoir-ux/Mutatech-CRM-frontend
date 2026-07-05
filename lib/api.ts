@@ -288,8 +288,10 @@ export const idelCreerPatient = (data: Partial<IdelPatient>) =>
   });
 
 // --- Aide calcul ---
-export function calculerTotaux(lignes: Ligne[], tauxTva: number) {
-  const totalHt = lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
+// Gère proprement les lignes null/undefined qui peuvent venir de l'API
+export function calculerTotaux(lignes: Ligne[] | null | undefined, tauxTva: number) {
+  const lignesSures = Array.isArray(lignes) ? lignes : [];
+  const totalHt = lignesSures.reduce((s, l) => s + (l.quantite ?? 0) * (l.prix_unitaire ?? 0), 0);
   const totalTva = totalHt * (tauxTva / 100);
   return { totalHt, totalTva, totalTtc: totalHt + totalTva };
 }
