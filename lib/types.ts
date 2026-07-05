@@ -69,6 +69,7 @@ export interface Client {
   telephone?: string | null;
   adresse?: string | null;
   secteur?: string | null;
+  activite_description?: string | null;
   siret?: string | null;
   tva_intracommunautaire?: string | null;
   notes?: string | null;
@@ -81,6 +82,7 @@ export interface ClientInput {
   telephone?: string | null;
   adresse?: string | null;
   secteur?: string | null;
+  activite_description?: string | null;
   siret?: string | null;
   tva_intracommunautaire?: string | null;
   notes?: string | null;
