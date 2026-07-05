@@ -2,10 +2,12 @@
 export interface AuthResponse {
   access_token: string;
   token_type: string;
+  user_id?: string;
   produit?: string;
   nom?: string;
   email?: string;
   tenant_id?: string;
+  role?: string;
 }
 
 export interface UserMe {
@@ -21,6 +23,8 @@ export interface TenantConfig {
   nom_entreprise?: string;
   logo_url?: string;
   couleur_principale?: string;
+  couleur_primaire?: string;
+  couleur_secondaire?: string;
   siret?: string;
   tva_intracommunautaire?: string;
   adresse?: string;
@@ -129,7 +133,6 @@ export interface DevisInput {
   notes?: string | null;
 }
 
-// DevisPublic : retourné par l'endpoint public /api/devis/public/[token]
 export interface DevisPublic {
   id: string;
   numero: string;
