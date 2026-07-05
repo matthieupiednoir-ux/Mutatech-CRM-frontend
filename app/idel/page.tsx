@@ -6,9 +6,10 @@ import {
   idelGetOrdonnances, idelUploaderOrdonnance,
   idelProposerCotation, idelValiderCotation,
   idelMarquerTransmis, idelExporterCsv, idelFicheReprise,
+  idelGetPatients,
   ApiError,
 } from "@/lib/api";
-import { IdelOrdonnance, CotationOut } from "@/lib/types";
+import { IdelOrdonnance, CotationOut, IdelPatient } from "@/lib/types";
 
 const STATUT_LABEL: Record<string, string> = {
   reception: "Réception", en_cours: "En cours", traite: "Traité",
@@ -25,6 +26,7 @@ function safeArr<T>(v: unknown): T[] {
 
 export default function IdelDashboard() {
   const [ordonnances, setOrdonnances] = useState<IdelOrdonnance[]>([]);
+  const [patients, setPatients] = useState<IdelPatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [upload, setUpload] = useState(false);
@@ -34,12 +36,20 @@ export default function IdelDashboard() {
   const [cotationLoading, setCotationLoading] = useState(false);
   const [cotationError, setCotationError] = useState<string | null>(null);
   const [cotationValidee, setCotationValidee] = useState(false);
+  // Pour associer un patient si l'ordonnance n'en a pas
+  const [patientSelectionne, setPatientSelectionne] = useState<string>("");
 
   function charger() {
     setLoading(true);
     setError(null);
-    idelGetOrdonnances()
-      .then((data) => setOrdonnances(safeArr<IdelOrdonnance>(data)))
+    Promise.all([
+      idelGetOrdonnances(),
+      idelGetPatients().catch(() => []),
+    ])
+      .then(([ordo, pts]) => {
+        setOrdonnances(safeArr<IdelOrdonnance>(ordo));
+        setPatients(safeArr<IdelPatient>(pts));
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
   }
@@ -51,6 +61,7 @@ export default function IdelDashboard() {
     setCotationProposee(null);
     setCotationError(null);
     setCotationValidee(false);
+    setPatientSelectionne(o.patient?.id ?? "");
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -86,6 +97,12 @@ export default function IdelDashboard() {
   }
 
   async function handleValiderCotation(id: string) {
+    // Le backend requiert un patient_id
+    const pid = patientSelectionne || panneau?.patient?.id;
+    if (!pid) {
+      setCotationError("Associez d'abord un patient avant de valider la cotation.");
+      return;
+    }
     if (!cotationProposee) return;
     setActionEnCours(id);
     setCotationError(null);
@@ -95,9 +112,7 @@ export default function IdelDashboard() {
         quantite: c.quantite ?? 1,
         modificateurs: safeArr<string>(c.modificateurs),
       }));
-      // On passe patient_id depuis l'ordonnance si disponible
-      const patientId = panneau?.patient?.id ?? null;
-      await idelValiderCotation(id, items, patientId);
+      await idelValiderCotation(id, items, pid);
       setCotationValidee(true);
       setTimeout(() => charger(), 500);
     } catch (e) {
@@ -127,6 +142,11 @@ export default function IdelDashboard() {
   const totalCotation = safeCotation.reduce((s, c) => s + (c.montant_total ?? 0), 0);
   const safeCotationExistante = safeArr<CotationOut>(panneau?.cotations);
   const totalCotationExistante = safeCotationExistante.reduce((s, c) => s + (c.montant_total ?? 0), 0);
+
+  // Patient résolu pour le panneau en cours
+  const patientResolu = panneau?.patient
+    || patients.find((p) => p.id === patientSelectionne)
+    || null;
 
   return (
     <>
@@ -185,6 +205,7 @@ export default function IdelDashboard() {
           })}
         </div>
 
+        {/* Panneau détail */}
         {panneau && (
           <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-center"
             onClick={(e) => { if (e.target === e.currentTarget) setPanneau(null); }}>
@@ -195,13 +216,33 @@ export default function IdelDashboard() {
               </div>
 
               <div className="space-y-3 text-sm">
+                {/* Patient — avec sélecteur si non associé */}
                 <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Patient</p>
-                  <p className="text-textPrimary font-medium">
-                    {panneau.patient ? `${panneau.patient.nom} ${panneau.patient.prenom}` : "Non associé"}
-                  </p>
+                  {patientResolu ? (
+                    <p className="text-textPrimary font-medium">{patientResolu.nom} {patientResolu.prenom}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-amber">⚠ Aucun patient associé — requis pour valider la cotation</p>
+                      {patients.length > 0 ? (
+                        <select
+                          value={patientSelectionne}
+                          onChange={(e) => setPatientSelectionne(e.target.value)}
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
+                        >
+                          <option value="">— Sélectionner un patient —</option>
+                          {patients.map((p) => (
+                            <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="text-xs text-textMuted">Aucun patient en base — créez-en un depuis l'onglet Patients.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
+                {/* Prescripteur */}
                 <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Prescripteur</p>
                   <p className="text-textPrimary">{panneau.medecin_prescripteur || "—"}</p>
@@ -210,6 +251,7 @@ export default function IdelDashboard() {
                   )}
                 </div>
 
+                {/* Acte prescrit */}
                 {panneau.acte_prescrit_texte && (
                   <div className="rounded-lg bg-surfaceAlt p-3">
                     <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Acte prescrit</p>
@@ -237,7 +279,7 @@ export default function IdelDashboard() {
                   </div>
                 )}
 
-                {/* Zone cotation — en_cours sans cotation existante */}
+                {/* Zone cotation NGAP */}
                 {panneau.statut === "en_cours" && safeCotationExistante.length === 0 && (
                   <div className="rounded-lg border border-violet/20 bg-violet/5 p-3">
                     <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Cotation NGAP</p>
@@ -274,12 +316,17 @@ export default function IdelDashboard() {
                             className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textMuted hover:text-textPrimary">
                             Relancer
                           </button>
-                          <button onClick={() => handleValiderCotation(panneau.id)}
-                            disabled={actionEnCours === panneau.id}
-                            className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-ink hover:opacity-90 disabled:opacity-50">
+                          <button
+                            onClick={() => handleValiderCotation(panneau.id)}
+                            disabled={actionEnCours === panneau.id || (!panneau.patient?.id && !patientSelectionne)}
+                            className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-ink hover:opacity-90 disabled:opacity-50"
+                          >
                             {actionEnCours === panneau.id ? "Validation…" : "✓ Valider la cotation"}
                           </button>
                         </div>
+                        {!panneau.patient?.id && !patientSelectionne && (
+                          <p className="text-[11px] text-amber text-center">Sélectionnez un patient ci-dessus pour pouvoir valider</p>
+                        )}
                       </div>
                     )}
 
