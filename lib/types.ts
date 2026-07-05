@@ -215,7 +215,7 @@ export interface DepenseInput {
   date_depense?: string;
   type?: string | null;
   recurrente?: boolean;
-  actif?: boolean;
+  actif?: boolean | null;
   frequence?: string;
   periodicite?: string;
   date_debut?: string;
