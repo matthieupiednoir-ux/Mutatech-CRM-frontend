@@ -164,9 +164,10 @@ export const signerDevisPublic = (token: string, signatureImage: string) =>
   });
 export const getAbonnementSuivi = (id: string) =>
   requete<MoisAbonnement[]>(`/api/devis/${id}/abonnement/suivi`);
-export const genererFactureMois = (id: string, moisIndex: number) =>
+export const genererFactureMois = (id: string, moisIndex?: number) =>
   requete<Facture>(`/api/devis/${id}/abonnement/facturer`, {
-    method: "POST", body: JSON.stringify({ mois_index: moisIndex }),
+    method: "POST",
+    body: JSON.stringify(moisIndex !== undefined ? { mois_index: moisIndex } : {}),
   });
 
 // --- Factures ---
