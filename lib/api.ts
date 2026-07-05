@@ -194,7 +194,7 @@ export const idelValiderCotation = (
   requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${id}/valider-cotation`, {
     method: "POST",
     body: JSON.stringify({
-      patient_id: patientId ?? null,
+      ...(patientId ? { patient_id: patientId } : {}),
       lignes: [],
       cotations: items,
     }),
