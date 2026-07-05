@@ -130,7 +130,6 @@ export interface DevisInput {
 }
 
 // DevisPublic : retourné par l'endpoint public /api/devis/public/[token]
-// Contient des champs supplémentaires spécifiques à la vue publique
 export interface DevisPublic {
   id: string;
   numero: string;
@@ -188,6 +187,7 @@ export interface MoisAbonnement {
   facture_id?: string | null;
   facture_numero?: string | null;
   statut?: string | null;
+  date_prevue?: string | null;
 }
 
 export interface EcheanceFacture {
