@@ -129,14 +129,18 @@ export interface DevisInput {
   notes?: string | null;
 }
 
+// DevisPublic : retourné par l'endpoint public /api/devis/public/[token]
+// Contient des champs supplémentaires spécifiques à la vue publique
 export interface DevisPublic {
   id: string;
   numero: string;
   statut: StatutDevis;
   objet?: string | null;
+  contexte?: string | null;
   lignes: Ligne[];
   taux_tva: number;
   client?: Client | null;
+  client_nom?: string | null;
   date_creation?: string;
   date_expiration?: string | null;
   signature_image?: string | null;
