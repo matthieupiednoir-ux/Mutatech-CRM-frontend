@@ -52,9 +52,7 @@ export default function DepensesPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => {
-    charger();
-  }, []);
+  useEffect(() => { charger(); }, []);
 
   function ouvrirNouveau() {
     setForm({ ...DEPENSE_VIDE });
@@ -65,15 +63,15 @@ export default function DepensesPage() {
   function ouvrirEdition(d: Depense) {
     setForm({
       libelle: d.libelle,
-      categorie: d.categorie || "",
+      categorie: d.categorie ?? "",
       montant: d.montant,
-      type: d.type,
-      date_depense: d.date_depense || new Date().toISOString().slice(0, 10),
-      frequence: d.frequence || "mensuelle",
-      date_debut: d.date_debut || new Date().toISOString().slice(0, 10),
-      date_fin: d.date_fin || "",
-      actif: d.actif,
-      notes: d.notes || "",
+      type: d.type ?? "ponctuelle",
+      date_depense: d.date_depense ?? new Date().toISOString().slice(0, 10),
+      frequence: d.frequence ?? "mensuelle",
+      date_debut: d.date_debut ?? new Date().toISOString().slice(0, 10),
+      date_fin: d.date_fin ?? "",
+      actif: d.actif ?? true,
+      notes: d.notes ?? "",
     });
     setDepenseEnEdition(d.id);
     setFormOuvert(true);
@@ -120,14 +118,14 @@ export default function DepensesPage() {
     try {
       await modifierDepense(d.id, {
         libelle: d.libelle,
-        categorie: d.categorie || undefined,
+        categorie: d.categorie ?? undefined,
         montant: d.montant,
-        type: d.type,
-        frequence: d.frequence || undefined,
-        date_debut: d.date_debut || undefined,
+        type: d.type ?? "recurrente",
+        frequence: d.frequence ?? undefined,
+        date_debut: d.date_debut ?? undefined,
         date_fin: new Date().toISOString().slice(0, 10),
         actif: false,
-        notes: d.notes || undefined,
+        notes: d.notes ?? undefined,
       });
       charger();
     } catch (e) {
@@ -216,15 +214,13 @@ export default function DepensesPage() {
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Catégorie</span>
                 <select
-                  value={form.categorie}
+                  value={form.categorie ?? ""}
                   onChange={(e) => setForm({ ...form, categorie: e.target.value })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                 >
                   <option value="">—</option>
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </label>
@@ -235,16 +231,14 @@ export default function DepensesPage() {
                   type="number"
                   step="0.01"
                   value={form.montant}
-                  onChange={(e) =>
-                    setForm({ ...form, montant: parseFloat(e.target.value) || 0 })
-                  }
+                  onChange={(e) => setForm({ ...form, montant: parseFloat(e.target.value) || 0 })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                 />
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Type</span>
                 <select
-                  value={form.type}
+                  value={form.type ?? "ponctuelle"}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                 >
@@ -258,7 +252,7 @@ export default function DepensesPage() {
                   <span className="mb-1 block text-sm text-textMuted">Date</span>
                   <input
                     type="date"
-                    value={form.date_depense}
+                    value={form.date_depense ?? ""}
                     onChange={(e) => setForm({ ...form, date_depense: e.target.value })}
                     className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                   />
@@ -268,7 +262,7 @@ export default function DepensesPage() {
                   <label className="block">
                     <span className="mb-1 block text-sm text-textMuted">Fréquence</span>
                     <select
-                      value={form.frequence}
+                      value={form.frequence ?? "mensuelle"}
                       onChange={(e) => setForm({ ...form, frequence: e.target.value })}
                       className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                     >
@@ -277,12 +271,10 @@ export default function DepensesPage() {
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm text-textMuted">
-                      Date de début
-                    </span>
+                    <span className="mb-1 block text-sm text-textMuted">Date de début</span>
                     <input
                       type="date"
-                      value={form.date_debut}
+                      value={form.date_debut ?? ""}
                       onChange={(e) => setForm({ ...form, date_debut: e.target.value })}
                       className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                     />
@@ -290,13 +282,11 @@ export default function DepensesPage() {
                   <label className="block">
                     <span className="mb-1 block text-sm text-textMuted">
                       Date de fin{" "}
-                      <span className="text-textMuted/60">
-                        (laisser vide si toujours en cours)
-                      </span>
+                      <span className="text-textMuted/60">(laisser vide si toujours en cours)</span>
                     </span>
                     <input
                       type="date"
-                      value={form.date_fin}
+                      value={form.date_fin ?? ""}
                       onChange={(e) => setForm({ ...form, date_fin: e.target.value })}
                       className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
                     />
@@ -307,7 +297,7 @@ export default function DepensesPage() {
               <label className="block sm:col-span-2">
                 <span className="mb-1 block text-sm text-textMuted">Notes</span>
                 <textarea
-                  value={form.notes}
+                  value={form.notes ?? ""}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   rows={2}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary"
@@ -361,10 +351,8 @@ export default function DepensesPage() {
                         </p>
                         <p className="text-xs text-textMuted">
                           {d.categorie || "—"} · {d.frequence === "annuelle" ? "Annuelle" : "Mensuelle"}
-                          {d.date_debut &&
-                            ` · depuis le ${new Date(d.date_debut).toLocaleDateString("fr-FR")}`}
-                          {d.date_fin &&
-                            ` · jusqu'au ${new Date(d.date_fin).toLocaleDateString("fr-FR")}`}
+                          {d.date_debut && ` · depuis le ${new Date(d.date_debut).toLocaleDateString("fr-FR")}`}
+                          {d.date_fin && ` · jusqu'au ${new Date(d.date_fin).toLocaleDateString("fr-FR")}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -417,8 +405,7 @@ export default function DepensesPage() {
                         </p>
                         <p className="text-xs text-textMuted">
                           {d.categorie || "—"}
-                          {d.date_depense &&
-                            ` · ${new Date(d.date_depense).toLocaleDateString("fr-FR")}`}
+                          {d.date_depense && ` · ${new Date(d.date_depense).toLocaleDateString("fr-FR")}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
