@@ -68,6 +68,7 @@ export interface Client {
   email?: string | null;
   telephone?: string | null;
   adresse?: string | null;
+  secteur?: string | null;
   siret?: string | null;
   tva_intracommunautaire?: string | null;
   notes?: string | null;
@@ -79,6 +80,7 @@ export interface ClientInput {
   email?: string | null;
   telephone?: string | null;
   adresse?: string | null;
+  secteur?: string | null;
   siret?: string | null;
   tva_intracommunautaire?: string | null;
   notes?: string | null;
