@@ -256,6 +256,7 @@ export interface Tache {
   statut: StatutTache;
   priorite?: number | null;
   pilier?: number | null;
+  ordre?: number | null;
   description?: string | null;
   date_echeance?: string | null;
   client_id?: string | null;
@@ -268,6 +269,7 @@ export interface TacheInput {
   statut?: StatutTache;
   priorite?: number | null;
   pilier?: number | null;
+  ordre?: number | null;
   description?: string | null;
   date_echeance?: string | null;
   client_id?: string | null;
