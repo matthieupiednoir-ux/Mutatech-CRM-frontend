@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import NavBar from "@/components/NavBar";
 import {
   idelGetOrdonnances, idelUploaderOrdonnance,
@@ -19,18 +19,12 @@ interface PatientForm {
   telephone: string; adresse: string; medecin_traitant: string; notes: string;
   zone_deplacement: ZoneDeplacement; distance_km: string;
 }
-
-interface TourneeItem {
-  patientId: string; heure: string; ordre: number; note: string;
-}
-
+interface TourneeItem { patientId: string; heure: string; ordre: number; note: string; }
 interface ChatMsg { role: "user" | "assistant"; content: string; }
 
 // ===== CONSTANTES NGAP =====
 const IFD = 2.50;
-const IK_ZONES: Record<ZoneDeplacement, number> = {
-  plaine: 0.91, montagne: 1.05, tres_montagneux: 1.10,
-};
+const IK_ZONES: Record<ZoneDeplacement, number> = { plaine: 0.91, montagne: 1.05, tres_montagneux: 1.10 };
 const MAJORATIONS = [
   { code: "MS", label: "Soirée (20h–0h)", montant: 3.15 },
   { code: "MN", label: "Nuit (0h–7h)", montant: 4.72 },
@@ -41,13 +35,10 @@ const ZONES: { value: ZoneDeplacement; label: string }[] = [
   { value: "montagne", label: "Montagne (1.05€/km)" },
   { value: "tres_montagneux", label: "Très montagneux (1.10€/km)" },
 ];
+const NGAP_CONTEXT = `Tu es un assistant spécialisé en cotation NGAP pour infirmiers libéraux (IDEL) en France. Tu connais parfaitement l'article 11B (acte 1 = 100%, acte 2 = 50%, suivants gratuit), les codes AMI/AIS, les majorations MS (+3.15€), MN (+4.72€), MJF (+11.65€), l'IFD (2.50€) et les IK (plaine 0.91€/km, montagne 1.05€/km, très montagneux 1.10€/km). Réponds de façon claire et concise.`;
 
-// ===== MOTEUR NGAP ART.11B =====
-function calculerNGAP(
-  cotations: CotationOut[],
-  patient: IdelPatient | null | undefined,
-  majActives: string[]
-): DetailCotationNGAP {
+// ===== MOTEUR NGAP =====
+function calculerNGAP(cotations: CotationOut[], patient: IdelPatient | null | undefined, majActives: string[]): DetailCotationNGAP {
   const tries = [...cotations].sort((a, b) => (b.montant_total ?? 0) - (a.montant_total ?? 0));
   const lignes: LigneCotationCalculee[] = tries.map((c, i) => {
     const brut = c.montant_total ?? 0;
@@ -71,7 +62,6 @@ const VIDE_PATIENT: PatientForm = {
   zone_deplacement: "plaine", distance_km: "",
 };
 
-// Extrait nom/prénom du texte OCR de l'ordonnance
 function extraireNomPrenom(texte?: string | null): { nom: string; prenom: string } {
   if (!texte) return { nom: "", prenom: "" };
   const match = texte.match(/(?:patient|pour|madame|monsieur|mme|m\.)\s+([A-ZÉÀÂ][a-zéàâ]+)\s+([A-ZÉÀÂ][a-zéàâ]+)/i);
@@ -79,21 +69,49 @@ function extraireNomPrenom(texte?: string | null): { nom: string; prenom: string
   return { nom: "", prenom: "" };
 }
 
-// Contexte NGAP pour l'assistant IA
-const NGAP_CONTEXT = `Tu es un assistant spécialisé en cotation NGAP pour infirmiers libéraux (IDEL) en France. Tu connais parfaitement :
-- L'article 11B : acte 1 = 100%, acte 2 = 50%, actes suivants = gratuit
-- Les codes AMI (Actes Médicaux Infirmiers) et AIS (Actes Infirmiers de Soins)
-- Les majorations : MS (soirée +3.15€), MN (nuit +4.72€), MJF (dimanche/férié +11.65€)
-- L'IFD (2.50€) et les IK (plaine 0.91€/km, montagne 1.05€/km, très montagneux 1.10€/km)
-- Les règles de cumul et les cas particuliers
-Réponds de façon claire, concise et pratique pour aider l'infirmière dans sa cotation quotidienne.`;
-
 const STATUT_LABEL: Record<string, string> = { reception: "Réception", en_cours: "En cours", traite: "Traité" };
 const STATUT_COL: Record<string, string> = {
   reception: "border-line text-textMuted",
   en_cours: "border-amber/40 bg-amber/10 text-amber",
   traite: "border-teal/40 bg-teal/10 text-teal",
 };
+
+// ===== HOOK RECONNAISSANCE VOCALE =====
+function useVoice(onResult: (text: string) => void, lang = "fr-FR") {
+  const [ecoute, setEcoute] = useState(false);
+  const [supporte, setSupporte] = useState(false);
+  const recRef = useRef<SpeechRecognition | null>(null);
+
+  useEffect(() => {
+    const SR = typeof window !== "undefined"
+      ? (window.SpeechRecognition || (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition)
+      : undefined;
+    if (SR) { setSupporte(true); recRef.current = new SR(); }
+  }, []);
+
+  function toggleEcoute() {
+    if (!recRef.current) return;
+    if (ecoute) {
+      recRef.current.stop();
+      setEcoute(false);
+      return;
+    }
+    recRef.current.lang = lang;
+    recRef.current.continuous = false;
+    recRef.current.interimResults = false;
+    recRef.current.onresult = (e: SpeechRecognitionEvent) => {
+      const transcript = e.results[0]?.[0]?.transcript ?? "";
+      if (transcript) onResult(transcript);
+      setEcoute(false);
+    };
+    recRef.current.onerror = () => setEcoute(false);
+    recRef.current.onend = () => setEcoute(false);
+    recRef.current.start();
+    setEcoute(true);
+  }
+
+  return { ecoute, supporte, toggleEcoute };
+}
 
 export default function IdelPage() {
   const [vue, setVue] = useState<"pipeline" | "tournee">("pipeline");
@@ -119,17 +137,23 @@ export default function IdelPage() {
   const [patSaving, setPatSaving] = useState(false);
   const [patErr, setPatErr] = useState<string | null>(null);
 
-  // Assistant IA
+  // Chat NGAP
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatOuvert, setChatOuvert] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Tournée
   const [tournee, setTournee] = useState<TourneeItem[]>([]);
   const [tourneePatient, setTourneePatient] = useState("");
   const [tourneeHeure, setTourneeHeure] = useState("08:00");
   const [tourneeNote, setTourneeNote] = useState("");
+
+  // Voix pour le chat
+  const { ecoute, supporte: voixSupporte, toggleEcoute } = useVoice((transcript) => {
+    setChatInput((prev) => (prev ? prev + " " + transcript : transcript));
+  });
 
   function charger() {
     setLoading(true);
@@ -147,13 +171,16 @@ export default function IdelPage() {
 
   useEffect(() => { charger(); }, []);
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat]);
+
   function ouvrirPanneau(o: IdelOrdonnance) {
     setPanneau(o);
     setCotProp(null); setCotErr(null); setCotValidee(false);
     setPatientId(o.patient?.id ?? "");
     setMajActives([]);
     setCreerMode(false); setPatErr(null);
-    // Pré-remplir le formulaire patient depuis les données OCR
     const { nom, prenom } = extraireNomPrenom(o.acte_prescrit_texte);
     setPatForm({ ...VIDE_PATIENT, nom, prenom, medecin_traitant: o.medecin_prescripteur ?? "" });
   }
@@ -161,25 +188,21 @@ export default function IdelPage() {
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
     setUpload(true);
-    try {
-      const fd = new FormData(); fd.append("file", f);
-      await idelUploaderOrdonnance(fd); charger();
-    } catch (e) { setError(e instanceof ApiError ? e.message : "Erreur d'upload"); }
+    try { const fd = new FormData(); fd.append("file", f); await idelUploaderOrdonnance(fd); charger(); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Erreur d'upload"); }
     finally { setUpload(false); e.target.value = ""; }
   }
 
   async function handleProposerCotation(id: string) {
     setCotLoading(true); setCotErr(null); setCotProp(null);
-    try {
-      const props = await idelProposerCotation(id);
-      setCotProp(safeArr<CotationOut>(props));
-    } catch (e) { setCotErr(e instanceof ApiError ? e.message : "Erreur de proposition"); }
+    try { const props = await idelProposerCotation(id); setCotProp(safeArr<CotationOut>(props)); }
+    catch (e) { setCotErr(e instanceof ApiError ? e.message : "Erreur"); }
     finally { setCotLoading(false); }
   }
 
   async function handleValiderCotation(id: string) {
     const pid = patientId || panneau?.patient?.id;
-    if (!pid) { setCotErr("Sélectionnez ou créez un patient avant de valider."); return; }
+    if (!pid) { setCotErr("Sélectionnez ou créez un patient."); return; }
     if (!cotProp) return;
     setActionId(id); setCotErr(null);
     try {
@@ -218,17 +241,16 @@ export default function IdelPage() {
     };
     try {
       const newPat = await idelCreerPatient(payload);
-      const updatedPats = [...patients, newPat];
-      setPatients(updatedPats);
+      setPatients((prev) => [...prev, newPat]);
       setPatientId(newPat.id);
       setCreerMode(false);
     } catch (e) { setPatErr(e instanceof ApiError ? e.message : "Erreur de création"); }
     finally { setPatSaving(false); }
   }
 
-  async function handleChat(e: React.FormEvent) {
-    e.preventDefault();
-    const msg = chatInput.trim(); if (!msg) return;
+  async function handleChat(e?: React.FormEvent) {
+    e?.preventDefault();
+    const msg = chatInput.trim(); if (!msg || chatLoading) return;
     const newHistory: ChatMsg[] = [...chat, { role: "user", content: msg }];
     setChat(newHistory); setChatInput(""); setChatLoading(true);
     try {
@@ -240,7 +262,7 @@ export default function IdelPage() {
       const resp = await chatAgent(msg, historique);
       setChat((prev) => [...prev, { role: "assistant", content: resp.reply }]);
     } catch {
-      setChat((prev) => [...prev, { role: "assistant", content: "Désolé, je ne peux pas répondre pour l'instant. Réessayez." }]);
+      setChat((prev) => [...prev, { role: "assistant", content: "Désolé, réessayez dans un instant." }]);
     } finally { setChatLoading(false); }
   }
 
@@ -248,25 +270,19 @@ export default function IdelPage() {
 
   // Tournée
   function ajouterTournee() {
-    if (!tourneePatient) return;
-    const alreadyIn = tournee.find((t) => t.patientId === tourneePatient);
-    if (alreadyIn) return;
-    setTournee((prev) => [
-      ...prev,
-      { patientId: tourneePatient, heure: tourneeHeure, ordre: prev.length + 1, note: tourneeNote },
-    ]);
+    if (!tourneePatient || tournee.find((t) => t.patientId === tourneePatient)) return;
+    setTournee((p) => [...p, { patientId: tourneePatient, heure: tourneeHeure, ordre: p.length + 1, note: tourneeNote }]);
     setTourneePatient(""); setTourneeNote("");
   }
   function retirerTournee(id: string) { setTournee((p) => p.filter((t) => t.patientId !== id)); }
   function monterOrdre(idx: number) {
     if (idx === 0) return;
-    setTournee((p) => { const n=[...p]; [n[idx-1],n[idx]]=[n[idx],n[idx-1]]; return n.map((x,i)=>({...x,ordre:i+1})); });
+    setTournee((p) => { const n = [...p]; [n[idx - 1], n[idx]] = [n[idx], n[idx - 1]]; return n.map((x, i) => ({ ...x, ordre: i + 1 })); });
   }
   function descendreOrdre(idx: number) {
-    setTournee((p) => { if(idx>=p.length-1)return p; const n=[...p]; [n[idx],n[idx+1]]=[n[idx+1],n[idx]]; return n.map((x,i)=>({...x,ordre:i+1})); });
+    setTournee((p) => { if (idx >= p.length - 1) return p; const n = [...p]; [n[idx], n[idx + 1]] = [n[idx + 1], n[idx]]; return n.map((x, i) => ({ ...x, ordre: i + 1 })); });
   }
 
-  // Patient résolu
   const patientResolu = panneau?.patient ?? patients.find((p) => p.id === patientId) ?? null;
   const safeCot = safeArr<CotationOut>(cotProp);
   const detail: DetailCotationNGAP | null = safeCot.length > 0 ? calculerNGAP(safeCot, patientResolu, majActives) : null;
@@ -283,10 +299,10 @@ export default function IdelPage() {
       <NavBar />
       <main className="mx-auto max-w-6xl px-4 py-6">
 
-        {/* Tabs */}
+        {/* Tabs + actions */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-2">
-            {([["pipeline", "📋 Pipeline"], ["tournee", "🗺 Tournée du jour"]] as const).map(([v, l]) => (
+            {([["pipeline", "📋 Pipeline"], ["tournee", "🗺 Tournée"]] as const).map(([v, l]) => (
               <button key={v} onClick={() => setVue(v)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${vue === v ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted hover:text-textPrimary"}`}>
                 {l}
@@ -295,7 +311,7 @@ export default function IdelPage() {
           </div>
           <div className="flex gap-2 items-center">
             <button onClick={() => setChatOuvert(!chatOuvert)}
-              className="rounded-lg border border-teal/40 bg-teal/10 px-3 py-2 text-xs font-medium text-teal hover:bg-teal/20">
+              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${chatOuvert ? "border-teal bg-teal/15 text-teal" : "border-teal/40 bg-teal/10 text-teal hover:bg-teal/20"}`}>
               🤖 Assistant NGAP {chatOuvert ? "▲" : "▼"}
             </button>
             {vue === "pipeline" && (
@@ -309,39 +325,81 @@ export default function IdelPage() {
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
-        {/* Assistant IA NGAP */}
+        {/* ===== ASSISTANT NGAP IA + VOIX ===== */}
         {chatOuvert && (
-          <div className="mb-6 rounded-xl border border-teal/30 bg-surface overflow-hidden">
-            <div className="px-4 py-3 border-b border-line bg-teal/5 flex items-center gap-2">
-              <span className="text-sm font-medium text-textPrimary">🤖 Assistant NGAP IA</span>
-              <span className="text-[11px] text-textMuted">Posez vos questions sur la cotation, les règles Art.11B, les majorations…</span>
+          <div className="mb-6 rounded-xl border border-teal/30 bg-surface overflow-hidden shadow-lg">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-teal/5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-textPrimary">🤖 Assistant NGAP IA</span>
+                {voixSupporte && (
+                  <span className="text-[11px] text-teal">· Micro disponible 🎤</span>
+                )}
+              </div>
+              <button onClick={() => setChat([])} className="text-[11px] text-textMuted hover:text-amber">
+                Effacer
+              </button>
             </div>
-            <div className="max-h-48 overflow-y-auto p-3 space-y-2">
+
+            {/* Messages */}
+            <div className="max-h-56 overflow-y-auto p-3 space-y-2">
               {chat.length === 0 && (
-                <div className="space-y-1">
-                  <p className="text-[11px] text-textMuted">Questions rapides :</p>
-                  {["Comment coter AMI4 + AMI1 ensemble ?", "Quand appliquer la majoration MJF ?", "Calcul IK pour 12km en montagne ?"].map((q) => (
-                    <button key={q} onClick={() => setChatInput(q)}
-                      className="block text-left text-xs text-teal hover:underline">{q}</button>
+                <div className="space-y-2">
+                  <p className="text-[11px] text-textMuted mb-1">Exemples de questions :</p>
+                  {[
+                    "Comment coter AMI4 + AMI1 + AIS3 ensemble ?",
+                    "Quand appliquer la majoration MJF ?",
+                    "Calcul IK pour 12km en montagne ?",
+                    "Règle de cumul pansement + injection ?",
+                  ].map((q) => (
+                    <button key={q} onClick={() => { setChatInput(q); }}
+                      className="block text-left text-xs text-teal hover:underline py-0.5">
+                      → {q}
+                    </button>
                   ))}
                 </div>
               )}
               {chat.map((m, i) => (
                 <div key={i} className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-                  <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${m.role === "user" ? "bg-violet text-white rounded-br-sm" : "bg-surfaceAlt text-textPrimary rounded-bl-sm"}`}>
+                  <div className={`max-w-[88%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-violet text-white rounded-br-sm" : "bg-surfaceAlt text-textPrimary rounded-bl-sm"}`}>
                     {m.content}
                   </div>
                 </div>
               ))}
-              {chatLoading && <p className="text-xs text-textMuted animate-pulse">Réflexion en cours…</p>}
+              {chatLoading && (
+                <div className="flex gap-1 items-center px-3 py-2 bg-surfaceAlt rounded-xl w-fit">
+                  <span className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              )}
+              <div ref={chatEndRef} />
             </div>
-            <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-line">
-              <input value={chatInput} onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Posez votre question NGAP…"
-                className="flex-1 rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-xs text-textPrimary outline-none focus:border-teal" />
+
+            {/* Input + micro + envoyer */}
+            <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-line items-end">
+              <textarea
+                value={chatInput}
+                onChange={(e) => { setChatInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 80) + "px"; }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChat(); } }}
+                placeholder={ecoute ? "🎤 Parlez maintenant…" : "Posez votre question NGAP… (ou parlez)"}
+                rows={1}
+                className={`flex-1 rounded-lg border bg-surfaceAlt px-3 py-2 text-xs text-textPrimary outline-none resize-none transition ${ecoute ? "border-teal bg-teal/5" : "border-line focus:border-teal"}`}
+              />
+              {voixSupporte && (
+                <button type="button" onClick={toggleEcoute}
+                  className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition ${ecoute ? "border-teal bg-teal text-black animate-pulse" : "border-line text-textMuted hover:border-teal hover:text-teal"}`}
+                  title={ecoute ? "Arrêter l'écoute" : "Parler"}>
+                  🎤
+                </button>
+              )}
               <button type="submit" disabled={chatLoading || !chatInput.trim()}
-                className="rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black hover:opacity-90 disabled:opacity-40">→</button>
+                className="shrink-0 rounded-lg bg-teal px-3 py-2 text-xs font-bold text-black hover:opacity-90 disabled:opacity-40">
+                →
+              </button>
             </form>
+            <p className="px-4 pb-2 text-[10px] text-textMuted">
+              {voixSupporte ? "🎤 Appuyez sur le micro pour dicter votre question. " : ""}Entrée pour envoyer · Shift+Entrée pour nouvelle ligne.
+            </p>
           </div>
         )}
 
@@ -387,7 +445,7 @@ export default function IdelPage() {
         {vue === "tournee" && (
           <div className="space-y-4">
             <div className="rounded-xl border border-line bg-surface p-5">
-              <h2 className="font-display text-base font-bold text-textPrimary mb-3">Ajouter une visite à la tournée</h2>
+              <h2 className="font-display text-base font-bold text-textPrimary mb-3">Ajouter une visite</h2>
               <div className="grid gap-3 sm:grid-cols-3">
                 <select value={tourneePatient} onChange={(e) => setTourneePatient(e.target.value)}
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
@@ -399,37 +457,35 @@ export default function IdelPage() {
                 <input type="time" value={tourneeHeure} onChange={(e) => setTourneeHeure(e.target.value)}
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
                 <input value={tourneeNote} onChange={(e) => setTourneeNote(e.target.value)}
-                  placeholder="Note (optionnel)"
+                  placeholder="Note optionnelle"
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
               </div>
               <button onClick={ajouterTournee} disabled={!tourneePatient}
                 className="mt-3 rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-40">
-                + Ajouter à la tournée
+                + Ajouter
               </button>
             </div>
 
             {tournee.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line p-8 text-center">
-                <p className="text-sm text-textMuted">Aucune visite planifiée — ajoutez des patients ci-dessus.</p>
+                <p className="text-sm text-textMuted">Aucune visite planifiée.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-textMuted px-1">
-                  <span>{tournee.length} visite{tournee.length > 1 ? "s" : ""} planifiée{tournee.length > 1 ? "s" : ""}</span>
-                  <span className="text-teal font-medium">Total déplacement ≈ {totalIkJour.toFixed(2)} €</span>
+                  <span>{tournee.length} visite{tournee.length > 1 ? "s" : ""}</span>
+                  <span className="text-teal font-medium">Déplacements ≈ {totalIkJour.toFixed(2)} €</span>
                 </div>
                 {tournee.map((item, idx) => {
                   const pt = patients.find((p) => p.id === item.patientId);
                   const ik = pt?.distance_km ? pt.distance_km * IK_ZONES[pt.zone_deplacement ?? "plaine"] * 2 + IFD : IFD;
                   return (
                     <div key={item.patientId} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-                      <div className="flex flex-col gap-1 shrink-0">
-                        <button onClick={() => monterOrdre(idx)} disabled={idx === 0}
-                          className="text-textMuted hover:text-textPrimary disabled:opacity-20 text-xs leading-none">▲</button>
-                        <button onClick={() => descendreOrdre(idx)} disabled={idx === tournee.length - 1}
-                          className="text-textMuted hover:text-textPrimary disabled:opacity-20 text-xs leading-none">▼</button>
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button onClick={() => monterOrdre(idx)} disabled={idx === 0} className="text-textMuted hover:text-textPrimary disabled:opacity-20 text-xs">▲</button>
+                        <button onClick={() => descendreOrdre(idx)} disabled={idx === tournee.length - 1} className="text-textMuted hover:text-textPrimary disabled:opacity-20 text-xs">▼</button>
                       </div>
-                      <span className="text-lg font-bold text-violet/40 w-6 shrink-0">{idx + 1}</span>
+                      <span className="text-lg font-bold text-violet/30 w-6 shrink-0">{idx + 1}</span>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm text-textPrimary">{pt ? `${pt.nom} ${pt.prenom}` : "Patient inconnu"}</p>
                         {pt?.adresse && <p className="text-[11px] text-textMuted truncate">📍 {pt.adresse}</p>}
@@ -437,10 +493,9 @@ export default function IdelPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-medium text-textPrimary">{item.heure}</p>
-                        <p className="text-[11px] text-teal">{ik.toFixed(2)} € dépl.</p>
+                        <p className="text-[11px] text-teal">{ik.toFixed(2)} €</p>
                       </div>
-                      <button onClick={() => retirerTournee(item.patientId)}
-                        className="text-textMuted hover:text-amber text-sm shrink-0">✕</button>
+                      <button onClick={() => retirerTournee(item.patientId)} className="text-textMuted hover:text-amber text-sm shrink-0">✕</button>
                     </div>
                   );
                 })}
@@ -449,31 +504,28 @@ export default function IdelPage() {
           </div>
         )}
 
-        {/* ===== PANNEAU DÉTAIL ORDONNANCE ===== */}
+        {/* ===== PANNEAU ORDONNANCE ===== */}
         {panneau && (
-          <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-center"
+          <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/50 sm:items-center"
             onClick={(e) => { if (e.target === e.currentTarget) setPanneau(null); }}>
-            <div className="w-full max-w-lg rounded-t-2xl bg-surface p-5 sm:rounded-2xl sm:m-4 max-h-[92vh] overflow-y-auto space-y-3">
+            <div className="w-full max-w-lg rounded-t-2xl bg-surface p-5 sm:rounded-2xl sm:m-4 max-h-[90vh] overflow-y-auto space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-display text-lg font-bold text-textPrimary">Ordonnance</h3>
-                <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary">✕</button>
+                <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary text-xl">✕</button>
               </div>
 
               {/* Patient */}
               <div className="rounded-lg bg-surfaceAlt p-3">
-                <p className="mb-2 text-[11px] uppercase tracking-wide text-textMuted font-medium">Patient associé</p>
+                <p className="mb-2 text-[11px] uppercase tracking-wide text-textMuted font-medium">Patient</p>
                 {patientResolu && !creerMode ? (
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-medium text-sm text-textPrimary">{patientResolu.nom} {patientResolu.prenom}</p>
                       {patientResolu.adresse && <p className="text-xs text-textMuted">{patientResolu.adresse}</p>}
                       {patientResolu.zone_deplacement && (
-                        <p className="text-[11px] text-teal">{patientResolu.zone_deplacement} · {patientResolu.distance_km ?? 0}km</p>
+                        <p className="text-[11px] text-teal">{patientResolu.zone_deplacement} · {patientResolu.distance_km ?? 0} km</p>
                       )}
                     </div>
-                    {!patientResolu.zone_deplacement && (
-                      <span className="text-[10px] text-amber">⚠ Ajoutez la zone/distance dans Patients</span>
-                    )}
                   </div>
                 ) : !creerMode ? (
                   <div className="space-y-2">
@@ -487,17 +539,14 @@ export default function IdelPage() {
                     <button onClick={() => setCreerMode(true)}
                       className="w-full rounded-lg border border-violet/40 bg-violet/10 px-3 py-2 text-sm font-medium text-violet hover:bg-violet/20 text-left">
                       ✚ Créer un nouveau patient
-                      {(patForm.nom || patForm.prenom) && (
-                        <span className="ml-2 text-[11px] opacity-70">(pré-rempli depuis l'ordonnance)</span>
-                      )}
+                      {(patForm.nom || patForm.prenom) && <span className="ml-2 text-[11px] opacity-60">(pré-rempli depuis OCR)</span>}
                     </button>
                   </div>
                 ) : null}
 
-                {/* Formulaire création patient inline */}
                 {creerMode && (
                   <form onSubmit={handleCreerPatient} className="mt-2 space-y-3">
-                    <p className="text-xs font-medium text-textPrimary">Nouveau patient — données pré-remplies depuis l'OCR</p>
+                    <p className="text-xs font-medium text-textPrimary">Nouveau patient</p>
                     {patErr && <p className="text-xs text-amber">{patErr}</p>}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <input required value={patForm.nom} onChange={(e) => setPatForm((p) => ({ ...p, nom: e.target.value }))}
@@ -509,9 +558,7 @@ export default function IdelPage() {
                       <input value={patForm.medecin_traitant} onChange={(e) => setPatForm((p) => ({ ...p, medecin_traitant: e.target.value }))}
                         placeholder="Médecin traitant" className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
                       <input value={patForm.adresse} onChange={(e) => setPatForm((p) => ({ ...p, adresse: e.target.value }))}
-                        placeholder="Adresse" className="col-span-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                        placeholder="Adresse" className="sm:col-span-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
                       <select value={patForm.zone_deplacement} onChange={(e) => setZone(e.target.value as ZoneDeplacement)}
                         className="rounded-lg border border-teal/30 bg-teal/5 px-3 py-2 text-sm text-textPrimary">
                         {ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
@@ -526,18 +573,16 @@ export default function IdelPage() {
                         className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50">
                         {patSaving ? "Création…" : "✓ Créer le patient"}
                       </button>
-                      <button type="button" onClick={() => setCreerMode(false)}
-                        className="text-sm text-textMuted hover:text-textPrimary px-2">Annuler</button>
+                      <button type="button" onClick={() => setCreerMode(false)} className="text-sm text-textMuted hover:text-textPrimary px-2">Annuler</button>
                     </div>
                   </form>
                 )}
               </div>
 
-              {/* Prescripteur / Acte */}
               {panneau.medecin_prescripteur && (
-                <div className="rounded-lg bg-surfaceAlt p-3 text-sm">
+                <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="text-[11px] text-textMuted mb-1 uppercase tracking-wide">Prescripteur</p>
-                  <p className="text-textPrimary">{panneau.medecin_prescripteur}</p>
+                  <p className="text-sm text-textPrimary">{panneau.medecin_prescripteur}</p>
                   {panneau.date_prescription && <p className="text-xs text-textMuted">Le {new Date(panneau.date_prescription).toLocaleDateString("fr-FR")}</p>}
                 </div>
               )}
@@ -548,10 +593,9 @@ export default function IdelPage() {
                 </div>
               )}
 
-              {/* Cotation existante */}
               {cotExist.length > 0 && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-2 uppercase tracking-wide">Cotation NGAP validée</p>
+                  <p className="text-[11px] text-textMuted mb-2 uppercase tracking-wide">Cotation validée</p>
                   {cotExist.map((c, i) => (
                     <div key={i} className="flex justify-between text-xs gap-2 py-0.5">
                       <span className="font-bold text-textPrimary">{c.code_acte}</span>
@@ -562,24 +606,23 @@ export default function IdelPage() {
                 </div>
               )}
 
-              {/* Zone cotation NGAP */}
               {panneau.statut === "en_cours" && cotExist.length === 0 && (
                 <div className="rounded-xl border border-violet/20 bg-violet/5 p-4 space-y-3">
-                  <p className="text-[11px] uppercase tracking-wide text-textMuted font-medium">Cotation NGAP · Article 11B</p>
+                  <p className="text-[11px] uppercase tracking-wide text-textMuted font-medium">Cotation NGAP · Art.11B</p>
                   {!cotProp && !cotLoading && !cotValidee && (
                     <button onClick={() => handleProposerCotation(panneau.id)}
                       className="w-full rounded-lg bg-violet px-4 py-2.5 text-sm font-medium text-white hover:bg-violet/90">
-                      🤖 Proposer une cotation NGAP
+                      🤖 Proposer une cotation IA
                     </button>
                   )}
-                  {cotLoading && <p className="text-xs text-textMuted text-center py-2">Analyse IA en cours…</p>}
+                  {cotLoading && <p className="text-xs text-textMuted text-center py-2 animate-pulse">Analyse en cours…</p>}
                   {cotErr && <p className="text-xs text-amber">{cotErr}</p>}
                   {detail && !cotValidee && (
                     <div className="space-y-3">
                       {detail.lignes.map((l, i) => (
                         <div key={i} className={`flex items-center gap-2 text-xs ${l.gratuit ? "opacity-50" : ""}`}>
                           <span className="font-bold text-textPrimary w-14 shrink-0">{l.code_acte}</span>
-                          <span className="text-textMuted flex-1 truncate text-[11px]">{l.libelle}</span>
+                          <span className="text-textMuted flex-1 text-[11px] truncate">{l.libelle}</span>
                           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${l.pourcentage === 100 ? "bg-teal/20 text-teal" : l.pourcentage === 50 ? "bg-amber/20 text-amber" : "bg-surfaceAlt text-textMuted"}`}>
                             {l.gratuit ? "Gratuit" : `${l.pourcentage}%`}
                           </span>
@@ -593,9 +636,7 @@ export default function IdelPage() {
                             <span>IK {patientResolu.zone_deplacement} · {patientResolu.distance_km}km A/R</span>
                             <span>{detail.ik.toFixed(2)} €</span>
                           </div>
-                        ) : (
-                          <p className="text-[10px] text-textMuted italic">← Distance à renseigner dans la fiche patient</p>
-                        )}
+                        ) : <p className="text-[10px] text-textMuted italic">Renseignez la distance dans la fiche patient</p>}
                       </div>
                       <div className="border-t border-line pt-2">
                         <p className="text-[11px] text-textMuted font-medium mb-2">Majorations</p>
@@ -619,7 +660,7 @@ export default function IdelPage() {
                         <button onClick={() => handleValiderCotation(panneau.id)}
                           disabled={actionId === panneau.id || (!panneau.patient?.id && !patientId)}
                           className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black hover:opacity-90 disabled:opacity-50">
-                          {actionId === panneau.id ? "Validation…" : "✓ Valider la cotation"}
+                          {actionId === panneau.id ? "Validation…" : "✓ Valider"}
                         </button>
                       </div>
                       {!panneau.patient?.id && !patientId && (
@@ -631,7 +672,6 @@ export default function IdelPage() {
                 </div>
               )}
 
-              {/* Actions export */}
               {panneau.statut === "en_cours" && cotExist.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <a href={idelExporterCsv(panneau.id)} target="_blank" rel="noopener noreferrer"
@@ -649,7 +689,7 @@ export default function IdelPage() {
                 </div>
               )}
               {panneau.statut === "traite" && (
-                <p className="text-xs text-teal text-center">✓ Transmise à la CPAM via votre LPS</p>
+                <p className="text-xs text-teal text-center">✓ Transmise à la CPAM</p>
               )}
             </div>
           </div>
