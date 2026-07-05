@@ -140,6 +140,7 @@ export interface DevisPublic {
   date_creation?: string;
   date_expiration?: string | null;
   signature_image?: string | null;
+  signe_le?: string | null;
   nom_entreprise?: string | null;
   logo_url?: string | null;
   mentions_legales?: string | null;
