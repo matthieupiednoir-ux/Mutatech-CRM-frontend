@@ -212,12 +212,15 @@ export interface DepenseInput {
   montant: number;
   categorie: string;
   date_depense: string;
+  type?: string;
   recurrente: boolean;
   frequence?: string;
   periodicite?: string;
+  date_debut?: string;
   date_fin?: string;
   notes?: string;
 }
+
 
 export interface Tache {
   id: string;
