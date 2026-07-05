@@ -1,185 +1,201 @@
-// types.ts — Types TypeScript pour le CRM Mutatech SaaS
-
+// --- Auth ---
 export interface AuthResponse {
   access_token: string;
   token_type: string;
-  user_id: string;
-  tenant_id: string | null;
-  role: string;
-  produit: string;
-  nom: string | null;
-  email: string;
+  produit?: string;
+  nom?: string;
+  email?: string;
+  tenant_id?: string;
 }
 
 export interface UserMe {
   id: string;
   email: string;
-  nom: string | null;
-  role: string;
-  tenant_id: string | null;
-  produit: string;
+  nom?: string;
+  produit?: string;
+  tenant_id?: string;
+  role?: string;
 }
 
 export interface TenantConfig {
-  nom_entreprise: string | null;
-  logo_url: string | null;
-  couleur_primaire: string | null;
-  couleur_secondaire: string | null;
+  nom_entreprise?: string;
+  logo_url?: string;
+  couleur_principale?: string;
+  siret?: string;
+  tva_intracommunautaire?: string;
+  adresse?: string;
+  telephone?: string;
+  email_contact?: string;
+  site_web?: string;
+  mentions_legales?: string;
+  taux_tva_defaut?: number;
 }
 
-// --- Admin ---
+export interface GoogleStatus {
+  connecte: boolean;
+  email?: string;
+}
+
 export interface CreerClientInput {
   email: string;
   nom?: string;
   nom_entreprise?: string;
-  produit: string;
-  envoyer_email?: boolean;
+  produit?: string;
+  mot_de_passe?: string;
 }
 
 export interface ClientCreeOut {
-  tenant_id: string;
-  user_id: string;
+  id: string;
   email: string;
-  mot_de_passe_temporaire: string;
-  produit: string;
+  nom?: string;
+  nom_entreprise?: string;
+  produit?: string;
+  invitation_url?: string;
 }
 
-// --- CRM ---
+// --- Ligne commune devis / facture ---
+export interface Ligne {
+  description: string;
+  quantite: number;
+  prix_unitaire: number;
+  unite?: string | null;
+}
+
+// --- Clients ---
 export interface Client {
   id: string;
   nom: string;
-  secteur?: string | null;
   email?: string | null;
   telephone?: string | null;
   adresse?: string | null;
   siret?: string | null;
+  tva_intracommunautaire?: string | null;
   notes?: string | null;
-  activite_description?: string | null;
-  cree_le: string;
+  created_at?: string;
 }
 
 export interface ClientInput {
   nom: string;
-  secteur?: string;
-  email?: string;
-  telephone?: string;
-  adresse?: string;
-  siret?: string;
-  notes?: string;
-  activite_description?: string;
+  email?: string | null;
+  telephone?: string | null;
+  adresse?: string | null;
+  siret?: string | null;
+  tva_intracommunautaire?: string | null;
+  notes?: string | null;
 }
 
-export interface Ligne {
-  id?: string;
-  description: string;
-  quantite: number;
-  prix_unitaire: number;
-}
+// --- Devis ---
+export type StatutDevis = "brouillon" | "envoye" | "accepte" | "refuse";
+export type TypeDevis = "ponctuel" | "abonnement";
 
 export interface Devis {
   id: string;
   numero: string;
-  client_id: string;
-  objet?: string | null;
-  contexte?: string | null;
-  date_creation: string;
-  taux_tva: number;
-  statut: string;
-  drive_file_url?: string | null;
-  signe_le?: string | null;
-  lignes: Ligne[];
+  statut: StatutDevis;
+  type_devis?: TypeDevis | null;
   client?: Client | null;
-  type_facturation: string;
-  montant_mensuel?: number | null;
-  duree_mois?: number | null;
-  date_debut_abonnement?: string | null;
-  premier_versement?: number | null;
-}
-
-export interface DevisPublic {
-  numero: string;
+  client_id?: string | null;
   objet?: string | null;
-  contexte?: string | null;
-  date_creation: string;
-  taux_tva: number;
-  statut: string;
-  signature_image?: string | null;
-  signe_le?: string | null;
   lignes: Ligne[];
-  client_nom: string;
-  type_facturation: string;
+  taux_tva: number;
+  date_creation?: string;
+  date_envoi?: string | null;
+  date_acceptation?: string | null;
+  date_expiration?: string | null;
+  signature_image?: string | null;
+  token_signature?: string | null;
   montant_mensuel?: number | null;
   duree_mois?: number | null;
-  date_debut_abonnement?: string | null;
+  premier_versement_differe?: boolean | null;
   premier_versement?: number | null;
+  notes?: string | null;
 }
 
 export interface DevisInput {
-  client_id: string;
-  objet?: string;
-  contexte?: string;
-  taux_tva: number;
+  client_id?: string | null;
+  objet?: string | null;
   lignes: Ligne[];
-  type_facturation?: string;
-  montant_mensuel?: number;
-  duree_mois?: number;
-  date_debut_abonnement?: string;
-  premier_versement?: number;
+  taux_tva: number;
+  type_devis?: TypeDevis | null;
+  date_expiration?: string | null;
+  montant_mensuel?: number | null;
+  duree_mois?: number | null;
+  premier_versement_differe?: boolean | null;
+  premier_versement?: number | null;
+  notes?: string | null;
 }
 
-export interface MoisAbonnement {
-  mois_index: number;
-  date_prevue: string;
-  montant: number;
-  facture_id?: string | null;
-  facture_numero?: string | null;
-  statut: string;
+export interface DevisPublic {
+  id: string;
+  numero: string;
+  statut: StatutDevis;
+  objet?: string | null;
+  lignes: Ligne[];
+  taux_tva: number;
+  client?: Client | null;
+  date_creation?: string;
+  date_expiration?: string | null;
+  signature_image?: string | null;
+  nom_entreprise?: string | null;
+  logo_url?: string | null;
+  mentions_legales?: string | null;
 }
+
+// --- Factures ---
+export type StatutFacture = "brouillon" | "envoyee" | "payee";
 
 export interface Facture {
   id: string;
   numero: string;
-  client_id: string;
+  statut: StatutFacture;
+  client?: Client | null;
+  client_id?: string | null;
   devis_id?: string | null;
   objet?: string | null;
-  date_creation: string;
-  date_echeance?: string | null;
-  taux_tva: number;
-  statut: string;
-  drive_file_url?: string | null;
-  envoyee_le?: string | null;
-  payee_le?: string | null;
-  derniere_relance_le?: string | null;
   lignes: Ligne[];
-  client?: Client | null;
+  taux_tva: number;
+  date_creation?: string;
+  date_envoi?: string | null;
+  date_echeance?: string | null;
+  payee_le?: string | null;
+  notes?: string | null;
 }
 
 export interface FactureInput {
-  client_id: string;
-  devis_id?: string;
-  objet?: string;
-  taux_tva: number;
-  date_echeance?: string;
+  client_id?: string | null;
+  devis_id?: string | null;
+  objet?: string | null;
   lignes: Ligne[];
+  taux_tva: number;
+  date_echeance?: string | null;
+  notes?: string | null;
+}
+
+// --- Abonnements & Échéances ---
+export interface MoisAbonnement {
+  mois_index: number;
+  label: string;
+  montant: number;
+  facture_id?: string | null;
+  facture_numero?: string | null;
+  statut?: string | null;
 }
 
 export interface EcheanceFacture {
   id: string;
   numero: string;
   client_nom: string;
-  montant_ttc: number;
-  date_echeance: string;
-  jours: number;
-  derniere_relance_le?: string | null;
+  montant_ttc?: number | null;
+  date_echeance?: string | null;
+  jours?: number | null;
 }
 
 export interface AbonnementAFacturer {
   devis_id: string;
   devis_numero: string;
   client_nom: string;
+  montant_mensuel: number;
   mois_index: number;
-  montant: number;
-  date_prevue: string;
 }
 
 export interface RecapEcheances {
@@ -188,21 +204,19 @@ export interface RecapEcheances {
   abonnements_a_facturer: AbonnementAFacturer[];
 }
 
-export interface GoogleStatus {
-  connecte: boolean;
-}
+// --- Dépenses ---
+export type TypeDepense = "ponctuelle" | "recurrente";
+export type FrequenceDepense = "mensuelle" | "annuelle";
 
 export interface Depense {
   id: string;
   libelle: string;
   montant: number;
   categorie?: string | null;
-  date_depense?: string | null;
-  type?: string | null;
-  recurrente: boolean;
+  type?: TypeDepense | null;
+  frequence?: FrequenceDepense | null;
   actif?: boolean | null;
-  frequence?: string | null;
-  periodicite?: string | null;
+  date_depense?: string | null;
   date_debut?: string | null;
   date_fin?: string | null;
   notes?: string | null;
@@ -211,70 +225,81 @@ export interface Depense {
 export interface DepenseInput {
   libelle: string;
   montant: number;
-  categorie?: string;
-  date_depense?: string;
+  categorie?: string | null;
   type?: string | null;
-  recurrente?: boolean;
+  frequence?: string | null;
   actif?: boolean | null;
-  frequence?: string;
-  periodicite?: string;
-  date_debut?: string;
-  date_fin?: string;
-  notes?: string;
+  date_depense?: string | null;
+  date_debut?: string | null;
+  date_fin?: string | null;
+  notes?: string | null;
 }
+
+// --- Tâches ---
+export type StatutTache = "todo" | "prog" | "done";
 
 export interface Tache {
   id: string;
-  pilier: number;
   titre: string;
+  statut: StatutTache;
+  priorite?: number | null;
+  pilier?: number | null;
   description?: string | null;
-  statut: string;
-  ordre: number;
+  date_echeance?: string | null;
+  client_id?: string | null;
+  client?: Client | null;
+  created_at?: string;
 }
 
 export interface TacheInput {
-  pilier: number;
   titre: string;
-  description?: string;
-  statut: string;
-  ordre: number;
+  statut?: StatutTache;
+  priorite?: number | null;
+  pilier?: number | null;
+  description?: string | null;
+  date_echeance?: string | null;
+  client_id?: string | null;
 }
+
+// --- Prospects ---
+export type StatutProspect = "a_contacter" | "contacte" | "rdv_planifie" | "converti" | "perdu";
 
 export interface Prospect {
   id: string;
   nom: string;
-  secteur?: string | null;
+  statut: StatutProspect;
   email?: string | null;
   telephone?: string | null;
   adresse?: string | null;
+  secteur?: string | null;
+  notes?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  statut: string;
-  notes?: string | null;
+  created_at?: string;
 }
 
 export interface ProspectInput {
   nom: string;
-  secteur?: string;
-  email?: string;
-  telephone?: string;
-  adresse?: string;
-  latitude?: number;
-  longitude?: number;
-  statut: string;
-  notes?: string;
+  statut?: StatutProspect;
+  email?: string | null;
+  telephone?: string | null;
+  adresse?: string | null;
+  secteur?: string | null;
+  notes?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 // --- Agent IA ---
 export interface AgentMessage {
-  role: string;
+  role: "user" | "assistant";
   content: string;
   actions_effectuees?: string[];
 }
 
 export interface AgentResponse {
   reply: string;
-  actions_effectuees: string[];
+  actions_effectuees?: string[];
 }
 
 // --- IDEL ---
@@ -284,19 +309,20 @@ export interface IdelPatient {
   prenom: string;
   date_naissance?: string | null;
   numero_secu?: string | null;
-  adresse?: string | null;
   telephone?: string | null;
+  adresse?: string | null;
   medecin_traitant?: string | null;
+  notes?: string | null;
 }
 
 export interface CotationOut {
   code_acte: string;
-  libelle: string;
+  libelle?: string | null;
   coefficient?: number | null;
   quantite?: number | null;
-  modificateurs?: string[] | null;
   montant_unitaire?: number | null;
   montant_total?: number | null;
+  modificateurs?: string[] | null;
 }
 
 export interface CotationValidationItem {
@@ -307,13 +333,12 @@ export interface CotationValidationItem {
 
 export interface IdelOrdonnance {
   id: string;
-  statut: string;
+  statut: "reception" | "en_cours" | "traite";
   patient?: IdelPatient | null;
   medecin_prescripteur?: string | null;
   date_prescription?: string | null;
   acte_prescrit_texte?: string | null;
-  confiance_ocr?: number | null;
-  necessite_validation?: boolean;
   cotations?: CotationOut[] | null;
-  created_at?: string | null;
+  confiance_ocr?: number | null;
+  necessite_validation?: boolean | null;
 }
