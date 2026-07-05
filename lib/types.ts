@@ -213,7 +213,7 @@ export interface DepenseInput {
   montant: number;
   categorie?: string;
   date_depense?: string;
-  type?: string;
+  type?: string | null;
   recurrente?: boolean;
   actif?: boolean;
   frequence?: string;
