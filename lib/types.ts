@@ -196,10 +196,11 @@ export interface Depense {
   id: string;
   libelle: string;
   montant: number;
-  categorie: string;
-  date_depense: string;
+  categorie?: string | null;
+  date_depense?: string | null;
   type?: string | null;
   recurrente: boolean;
+  actif?: boolean | null;
   frequence?: string | null;
   periodicite?: string | null;
   date_debut?: string | null;
@@ -210,17 +211,17 @@ export interface Depense {
 export interface DepenseInput {
   libelle: string;
   montant: number;
-  categorie: string;
-  date_depense: string;
+  categorie?: string;
+  date_depense?: string;
   type?: string;
-  recurrente: boolean;
+  recurrente?: boolean;
+  actif?: boolean;
   frequence?: string;
   periodicite?: string;
   date_debut?: string;
   date_fin?: string;
   notes?: string;
 }
-
 
 export interface Tache {
   id: string;
