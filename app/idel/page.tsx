@@ -13,6 +13,18 @@ import {
   ZoneDeplacement, LigneCotationCalculee, DetailCotationNGAP,
 } from "@/lib/types";
 
+// ===== TYPE CUSTOM RECONNAISSANCE VOCALE (évite la dépendance aux types DOM) =====
+interface ISpeechRecognition {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
 // ===== TYPES LOCAUX =====
 interface PatientForm {
   nom: string; prenom: string; date_naissance: string; numero_secu: string;
@@ -35,9 +47,9 @@ const ZONES: { value: ZoneDeplacement; label: string }[] = [
   { value: "montagne", label: "Montagne (1.05€/km)" },
   { value: "tres_montagneux", label: "Très montagneux (1.10€/km)" },
 ];
-const NGAP_CONTEXT = `Tu es un assistant spécialisé en cotation NGAP pour infirmiers libéraux (IDEL) en France. Tu connais parfaitement l'article 11B (acte 1 = 100%, acte 2 = 50%, suivants gratuit), les codes AMI/AIS, les majorations MS (+3.15€), MN (+4.72€), MJF (+11.65€), l'IFD (2.50€) et les IK (plaine 0.91€/km, montagne 1.05€/km, très montagneux 1.10€/km). Réponds de façon claire et concise.`;
+const NGAP_CONTEXT = `Tu es un assistant spécialisé en cotation NGAP pour infirmiers libéraux (IDEL) en France. Tu connais l'article 11B (acte 1=100%, acte 2=50%, suivants gratuit), les codes AMI/AIS, les majorations MS (+3.15€), MN (+4.72€), MJF (+11.65€), l'IFD (2.50€) et les IK (plaine 0.91€/km, montagne 1.05€/km, très montagneux 1.10€/km). Réponds de façon claire et concise en français.`;
 
-// ===== MOTEUR NGAP =====
+// ===== MOTEUR NGAP ART.11B =====
 function calculerNGAP(cotations: CotationOut[], patient: IdelPatient | null | undefined, majActives: string[]): DetailCotationNGAP {
   const tries = [...cotations].sort((a, b) => (b.montant_total ?? 0) - (a.montant_total ?? 0));
   const lignes: LigneCotationCalculee[] = tries.map((c, i) => {
@@ -76,37 +88,37 @@ const STATUT_COL: Record<string, string> = {
   traite: "border-teal/40 bg-teal/10 text-teal",
 };
 
-// ===== HOOK RECONNAISSANCE VOCALE =====
-function useVoice(onResult: (text: string) => void, lang = "fr-FR") {
+// ===== HOOK VOIX =====
+function useVoice(onResult: (text: string) => void) {
   const [ecoute, setEcoute] = useState(false);
   const [supporte, setSupporte] = useState(false);
-  const recRef = useRef<SpeechRecognition | null>(null);
+  const recRef = useRef<ISpeechRecognition | null>(null);
 
   useEffect(() => {
-    const SR = typeof window !== "undefined"
-      ? (window.SpeechRecognition || (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition)
-      : undefined;
-    if (SR) { setSupporte(true); recRef.current = new SR(); }
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SR) {
+      setSupporte(true);
+      recRef.current = new SR() as ISpeechRecognition;
+    }
   }, []);
 
   function toggleEcoute() {
     if (!recRef.current) return;
-    if (ecoute) {
-      recRef.current.stop();
-      setEcoute(false);
-      return;
-    }
-    recRef.current.lang = lang;
-    recRef.current.continuous = false;
-    recRef.current.interimResults = false;
-    recRef.current.onresult = (e: SpeechRecognitionEvent) => {
-      const transcript = e.results[0]?.[0]?.transcript ?? "";
+    if (ecoute) { recRef.current.stop(); setEcoute(false); return; }
+    const rec = recRef.current;
+    rec.lang = "fr-FR";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const transcript = (e.results[0] as ArrayLike<{ transcript: string }>)[0]?.transcript ?? "";
       if (transcript) onResult(transcript);
       setEcoute(false);
     };
-    recRef.current.onerror = () => setEcoute(false);
-    recRef.current.onend = () => setEcoute(false);
-    recRef.current.start();
+    rec.onerror = () => setEcoute(false);
+    rec.onend = () => setEcoute(false);
+    rec.start();
     setEcoute(true);
   }
 
@@ -150,9 +162,9 @@ export default function IdelPage() {
   const [tourneeHeure, setTourneeHeure] = useState("08:00");
   const [tourneeNote, setTourneeNote] = useState("");
 
-  // Voix pour le chat
+  // Voix
   const { ecoute, supporte: voixSupporte, toggleEcoute } = useVoice((transcript) => {
-    setChatInput((prev) => (prev ? prev + " " + transcript : transcript));
+    setChatInput((prev) => prev ? prev + " " + transcript : transcript);
   });
 
   function charger() {
@@ -170,10 +182,7 @@ export default function IdelPage() {
   }
 
   useEffect(() => { charger(); }, []);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chat]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   function ouvrirPanneau(o: IdelOrdonnance) {
     setPanneau(o);
@@ -268,7 +277,6 @@ export default function IdelPage() {
 
   function setZone(z: ZoneDeplacement) { setPatForm((p) => ({ ...p, zone_deplacement: z })); }
 
-  // Tournée
   function ajouterTournee() {
     if (!tourneePatient || tournee.find((t) => t.patientId === tourneePatient)) return;
     setTournee((p) => [...p, { patientId: tourneePatient, heure: tourneeHeure, ordre: p.length + 1, note: tourneeNote }]);
@@ -298,8 +306,7 @@ export default function IdelPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-6xl px-4 py-6">
-
-        {/* Tabs + actions */}
+        {/* Tabs */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-2">
             {([["pipeline", "📋 Pipeline"], ["tournee", "🗺 Tournée"]] as const).map(([v, l]) => (
@@ -309,9 +316,9 @@ export default function IdelPage() {
               </button>
             ))}
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2">
             <button onClick={() => setChatOuvert(!chatOuvert)}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${chatOuvert ? "border-teal bg-teal/15 text-teal" : "border-teal/40 bg-teal/10 text-teal hover:bg-teal/20"}`}>
+              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${chatOuvert ? "border-teal bg-teal/15 text-teal" : "border-teal/40 bg-teal/10 text-teal"}`}>
               🤖 Assistant NGAP {chatOuvert ? "▲" : "▼"}
             </button>
             {vue === "pipeline" && (
@@ -325,36 +332,22 @@ export default function IdelPage() {
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
-        {/* ===== ASSISTANT NGAP IA + VOIX ===== */}
+        {/* ===== ASSISTANT NGAP ===== */}
         {chatOuvert && (
           <div className="mb-6 rounded-xl border border-teal/30 bg-surface overflow-hidden shadow-lg">
             <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-teal/5">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-textPrimary">🤖 Assistant NGAP IA</span>
-                {voixSupporte && (
-                  <span className="text-[11px] text-teal">· Micro disponible 🎤</span>
-                )}
+                {voixSupporte && <span className="text-[11px] text-teal">· 🎤 Micro actif</span>}
               </div>
-              <button onClick={() => setChat([])} className="text-[11px] text-textMuted hover:text-amber">
-                Effacer
-              </button>
+              <button onClick={() => setChat([])} className="text-[11px] text-textMuted hover:text-amber">Effacer</button>
             </div>
-
-            {/* Messages */}
             <div className="max-h-56 overflow-y-auto p-3 space-y-2">
               {chat.length === 0 && (
-                <div className="space-y-2">
-                  <p className="text-[11px] text-textMuted mb-1">Exemples de questions :</p>
-                  {[
-                    "Comment coter AMI4 + AMI1 + AIS3 ensemble ?",
-                    "Quand appliquer la majoration MJF ?",
-                    "Calcul IK pour 12km en montagne ?",
-                    "Règle de cumul pansement + injection ?",
-                  ].map((q) => (
-                    <button key={q} onClick={() => { setChatInput(q); }}
-                      className="block text-left text-xs text-teal hover:underline py-0.5">
-                      → {q}
-                    </button>
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-textMuted">Exemples :</p>
+                  {["Comment coter AMI4 + AMI1 + AIS3 ?", "Quand appliquer MJF ?", "IK pour 12km en montagne ?", "Cumul pansement + injection ?"].map((q) => (
+                    <button key={q} onClick={() => setChatInput(q)} className="block text-left text-xs text-teal hover:underline">→ {q}</button>
                   ))}
                 </div>
               )}
@@ -366,44 +359,35 @@ export default function IdelPage() {
                 </div>
               ))}
               {chatLoading && (
-                <div className="flex gap-1 items-center px-3 py-2 bg-surfaceAlt rounded-xl w-fit">
-                  <span className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                <div className="flex gap-1 px-3 py-2 bg-surfaceAlt rounded-xl w-fit">
+                  {[0, 150, 300].map((d) => (
+                    <span key={d} className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                  ))}
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
-
-            {/* Input + micro + envoyer */}
             <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-line items-end">
-              <textarea
-                value={chatInput}
+              <textarea value={chatInput}
                 onChange={(e) => { setChatInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 80) + "px"; }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChat(); } }}
-                placeholder={ecoute ? "🎤 Parlez maintenant…" : "Posez votre question NGAP… (ou parlez)"}
+                placeholder={ecoute ? "🎤 Parlez…" : "Question NGAP… (ou utilisez le micro)"}
                 rows={1}
-                className={`flex-1 rounded-lg border bg-surfaceAlt px-3 py-2 text-xs text-textPrimary outline-none resize-none transition ${ecoute ? "border-teal bg-teal/5" : "border-line focus:border-teal"}`}
+                className={`flex-1 rounded-lg border bg-surfaceAlt px-3 py-2 text-xs text-textPrimary outline-none resize-none ${ecoute ? "border-teal bg-teal/5" : "border-line focus:border-teal"}`}
               />
               {voixSupporte && (
                 <button type="button" onClick={toggleEcoute}
-                  className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition ${ecoute ? "border-teal bg-teal text-black animate-pulse" : "border-line text-textMuted hover:border-teal hover:text-teal"}`}
-                  title={ecoute ? "Arrêter l'écoute" : "Parler"}>
+                  className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition ${ecoute ? "border-teal bg-teal text-black animate-pulse" : "border-line text-textMuted hover:border-teal hover:text-teal"}`}>
                   🎤
                 </button>
               )}
               <button type="submit" disabled={chatLoading || !chatInput.trim()}
-                className="shrink-0 rounded-lg bg-teal px-3 py-2 text-xs font-bold text-black hover:opacity-90 disabled:opacity-40">
-                →
-              </button>
+                className="shrink-0 rounded-lg bg-teal px-3 py-2 text-xs font-bold text-black disabled:opacity-40">→</button>
             </form>
-            <p className="px-4 pb-2 text-[10px] text-textMuted">
-              {voixSupporte ? "🎤 Appuyez sur le micro pour dicter votre question. " : ""}Entrée pour envoyer · Shift+Entrée pour nouvelle ligne.
-            </p>
           </div>
         )}
 
-        {/* ===== VUE PIPELINE ===== */}
+        {/* ===== PIPELINE ===== */}
         {vue === "pipeline" && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {colonnes.map((statut) => {
@@ -441,7 +425,7 @@ export default function IdelPage() {
           </div>
         )}
 
-        {/* ===== VUE TOURNÉE ===== */}
+        {/* ===== TOURNÉE ===== */}
         {vue === "tournee" && (
           <div className="space-y-4">
             <div className="rounded-xl border border-line bg-surface p-5">
@@ -449,7 +433,7 @@ export default function IdelPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <select value={tourneePatient} onChange={(e) => setTourneePatient(e.target.value)}
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
-                  <option value="">— Choisir un patient —</option>
+                  <option value="">— Patient —</option>
                   {patients.filter((p) => !tournee.find((t) => t.patientId === p.id)).map((p) => (
                     <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>
                   ))}
@@ -457,7 +441,7 @@ export default function IdelPage() {
                 <input type="time" value={tourneeHeure} onChange={(e) => setTourneeHeure(e.target.value)}
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
                 <input value={tourneeNote} onChange={(e) => setTourneeNote(e.target.value)}
-                  placeholder="Note optionnelle"
+                  placeholder="Note"
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
               </div>
               <button onClick={ajouterTournee} disabled={!tourneePatient}
@@ -465,7 +449,6 @@ export default function IdelPage() {
                 + Ajouter
               </button>
             </div>
-
             {tournee.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line p-8 text-center">
                 <p className="text-sm text-textMuted">Aucune visite planifiée.</p>
@@ -487,7 +470,7 @@ export default function IdelPage() {
                       </div>
                       <span className="text-lg font-bold text-violet/30 w-6 shrink-0">{idx + 1}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-textPrimary">{pt ? `${pt.nom} ${pt.prenom}` : "Patient inconnu"}</p>
+                        <p className="font-medium text-sm text-textPrimary">{pt ? `${pt.nom} ${pt.prenom}` : "—"}</p>
                         {pt?.adresse && <p className="text-[11px] text-textMuted truncate">📍 {pt.adresse}</p>}
                         {item.note && <p className="text-[11px] italic text-textMuted">{item.note}</p>}
                       </div>
@@ -504,7 +487,7 @@ export default function IdelPage() {
           </div>
         )}
 
-        {/* ===== PANNEAU ORDONNANCE ===== */}
+        {/* ===== PANNEAU DÉTAIL ===== */}
         {panneau && (
           <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/50 sm:items-center"
             onClick={(e) => { if (e.target === e.currentTarget) setPanneau(null); }}>
@@ -518,35 +501,30 @@ export default function IdelPage() {
               <div className="rounded-lg bg-surfaceAlt p-3">
                 <p className="mb-2 text-[11px] uppercase tracking-wide text-textMuted font-medium">Patient</p>
                 {patientResolu && !creerMode ? (
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-sm text-textPrimary">{patientResolu.nom} {patientResolu.prenom}</p>
-                      {patientResolu.adresse && <p className="text-xs text-textMuted">{patientResolu.adresse}</p>}
-                      {patientResolu.zone_deplacement && (
-                        <p className="text-[11px] text-teal">{patientResolu.zone_deplacement} · {patientResolu.distance_km ?? 0} km</p>
-                      )}
-                    </div>
+                  <div>
+                    <p className="font-medium text-sm text-textPrimary">{patientResolu.nom} {patientResolu.prenom}</p>
+                    {patientResolu.adresse && <p className="text-xs text-textMuted">{patientResolu.adresse}</p>}
+                    {patientResolu.zone_deplacement && <p className="text-[11px] text-teal">{patientResolu.zone_deplacement} · {patientResolu.distance_km ?? 0} km</p>}
                   </div>
                 ) : !creerMode ? (
                   <div className="space-y-2">
                     {patients.length > 0 && (
                       <select value={patientId} onChange={(e) => setPatientId(e.target.value)}
                         className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary">
-                        <option value="">— Sélectionner un patient existant —</option>
+                        <option value="">— Patient existant —</option>
                         {patients.map((p) => <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>)}
                       </select>
                     )}
                     <button onClick={() => setCreerMode(true)}
                       className="w-full rounded-lg border border-violet/40 bg-violet/10 px-3 py-2 text-sm font-medium text-violet hover:bg-violet/20 text-left">
-                      ✚ Créer un nouveau patient
-                      {(patForm.nom || patForm.prenom) && <span className="ml-2 text-[11px] opacity-60">(pré-rempli depuis OCR)</span>}
+                      ✚ Créer un patient
+                      {(patForm.nom || patForm.prenom) && <span className="ml-2 text-[11px] opacity-60">(pré-rempli OCR)</span>}
                     </button>
                   </div>
                 ) : null}
 
                 {creerMode && (
-                  <form onSubmit={handleCreerPatient} className="mt-2 space-y-3">
-                    <p className="text-xs font-medium text-textPrimary">Nouveau patient</p>
+                  <form onSubmit={handleCreerPatient} className="mt-2 space-y-2">
                     {patErr && <p className="text-xs text-amber">{patErr}</p>}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <input required value={patForm.nom} onChange={(e) => setPatForm((p) => ({ ...p, nom: e.target.value }))}
@@ -570,8 +548,8 @@ export default function IdelPage() {
                     </div>
                     <div className="flex gap-2">
                       <button type="submit" disabled={patSaving}
-                        className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50">
-                        {patSaving ? "Création…" : "✓ Créer le patient"}
+                        className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+                        {patSaving ? "Création…" : "✓ Créer"}
                       </button>
                       <button type="button" onClick={() => setCreerMode(false)} className="text-sm text-textMuted hover:text-textPrimary px-2">Annuler</button>
                     </div>
@@ -581,21 +559,21 @@ export default function IdelPage() {
 
               {panneau.medecin_prescripteur && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-1 uppercase tracking-wide">Prescripteur</p>
+                  <p className="text-[11px] text-textMuted mb-1 uppercase">Prescripteur</p>
                   <p className="text-sm text-textPrimary">{panneau.medecin_prescripteur}</p>
                   {panneau.date_prescription && <p className="text-xs text-textMuted">Le {new Date(panneau.date_prescription).toLocaleDateString("fr-FR")}</p>}
                 </div>
               )}
               {panneau.acte_prescrit_texte && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-1 uppercase tracking-wide">Acte prescrit (OCR)</p>
+                  <p className="text-[11px] text-textMuted mb-1 uppercase">Acte prescrit (OCR)</p>
                   <p className="text-xs text-textPrimary leading-relaxed">{panneau.acte_prescrit_texte}</p>
                 </div>
               )}
 
               {cotExist.length > 0 && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-2 uppercase tracking-wide">Cotation validée</p>
+                  <p className="text-[11px] text-textMuted mb-2 uppercase">Cotation validée</p>
                   {cotExist.map((c, i) => (
                     <div key={i} className="flex justify-between text-xs gap-2 py-0.5">
                       <span className="font-bold text-textPrimary">{c.code_acte}</span>
@@ -615,7 +593,7 @@ export default function IdelPage() {
                       🤖 Proposer une cotation IA
                     </button>
                   )}
-                  {cotLoading && <p className="text-xs text-textMuted text-center py-2 animate-pulse">Analyse en cours…</p>}
+                  {cotLoading && <p className="text-xs text-textMuted text-center animate-pulse">Analyse en cours…</p>}
                   {cotErr && <p className="text-xs text-amber">{cotErr}</p>}
                   {detail && !cotValidee && (
                     <div className="space-y-3">
@@ -631,12 +609,10 @@ export default function IdelPage() {
                       ))}
                       <div className="border-t border-line pt-2 space-y-0.5">
                         <div className="flex justify-between text-[11px] text-textMuted"><span>IFD</span><span>{IFD.toFixed(2)} €</span></div>
-                        {detail.ik > 0 && patientResolu ? (
-                          <div className="flex justify-between text-[11px] text-textMuted">
-                            <span>IK {patientResolu.zone_deplacement} · {patientResolu.distance_km}km A/R</span>
-                            <span>{detail.ik.toFixed(2)} €</span>
-                          </div>
-                        ) : <p className="text-[10px] text-textMuted italic">Renseignez la distance dans la fiche patient</p>}
+                        {detail.ik > 0 && patientResolu
+                          ? <div className="flex justify-between text-[11px] text-textMuted"><span>IK {patientResolu.zone_deplacement} · {patientResolu.distance_km}km A/R</span><span>{detail.ik.toFixed(2)} €</span></div>
+                          : <p className="text-[10px] text-textMuted italic">Ajoutez la distance dans la fiche patient</p>
+                        }
                       </div>
                       <div className="border-t border-line pt-2">
                         <p className="text-[11px] text-textMuted font-medium mb-2">Majorations</p>
@@ -655,16 +631,15 @@ export default function IdelPage() {
                         <span className="text-teal text-lg">{detail.total.toFixed(2)} €</span>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => setCotProp(null)}
-                          className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textMuted hover:text-textPrimary">Relancer</button>
+                        <button onClick={() => setCotProp(null)} className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textMuted hover:text-textPrimary">Relancer</button>
                         <button onClick={() => handleValiderCotation(panneau.id)}
                           disabled={actionId === panneau.id || (!panneau.patient?.id && !patientId)}
-                          className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black hover:opacity-90 disabled:opacity-50">
+                          className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black disabled:opacity-50">
                           {actionId === panneau.id ? "Validation…" : "✓ Valider"}
                         </button>
                       </div>
                       {!panneau.patient?.id && !patientId && (
-                        <p className="text-[11px] text-amber text-center">Sélectionnez ou créez un patient d'abord</p>
+                        <p className="text-[11px] text-amber text-center">Créez ou sélectionnez un patient d'abord</p>
                       )}
                     </div>
                   )}
@@ -675,29 +650,21 @@ export default function IdelPage() {
               {panneau.statut === "en_cours" && cotExist.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <a href={idelExporterCsv(panneau.id)} target="_blank" rel="noopener noreferrer"
-                    className="rounded-lg border border-teal/40 bg-teal/10 px-4 py-2 text-center text-sm font-medium text-teal hover:bg-teal/20">
-                    ↓ Export CSV (import LPS)
-                  </a>
+                    className="rounded-lg border border-teal/40 bg-teal/10 px-4 py-2 text-center text-sm font-medium text-teal hover:bg-teal/20">↓ Export CSV</a>
                   <a href={idelFicheReprise(panneau.id)} target="_blank" rel="noopener noreferrer"
-                    className="rounded-lg border border-violet/40 bg-violet/10 px-4 py-2 text-center text-sm font-medium text-violet hover:bg-violet/20">
-                    ↓ Fiche de reprise assistée
-                  </a>
+                    className="rounded-lg border border-violet/40 bg-violet/10 px-4 py-2 text-center text-sm font-medium text-violet hover:bg-violet/20">↓ Fiche de reprise</a>
                   <button onClick={() => handleMarquerTransmis(panneau.id)} disabled={actionId === panneau.id}
-                    className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50">
+                    className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-black disabled:opacity-50">
                     {actionId === panneau.id ? "…" : "✓ Transmis depuis mon LPS"}
                   </button>
                 </div>
               )}
-              {panneau.statut === "traite" && (
-                <p className="text-xs text-teal text-center">✓ Transmise à la CPAM</p>
-              )}
+              {panneau.statut === "traite" && <p className="text-xs text-teal text-center">✓ Transmise à la CPAM</p>}
             </div>
           </div>
         )}
 
-        <p className="mt-8 text-[11px] text-textMuted">
-          ⚠ Cotation indicative (Art.11B NGAP). Ne se substitue pas à votre LPS agréé SESAM-Vitale.
-        </p>
+        <p className="mt-8 text-[11px] text-textMuted">⚠ Cotation indicative (Art.11B NGAP). Ne se substitue pas à votre LPS agréé SESAM-Vitale.</p>
       </main>
     </>
   );
