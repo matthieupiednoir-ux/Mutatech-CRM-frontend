@@ -200,6 +200,7 @@ export interface Depense {
   date_depense: string;
   type?: string | null;
   recurrente: boolean;
+  frequence?: string | null;
   periodicite?: string | null;
   date_debut?: string | null;
   date_fin?: string | null;
@@ -212,6 +213,7 @@ export interface DepenseInput {
   categorie: string;
   date_depense: string;
   recurrente: boolean;
+  frequence?: string;
   periodicite?: string;
   date_fin?: string;
   notes?: string;
