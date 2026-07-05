@@ -258,8 +258,20 @@ export const idelGetOrdonnances = () =>
 export const idelUploaderOrdonnance = (formData: FormData) =>
   requeteIdelFormData<IdelOrdonnance>("/api/reception/ordonnances", formData);
 
-export const idelProposerCotation = (id: string) =>
-  requeteIdel<CotationOut[]>(`/api/encours/ordonnances/${id}/proposition-cotation`);
+// L'API retourne { propositions: CotationOut[], confiance: number, ... }
+// On extrait le tableau propositions
+export const idelProposerCotation = async (id: string): Promise<CotationOut[]> => {
+  const raw = await requeteIdel<{
+    propositions?: CotationOut[];
+    confiance?: number;
+    validation_humaine_obligatoire?: boolean;
+    acte_prescrit_texte?: string;
+  }>(`/api/encours/ordonnances/${id}/proposition-cotation`);
+  // Le backend retourne un objet avec propositions[], pas un tableau direct
+  if (Array.isArray(raw)) return raw;
+  if (raw && Array.isArray(raw.propositions)) return raw.propositions;
+  return [];
+};
 
 export const idelValiderCotation = (id: string, items: CotationValidationItem[]) =>
   requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${id}/valider-cotation`, {
@@ -288,10 +300,15 @@ export const idelCreerPatient = (data: Partial<IdelPatient>) =>
   });
 
 // --- Aide calcul ---
-// Gère proprement les lignes null/undefined qui peuvent venir de l'API
 export function calculerTotaux(lignes: Ligne[] | null | undefined, tauxTva: number) {
-  const lignesSures = Array.isArray(lignes) ? lignes : [];
-  const totalHt = lignesSures.reduce((s, l) => s + (l.quantite ?? 0) * (l.prix_unitaire ?? 0), 0);
-  const totalTva = totalHt * (tauxTva / 100);
-  return { totalHt, totalTva, totalTtc: totalHt + totalTva };
+  try {
+    const lignesSures = Array.isArray(lignes) ? lignes : [];
+    const totalHt = lignesSures.reduce(
+      (s, l) => s + (l?.quantite ?? 0) * (l?.prix_unitaire ?? 0), 0
+    );
+    const totalTva = totalHt * ((tauxTva ?? 0) / 100);
+    return { totalHt, totalTva, totalTtc: totalHt + totalTva };
+  } catch {
+    return { totalHt: 0, totalTva: 0, totalTtc: 0 };
+  }
 }
