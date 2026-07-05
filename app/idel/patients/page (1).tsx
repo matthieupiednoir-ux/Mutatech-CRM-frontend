@@ -3,19 +3,18 @@
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { idelGetPatients, idelCreerPatient, ApiError } from "@/lib/api";
-import { IdelPatient } from "@/lib/types";
+import { IdelPatient, ZoneDeplacement } from "@/lib/types";
 
-const ZONES = [
+const ZONES: { value: ZoneDeplacement; label: string; ik: number }[] = [
   { value: "plaine", label: "Plaine", ik: 0.91 },
   { value: "montagne", label: "Montagne", ik: 1.05 },
-  { value: "tres_montagneux", label: "Très montagneux / Accès difficile", ik: 1.10 },
+  { value: "tres_montagneux", label: "Très montagneux / accès difficile", ik: 1.10 },
 ];
 
-const PATIENT_VIDE = {
+const VIDE = {
   nom: "", prenom: "", date_naissance: "", numero_secu: "",
-  telephone: "", adresse: "", medecin_traitant: "",
-  zone_deplacement: "plaine", distance_km: "",
-  notes: "",
+  telephone: "", adresse: "", medecin_traitant: "", notes: "",
+  zone_deplacement: "plaine" as ZoneDeplacement, distance_km: "",
 };
 
 function safeArr<T>(v: unknown): T[] {
@@ -27,8 +26,7 @@ export default function IdelPatientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
-  const [editionId, setEditionId] = useState<string | null>(null);
-  const [form, setForm] = useState({ ...PATIENT_VIDE });
+  const [form, setForm] = useState({ ...VIDE });
   const [enregistrement, setEnregistrement] = useState(false);
   const [recherche, setRecherche] = useState("");
 
@@ -42,37 +40,12 @@ export default function IdelPatientsPage() {
 
   useEffect(() => { charger(); }, []);
 
-  function ouvrirCreation() {
-    setEditionId(null);
-    setForm({ ...PATIENT_VIDE });
-    setFormOuvert(true);
-    setError(null);
-  }
-
-  function ouvrirEdition(p: IdelPatient) {
-    setEditionId(p.id);
-    setForm({
-      nom: p.nom ?? "",
-      prenom: p.prenom ?? "",
-      date_naissance: p.date_naissance ?? "",
-      numero_secu: p.numero_secu ?? "",
-      telephone: p.telephone ?? "",
-      adresse: p.adresse ?? "",
-      medecin_traitant: p.medecin_traitant ?? "",
-      zone_deplacement: (p as any).zone_deplacement ?? "plaine",
-      distance_km: String((p as any).distance_km ?? ""),
-      notes: p.notes ?? "",
-    });
-    setFormOuvert(true);
-    setError(null);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setEnregistrement(true);
     setError(null);
     try {
-      const payload = {
+      await idelCreerPatient({
         nom: form.nom.trim(),
         prenom: form.prenom.trim(),
         date_naissance: form.date_naissance || undefined,
@@ -80,14 +53,12 @@ export default function IdelPatientsPage() {
         telephone: form.telephone.trim() || undefined,
         adresse: form.adresse.trim() || undefined,
         medecin_traitant: form.medecin_traitant.trim() || undefined,
-        zone_deplacement: form.zone_deplacement || "plaine",
-        distance_km: form.distance_km ? parseFloat(form.distance_km) : undefined,
         notes: form.notes.trim() || undefined,
-      };
-      await idelCreerPatient(payload);
-      setForm({ ...PATIENT_VIDE });
+        zone_deplacement: form.zone_deplacement,
+        distance_km: form.distance_km ? parseFloat(form.distance_km) : undefined,
+      });
+      setForm({ ...VIDE });
       setFormOuvert(false);
-      setEditionId(null);
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur d'enregistrement");
@@ -107,10 +78,12 @@ export default function IdelPatientsPage() {
     );
   });
 
-  const zoneLabel = (p: IdelPatient) => {
-    const z = (p as any).zone_deplacement ?? "plaine";
-    return ZONES.find((x) => x.value === z)?.label ?? "Plaine";
-  };
+  function labelZone(z?: ZoneDeplacement | null) {
+    return ZONES.find((x) => x.value === z)?.label ?? "—";
+  }
+  function ikZone(z?: ZoneDeplacement | null) {
+    return ZONES.find((x) => x.value === z)?.ik ?? 0.91;
+  }
 
   return (
     <>
@@ -120,26 +93,20 @@ export default function IdelPatientsPage() {
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Patients</h1>
             <p className="mt-0.5 text-sm text-textMuted">
-              {patients.length} patient{patients.length !== 1 ? "s" : ""} · Zone & distance utilisées pour le calcul des IK
+              {patients.length} patient{patients.length !== 1 ? "s" : ""} · Zone et distance configurées pour le calcul IK
             </p>
           </div>
-          <button onClick={ouvrirCreation}
+          <button onClick={() => { setForm({ ...VIDE }); setFormOuvert(true); }}
             className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
             + Nouveau patient
           </button>
         </div>
 
-        {error && !formOuvert && (
-          <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>
-        )}
+        {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
-        {/* Formulaire */}
         {formOuvert && (
           <form onSubmit={handleSubmit} className="mb-8 space-y-4 rounded-xl border border-line bg-surface p-5">
-            <h2 className="font-display text-lg text-textPrimary">
-              {editionId ? "Modifier le patient" : "Nouveau patient"}
-            </h2>
-            {error && <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-amber">{error}</p>}
+            <h2 className="font-display text-lg text-textPrimary">Nouveau patient</h2>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
@@ -156,8 +123,7 @@ export default function IdelPatientsPage() {
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Date de naissance</span>
-                <input type="date" value={form.date_naissance}
-                  onChange={(e) => setForm({ ...form, date_naissance: e.target.value })}
+                <input type="date" value={form.date_naissance} onChange={(e) => setForm({ ...form, date_naissance: e.target.value })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
               </label>
               <label className="block">
@@ -184,63 +150,61 @@ export default function IdelPatientsPage() {
                   placeholder="12 rue des Lilas, 06000 Nice"
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
               </label>
-
-              {/* Zone et distance — pour calcul IK automatique */}
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Zone de déplacement</span>
-                <select value={form.zone_deplacement}
-                  onChange={(e) => setForm({ ...form, zone_deplacement: e.target.value })}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary">
-                  {ZONES.map((z) => (
-                    <option key={z.value} value={z.value}>{z.label} ({z.ik}€/km)</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Distance aller (km)</span>
-                <div className="flex items-center gap-2">
-                  <input type="number" min={0} step={0.1} value={form.distance_km}
-                    onChange={(e) => setForm({ ...form, distance_km: e.target.value })}
-                    placeholder="5.2"
-                    className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
-                  <span className="text-xs text-textMuted whitespace-nowrap">km A/R</span>
-                </div>
-                {form.distance_km && (
-                  <p className="mt-1 text-[11px] text-teal">
-                    IK = {(parseFloat(form.distance_km) * 2 * (ZONES.find((z) => z.value === form.zone_deplacement)?.ik ?? 0.91)).toFixed(2)} € + IFD 2.50€
-                  </p>
-                )}
-              </label>
-
-              <label className="block sm:col-span-2">
-                <span className="mb-1 block text-sm text-textMuted">Notes</span>
-                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  rows={2} placeholder="Allergies, contacts d'urgence, particularités…"
-                  className="w-full resize-none rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary text-sm" />
-              </label>
             </div>
+
+            {/* Zone et distance NGAP */}
+            <div className="rounded-xl border border-teal/20 bg-teal/5 p-4">
+              <p className="mb-3 text-sm font-medium text-textPrimary">🚗 Déplacement NGAP</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm text-textMuted">Zone de déplacement</span>
+                  <select value={form.zone_deplacement}
+                    onChange={(e) => setForm({ ...form, zone_deplacement: e.target.value as ZoneDeplacement })}
+                    className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary">
+                    {ZONES.map((z) => (
+                      <option key={z.value} value={z.value}>{z.label} — {z.ik}€/km</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm text-textMuted">Distance aller (km)</span>
+                  <input type="number" min="0" step="0.1" value={form.distance_km}
+                    onChange={(e) => setForm({ ...form, distance_km: e.target.value })}
+                    placeholder="8.5"
+                    className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
+                </label>
+              </div>
+              {form.distance_km && (
+                <p className="mt-2 text-xs text-teal">
+                  IK estimé : {(parseFloat(form.distance_km) * (ZONES.find(z => z.value === form.zone_deplacement)?.ik ?? 0.91) * 2).toFixed(2)} € (aller-retour) + IFD 2.50€
+                </p>
+              )}
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-textMuted">Notes</span>
+              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={2} placeholder="Allergies, contacts d'urgence, particularités…"
+                className="w-full resize-none rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary text-sm" />
+            </label>
 
             <div className="flex gap-3">
               <button type="submit" disabled={enregistrement}
                 className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50">
-                {enregistrement ? "Enregistrement…" : editionId ? "Mettre à jour" : "Créer le patient"}
+                {enregistrement ? "Enregistrement…" : "Créer le patient"}
               </button>
-              <button type="button" onClick={() => { setFormOuvert(false); setEditionId(null); }}
-                className="text-sm text-textMuted hover:text-textPrimary">
-                Annuler
-              </button>
+              <button type="button" onClick={() => setFormOuvert(false)}
+                className="text-sm text-textMuted hover:text-textPrimary">Annuler</button>
             </div>
           </form>
         )}
 
-        {/* Recherche */}
         {patients.length > 0 && (
           <input value={recherche} onChange={(e) => setRecherche(e.target.value)}
             placeholder="Rechercher par nom, prénom, n° sécu…"
             className="mb-4 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/60" />
         )}
 
-        {/* Liste */}
         {loading ? (
           <p className="text-sm text-textMuted">Chargement…</p>
         ) : patientsFiltres.length === 0 ? (
@@ -252,48 +216,34 @@ export default function IdelPatientsPage() {
         ) : (
           <div className="space-y-2">
             {patientsFiltres.map((p) => {
-              const distKm = (p as any).distance_km;
-              const zone = ZONES.find((z) => z.value === ((p as any).zone_deplacement ?? "plaine")) ?? ZONES[0];
-              const ikTotal = distKm ? (distKm * 2 * zone.ik + 2.50).toFixed(2) : null;
+              const ik = ikZone(p.zone_deplacement);
+              const dist = p.distance_km ?? 0;
+              const totalDeplacement = dist > 0 ? (dist * ik * 2 + 2.50) : 2.50;
               return (
-                <div key={p.id}
-                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-display text-sm font-bold text-textPrimary">{p.nom} {p.prenom}</p>
-                      <span className="rounded-full border border-teal/30 bg-teal/10 px-2 py-0.5 text-[11px] text-teal">
-                        {zoneLabel(p)}
-                      </span>
-                      {ikTotal && (
-                        <span className="text-[11px] text-violet">
-                          IFD+IK = {ikTotal} €/visite
-                        </span>
-                      )}
-                    </div>
+                <div key={p.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+                  <div>
+                    <p className="font-display text-sm font-bold text-textPrimary">{p.nom} {p.prenom}</p>
                     <div className="mt-0.5 flex flex-wrap gap-3 text-xs text-textMuted">
                       {p.date_naissance && <span>Né(e) le {new Date(p.date_naissance).toLocaleDateString("fr-FR")}</span>}
                       {p.telephone && <span>📞 {p.telephone}</span>}
-                      {p.adresse && <span>📍 {p.adresse}</span>}
-                      {p.medecin_traitant && <span>🩺 {p.medecin_traitant}</span>}
+                      {p.medecin_traitant && <span>Dr {p.medecin_traitant}</span>}
                     </div>
-                    {p.numero_secu && (
-                      <p className="mt-0.5 font-mono text-[11px] text-textMuted">N° SS : {p.numero_secu}</p>
-                    )}
+                    {p.numero_secu && <p className="mt-0.5 font-mono text-[11px] text-textMuted">N° SS : {p.numero_secu}</p>}
+                    {p.adresse && <p className="text-[11px] text-textMuted">📍 {p.adresse}</p>}
                     {p.notes && <p className="mt-1 text-[11px] italic text-textMuted">{p.notes}</p>}
                   </div>
-                  <button onClick={() => ouvrirEdition(p)}
-                    className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">
-                    Modifier
-                  </button>
+                  {/* Déplacement */}
+                  <div className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-2 text-right">
+                    <p className="text-[11px] font-medium text-teal">{labelZone(p.zone_deplacement)}</p>
+                    {dist > 0 && <p className="text-[11px] text-textMuted">{dist} km · {ik}€/km</p>}
+                    <p className="text-xs font-bold text-teal">≈ {totalDeplacement.toFixed(2)} € / visite</p>
+                    <p className="text-[10px] text-textMuted">(IFD + IK aller-retour)</p>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
-
-        <p className="mt-6 text-[11px] text-textMuted">
-          💡 La zone et la distance sont utilisées automatiquement dans le calcul des indemnités kilométriques (IK) lors de la validation des cotations NGAP.
-        </p>
       </main>
     </>
   );

@@ -6,10 +6,22 @@ import {
   idelGetOrdonnances, idelUploaderOrdonnance,
   idelProposerCotation, idelValiderCotation,
   idelMarquerTransmis, idelExporterCsv, idelFicheReprise,
-  idelGetPatients,
-  ApiError,
+  idelGetPatients, ApiError,
 } from "@/lib/api";
 import { IdelOrdonnance, CotationOut, IdelPatient } from "@/lib/types";
+
+// ===== CONSTANTES NGAP =====
+const IFD = 2.50; // Indemnité forfaitaire de déplacement
+const ZONES_IK: Record<string, number> = {
+  plaine: 0.91,
+  montagne: 1.05,
+  tres_montagneux: 1.10,
+};
+const MAJORATIONS = [
+  { code: "MS", label: "Soirée (20h–0h)", montant: 3.15 },
+  { code: "MN", label: "Nuit (0h–7h)", montant: 4.72 },
+  { code: "MJF", label: "Dimanche / Jour férié", montant: 11.65 },
+];
 
 const STATUT_LABEL: Record<string, string> = {
   reception: "Réception", en_cours: "En cours", traite: "Traité",
@@ -24,6 +36,19 @@ function safeArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+// Application règle Article 11B NGAP
+function appliquer11B(cotations: CotationOut[]): Array<CotationOut & { montant_applique: number; rang: number }> {
+  const tries = [...cotations].sort((a, b) => (b.coefficient ?? 0) - (a.coefficient ?? 0));
+  return tries.map((c, i) => {
+    const base = c.montant_total ?? 0;
+    let montant_applique: number;
+    if (i === 0) montant_applique = base; // 100%
+    else if (i === 1) montant_applique = base * 0.5; // 50%
+    else montant_applique = 0; // gratuit
+    return { ...c, montant_applique, rang: i + 1 };
+  });
+}
+
 export default function IdelDashboard() {
   const [ordonnances, setOrdonnances] = useState<IdelOrdonnance[]>([]);
   const [patients, setPatients] = useState<IdelPatient[]>([]);
@@ -32,16 +57,20 @@ export default function IdelDashboard() {
   const [upload, setUpload] = useState(false);
   const [panneau, setPanneau] = useState<IdelOrdonnance | null>(null);
   const [actionEnCours, setActionEnCours] = useState<string | null>(null);
+
+  // Cotation
   const [cotationProposee, setCotationProposee] = useState<CotationOut[] | null>(null);
   const [cotationLoading, setCotationLoading] = useState(false);
   const [cotationError, setCotationError] = useState<string | null>(null);
   const [cotationValidee, setCotationValidee] = useState(false);
-  // Pour associer un patient si l'ordonnance n'en a pas
   const [patientSelectionne, setPatientSelectionne] = useState<string>("");
+
+  // Majorations et déplacement
+  const [majorationsSelectionnees, setMajorationsSelectionnees] = useState<string[]>([]);
+  const [avecDeplacement, setAvecDeplacement] = useState(true);
 
   function charger() {
     setLoading(true);
-    setError(null);
     Promise.all([
       idelGetOrdonnances(),
       idelGetPatients().catch(() => []),
@@ -62,6 +91,8 @@ export default function IdelDashboard() {
     setCotationError(null);
     setCotationValidee(false);
     setPatientSelectionne(o.patient?.id ?? "");
+    setMajorationsSelectionnees([]);
+    setAvecDeplacement(true);
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -70,9 +101,9 @@ export default function IdelDashboard() {
     setUpload(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      await idelUploaderOrdonnance(formData);
+      const fd = new FormData();
+      fd.append("file", file);
+      await idelUploaderOrdonnance(fd);
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur d'upload");
@@ -87,22 +118,18 @@ export default function IdelDashboard() {
     setCotationError(null);
     setCotationProposee(null);
     try {
-      const propositions = await idelProposerCotation(id);
-      setCotationProposee(safeArr<CotationOut>(propositions));
+      const props = await idelProposerCotation(id);
+      setCotationProposee(safeArr<CotationOut>(props));
     } catch (e) {
-      setCotationError(e instanceof ApiError ? e.message : "Erreur lors de la proposition");
+      setCotationError(e instanceof ApiError ? e.message : "Erreur");
     } finally {
       setCotationLoading(false);
     }
   }
 
   async function handleValiderCotation(id: string) {
-    // Le backend requiert un patient_id
     const pid = patientSelectionne || panneau?.patient?.id;
-    if (!pid) {
-      setCotationError("Associez d'abord un patient avant de valider la cotation.");
-      return;
-    }
+    if (!pid) { setCotationError("Associez un patient avant de valider."); return; }
     if (!cotationProposee) return;
     setActionEnCours(id);
     setCotationError(null);
@@ -123,9 +150,8 @@ export default function IdelDashboard() {
   }
 
   async function handleMarquerTransmis(id: string) {
-    if (!confirm("Confirmer que vous avez transmis cette ordonnance depuis votre LPS ?")) return;
+    if (!confirm("Confirmer la transmission depuis votre LPS ?")) return;
     setActionEnCours(id);
-    setError(null);
     try {
       await idelMarquerTransmis(id);
       charger();
@@ -137,16 +163,35 @@ export default function IdelDashboard() {
     }
   }
 
-  const colonnes: Array<"reception" | "en_cours" | "traite"> = ["reception", "en_cours", "traite"];
-  const safeCotation = safeArr<CotationOut>(cotationProposee);
-  const totalCotation = safeCotation.reduce((s, c) => s + (c.montant_total ?? 0), 0);
-  const safeCotationExistante = safeArr<CotationOut>(panneau?.cotations);
-  const totalCotationExistante = safeCotationExistante.reduce((s, c) => s + (c.montant_total ?? 0), 0);
+  function toggleMajoration(code: string) {
+    setMajorationsSelectionnees((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  }
 
-  // Patient résolu pour le panneau en cours
+  // Calcul complet de la séance
   const patientResolu = panneau?.patient
     || patients.find((p) => p.id === patientSelectionne)
     || null;
+
+  const safeCotation = safeArr<CotationOut>(cotationProposee);
+  const cotation11B = appliquer11B(safeCotation);
+
+  const totalActes = cotation11B.reduce((s, c) => s + c.montant_applique, 0);
+  const totalMajorations = majorationsSelectionnees.reduce((s, code) => {
+    return s + (MAJORATIONS.find((m) => m.code === code)?.montant ?? 0);
+  }, 0);
+
+  const patientZone = (patientResolu as any)?.zone_deplacement ?? "plaine";
+  const patientDistKm = parseFloat((patientResolu as any)?.distance_km ?? "0") || 0;
+  const ikParKm = ZONES_IK[patientZone] ?? 0.91;
+  const totalDeplacement = avecDeplacement ? IFD + patientDistKm * 2 * ikParKm : 0;
+  const totalSeance = totalActes + totalMajorations + totalDeplacement;
+
+  const safeCotationExistante = safeArr<CotationOut>(panneau?.cotations);
+  const totalCotationExistante = safeCotationExistante.reduce((s, c) => s + (c.montant_total ?? 0), 0);
+
+  const colonnes: Array<"reception" | "en_cours" | "traite"> = ["reception", "en_cours", "traite"];
 
   return (
     <>
@@ -155,16 +200,17 @@ export default function IdelDashboard() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Pipeline IDEL</h1>
-            <p className="mt-0.5 text-sm text-textMuted">Préparation des transmissions CPAM · Cotation NGAP</p>
+            <p className="mt-0.5 text-sm text-textMuted">Cotation NGAP · Art. 11B · Majorations · IK automatiques</p>
           </div>
           <label className={`cursor-pointer rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 ${upload ? "opacity-50 pointer-events-none" : ""}`}>
-            {upload ? "Analyse en cours…" : "+ Déposer une ordonnance"}
+            {upload ? "Analyse…" : "+ Déposer une ordonnance"}
             <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleUpload} disabled={upload} />
           </label>
         </div>
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
+        {/* Kanban */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {colonnes.map((statut) => {
             const items = safeArr<IdelOrdonnance>(ordonnances).filter((o) => o.statut === statut);
@@ -209,34 +255,37 @@ export default function IdelDashboard() {
         {panneau && (
           <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-center"
             onClick={(e) => { if (e.target === e.currentTarget) setPanneau(null); }}>
-            <div className="w-full max-w-lg rounded-t-2xl bg-surface p-6 sm:rounded-2xl sm:m-4 max-h-[90vh] overflow-y-auto">
+            <div className="w-full max-w-xl rounded-t-2xl bg-surface p-5 sm:rounded-2xl sm:m-4 max-h-[92vh] overflow-y-auto">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-display text-lg font-bold text-textPrimary">Détail ordonnance</h3>
                 <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary">✕</button>
               </div>
 
               <div className="space-y-3 text-sm">
-                {/* Patient — avec sélecteur si non associé */}
+                {/* Patient */}
                 <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Patient</p>
                   {patientResolu ? (
-                    <p className="text-textPrimary font-medium">{patientResolu.nom} {patientResolu.prenom}</p>
+                    <div>
+                      <p className="text-textPrimary font-medium">{patientResolu.nom} {patientResolu.prenom}</p>
+                      {(patientResolu as any).zone_deplacement && (
+                        <p className="text-[11px] text-textMuted mt-0.5">
+                          Zone : {ZONES_IK[(patientResolu as any).zone_deplacement] ? `${(patientResolu as any).zone_deplacement} (${ZONES_IK[(patientResolu as any).zone_deplacement]}€/km)` : "—"}
+                          {(patientResolu as any).distance_km ? ` · ${(patientResolu as any).distance_km}km aller` : ""}
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <div className="space-y-2">
-                      <p className="text-xs text-amber">⚠ Aucun patient associé — requis pour valider la cotation</p>
+                      <p className="text-xs text-amber">⚠ Aucun patient — requis pour valider</p>
                       {patients.length > 0 ? (
-                        <select
-                          value={patientSelectionne}
-                          onChange={(e) => setPatientSelectionne(e.target.value)}
-                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
-                        >
+                        <select value={patientSelectionne} onChange={(e) => setPatientSelectionne(e.target.value)}
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary">
                           <option value="">— Sélectionner un patient —</option>
-                          {patients.map((p) => (
-                            <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>
-                          ))}
+                          {patients.map((p) => <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>)}
                         </select>
                       ) : (
-                        <p className="text-xs text-textMuted">Aucun patient en base — créez-en un depuis l'onglet Patients.</p>
+                        <p className="text-xs text-textMuted">Aucun patient — créez-en un dans l'onglet Patients.</p>
                       )}
                     </div>
                   )}
@@ -247,42 +296,38 @@ export default function IdelDashboard() {
                   <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Prescripteur</p>
                   <p className="text-textPrimary">{panneau.medecin_prescripteur || "—"}</p>
                   {panneau.date_prescription && (
-                    <p className="text-xs text-textMuted mt-0.5">Le {new Date(panneau.date_prescription).toLocaleDateString("fr-FR")}</p>
+                    <p className="text-xs text-textMuted">Le {new Date(panneau.date_prescription).toLocaleDateString("fr-FR")}</p>
                   )}
                 </div>
 
-                {/* Acte prescrit */}
                 {panneau.acte_prescrit_texte && (
                   <div className="rounded-lg bg-surfaceAlt p-3">
                     <p className="text-[11px] uppercase tracking-wide text-textMuted mb-1">Acte prescrit</p>
-                    <p className="text-textPrimary text-xs leading-relaxed">{panneau.acte_prescrit_texte}</p>
+                    <p className="text-xs leading-relaxed text-textPrimary">{panneau.acte_prescrit_texte}</p>
                   </div>
                 )}
 
-                {/* Cotation déjà validée */}
+                {/* Cotation existante validée */}
                 {safeCotationExistante.length > 0 && (
                   <div className="rounded-lg bg-surfaceAlt p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Cotation NGAP validée</p>
-                    <div className="space-y-1">
-                      {safeCotationExistante.map((c, i) => (
-                        <div key={i} className="flex justify-between text-xs gap-2">
-                          <span className="text-textPrimary font-bold shrink-0">{c.code_acte}</span>
-                          <span className="text-textMuted flex-1 truncate">{c.libelle}</span>
-                          <span className="text-teal font-medium shrink-0">{(c.montant_total ?? 0).toFixed(2)} €</span>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Cotation validée</p>
+                    {safeCotationExistante.map((c, i) => (
+                      <div key={i} className="flex justify-between text-xs gap-2 py-0.5">
+                        <span className="font-bold text-textPrimary">{c.code_acte}</span>
+                        <span className="flex-1 text-textMuted truncate">{c.libelle}</span>
+                        <span className="text-teal">{(c.montant_total ?? 0).toFixed(2)} €</span>
+                      </div>
+                    ))}
                     <div className="mt-2 border-t border-line pt-2 flex justify-between text-xs font-bold">
-                      <span className="text-textPrimary">Total</span>
-                      <span className="text-teal">{totalCotationExistante.toFixed(2)} €</span>
+                      <span>Total actes</span><span className="text-teal">{totalCotationExistante.toFixed(2)} €</span>
                     </div>
                   </div>
                 )}
 
-                {/* Zone cotation NGAP */}
+                {/* Zone cotation NGAP complète */}
                 {panneau.statut === "en_cours" && safeCotationExistante.length === 0 && (
-                  <div className="rounded-lg border border-violet/20 bg-violet/5 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Cotation NGAP</p>
+                  <div className="rounded-xl border border-violet/20 bg-violet/5 p-4 space-y-3">
+                    <p className="text-[11px] uppercase tracking-wide text-textMuted">Cotation NGAP — Art. 11B</p>
 
                     {!cotationProposee && !cotationLoading && !cotationValidee && (
                       <button onClick={() => handleProposerCotation(panneau.id)}
@@ -291,41 +336,95 @@ export default function IdelDashboard() {
                       </button>
                     )}
 
-                    {cotationLoading && <p className="text-xs text-textMuted text-center py-2">Analyse en cours par l'IA…</p>}
-                    {cotationError && <p className="text-xs text-amber mt-2">{cotationError}</p>}
+                    {cotationLoading && <p className="text-xs text-textMuted text-center py-2">Analyse IA en cours…</p>}
+                    {cotationError && <p className="text-xs text-amber">{cotationError}</p>}
 
-                    {safeCotation.length > 0 && !cotationValidee && (
-                      <div className="space-y-2">
+                    {cotation11B.length > 0 && !cotationValidee && (
+                      <div className="space-y-3">
+                        {/* Actes avec règle 11B */}
                         <div className="space-y-1">
-                          {safeCotation.map((c, i) => (
-                            <div key={i} className="flex justify-between text-xs gap-2 py-1 border-b border-line last:border-0">
-                              <span className="text-textPrimary font-bold shrink-0">{c.code_acte}</span>
-                              <span className="text-textMuted flex-1 text-[11px]">{c.libelle}</span>
-                              {c.quantite && c.quantite > 1 && <span className="text-textMuted text-[11px] shrink-0">×{c.quantite}</span>}
-                              <span className="text-teal font-medium shrink-0">{(c.montant_total ?? 0).toFixed(2)} €</span>
+                          {cotation11B.map((c, i) => (
+                            <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${c.rang === 1 ? "bg-teal/10" : c.rang === 2 ? "bg-amber/10" : "bg-surfaceAlt opacity-60"}`}>
+                              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${c.rang === 1 ? "bg-teal/20 text-teal" : c.rang === 2 ? "bg-amber/20 text-amber" : "bg-surfaceAlt text-textMuted"}`}>
+                                {c.rang === 1 ? "100%" : c.rang === 2 ? "50%" : "Gratuit"}
+                              </span>
+                              <span className="font-bold text-textPrimary">{c.code_acte}</span>
+                              <span className="flex-1 text-textMuted truncate">{c.libelle}</span>
+                              <span className={c.rang <= 2 ? "text-textPrimary font-medium" : "line-through text-textMuted"}>
+                                {c.rang <= 2 ? c.montant_applique.toFixed(2) + " €" : "0 €"}
+                              </span>
                             </div>
                           ))}
                         </div>
-                        <div className="flex justify-between text-xs font-bold pt-1">
-                          <span className="text-textPrimary">Total estimé</span>
-                          <span className="text-teal">{totalCotation.toFixed(2)} €</span>
+
+                        {/* Majorations */}
+                        <div className="rounded-lg border border-line p-3 space-y-2">
+                          <p className="text-[11px] uppercase tracking-wide text-textMuted">Majorations</p>
+                          {MAJORATIONS.map((m) => (
+                            <label key={m.code} className="flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox"
+                                checked={majorationsSelectionnees.includes(m.code)}
+                                onChange={() => toggleMajoration(m.code)}
+                                className="accent-violet" />
+                              <span className="text-xs text-textPrimary flex-1">{m.label}</span>
+                              <span className="text-xs text-violet font-medium">+{m.montant.toFixed(2)} €</span>
+                            </label>
+                          ))}
                         </div>
-                        <p className="text-[11px] text-textMuted">Vérifiez la proposition avant de valider. La cotation NGAP est indicative.</p>
+
+                        {/* Déplacement */}
+                        <div className="rounded-lg border border-line p-3 space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={avecDeplacement}
+                              onChange={(e) => setAvecDeplacement(e.target.checked)}
+                              className="accent-teal" />
+                            <span className="text-[11px] uppercase tracking-wide text-textMuted flex-1">Indemnités déplacement</span>
+                          </label>
+                          {avecDeplacement && (
+                            <div className="space-y-1 text-xs text-textMuted pl-5">
+                              <div className="flex justify-between">
+                                <span>IFD (forfait)</span>
+                                <span className="text-textPrimary">{IFD.toFixed(2)} €</span>
+                              </div>
+                              {patientDistKm > 0 ? (
+                                <div className="flex justify-between">
+                                  <span>IK {patientDistKm}km A/R × {ikParKm}€</span>
+                                  <span className="text-textPrimary">{(patientDistKm * 2 * ikParKm).toFixed(2)} €</span>
+                                </div>
+                              ) : (
+                                <p className="text-amber">⚠ Distance non renseignée sur le patient</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Récap total */}
+                        <div className="rounded-lg bg-surface border border-line p-3 space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-textMuted mb-2">Récapitulatif séance</p>
+                          <div className="flex justify-between text-xs"><span className="text-textMuted">Actes (art. 11B)</span><span className="text-textPrimary">{totalActes.toFixed(2)} €</span></div>
+                          {totalMajorations > 0 && <div className="flex justify-between text-xs"><span className="text-textMuted">Majorations</span><span className="text-violet">+{totalMajorations.toFixed(2)} €</span></div>}
+                          {avecDeplacement && <div className="flex justify-between text-xs"><span className="text-textMuted">IFD + IK</span><span className="text-teal">+{totalDeplacement.toFixed(2)} €</span></div>}
+                          <div className="flex justify-between border-t border-line pt-2 font-bold">
+                            <span className="text-textPrimary">Total séance</span>
+                            <span className="text-teal text-base">{totalSeance.toFixed(2)} €</span>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-textMuted">Art. 11B NGAP — 1er acte 100%, 2ème 50%, suivants gratuits. Vérifiez avant de valider.</p>
+
                         <div className="flex gap-2">
                           <button onClick={() => setCotationProposee(null)}
                             className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textMuted hover:text-textPrimary">
                             Relancer
                           </button>
-                          <button
-                            onClick={() => handleValiderCotation(panneau.id)}
+                          <button onClick={() => handleValiderCotation(panneau.id)}
                             disabled={actionEnCours === panneau.id || (!panneau.patient?.id && !patientSelectionne)}
-                            className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-ink hover:opacity-90 disabled:opacity-50"
-                          >
-                            {actionEnCours === panneau.id ? "Validation…" : "✓ Valider la cotation"}
+                            className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-ink hover:opacity-90 disabled:opacity-50">
+                            {actionEnCours === panneau.id ? "Validation…" : "✓ Valider"}
                           </button>
                         </div>
                         {!panneau.patient?.id && !patientSelectionne && (
-                          <p className="text-[11px] text-amber text-center">Sélectionnez un patient ci-dessus pour pouvoir valider</p>
+                          <p className="text-[11px] text-amber text-center">Sélectionnez un patient pour valider</p>
                         )}
                       </div>
                     )}
@@ -347,10 +446,9 @@ export default function IdelDashboard() {
                       className="rounded-lg border border-violet/40 bg-violet/10 px-4 py-2 text-center text-sm font-medium text-violet hover:bg-violet/20">
                       ↓ Fiche de reprise assistée
                     </a>
-                    <button onClick={() => handleMarquerTransmis(panneau.id)}
-                      disabled={actionEnCours === panneau.id}
+                    <button onClick={() => handleMarquerTransmis(panneau.id)} disabled={actionEnCours === panneau.id}
                       className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50">
-                      {actionEnCours === panneau.id ? "Traitement…" : "✓ J'ai transmis depuis mon LPS"}
+                      {actionEnCours === panneau.id ? "…" : "✓ J'ai transmis depuis mon LPS"}
                     </button>
                   </>
                 )}
@@ -366,9 +464,8 @@ export default function IdelDashboard() {
         )}
 
         <p className="mt-8 text-[11px] text-textMuted">
-          ⚠ Ce système prépare vos transmissions CPAM mais ne se substitue jamais à votre LPS agréé SESAM-Vitale.
-          La cotation NGAP proposée est indicative — vérifiez toujours avant de valider.
-          Hébergement HDS requis en production.
+          ⚠ Ce système prépare vos transmissions CPAM mais ne remplace pas votre LPS agréé SESAM-Vitale.
+          La cotation NGAP est indicative — vérifiez toujours avant de valider. Hébergement HDS requis en production.
         </p>
       </main>
     </>

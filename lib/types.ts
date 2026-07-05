@@ -317,6 +317,8 @@ export interface AgentResponse {
 }
 
 // --- IDEL ---
+export type ZoneDeplacement = "plaine" | "montagne" | "tres_montagneux";
+
 export interface IdelPatient {
   id: string;
   nom: string;
@@ -327,6 +329,9 @@ export interface IdelPatient {
   adresse?: string | null;
   medecin_traitant?: string | null;
   notes?: string | null;
+  // Déplacement NGAP
+  zone_deplacement?: ZoneDeplacement | null;
+  distance_km?: number | null;
 }
 
 export interface CotationOut {
@@ -355,4 +360,23 @@ export interface IdelOrdonnance {
   cotations?: CotationOut[] | null;
   confiance_ocr?: number | null;
   necessite_validation?: boolean | null;
+}
+
+// --- Calcul NGAP Article 11B ---
+export interface LigneCotationCalculee {
+  code_acte: string;
+  libelle: string;
+  coefficient: number;
+  montant_brut: number;
+  pourcentage: 100 | 50 | 0;
+  montant_net: number;
+  gratuit: boolean;
+}
+
+export interface DetailCotationNGAP {
+  lignes: LigneCotationCalculee[];
+  ifd: number;
+  ik: number;
+  majorations: { code: string; label: string; montant: number }[];
+  total: number;
 }

@@ -20,6 +20,7 @@ const ONGLETS_CRM = [
 
 const ONGLETS_IDEL = [
   { href: "/idel", label: "Pipeline" },
+  { href: "/idel/patients", label: "Patients" },
   { href: "/idel/comptabilite", label: "Trésorerie" },
 ];
 
@@ -65,6 +66,13 @@ function NavBarInterieur() {
     router.push("/login");
   }
 
+  // Détermine si un onglet est actif
+  function isActive(href: string): boolean {
+    if (href === "/idel") return pathname === "/idel";
+    if (href === "/dashboard") return pathname === "/dashboard";
+    return pathname.startsWith(href);
+  }
+
   return (
     <header className="border-b border-line">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
@@ -73,7 +81,6 @@ function NavBarInterieur() {
             {labelProduit}
           </span>
 
-          {/* Onglets principaux — masqués sur la page admin */}
           {!estAdmin && (
             <nav className="flex flex-wrap gap-4">
               {onglets.map((onglet) => (
@@ -81,8 +88,7 @@ function NavBarInterieur() {
                   key={onglet.href}
                   href={onglet.href}
                   className={`text-sm font-medium transition ${
-                    pathname === onglet.href ||
-                    (onglet.href !== "/idel" && onglet.href !== "/dashboard" && pathname.startsWith(onglet.href))
+                    isActive(onglet.href)
                       ? "text-violet"
                       : "text-textMuted hover:text-textPrimary"
                   }`}
@@ -93,7 +99,6 @@ function NavBarInterieur() {
             </nav>
           )}
 
-          {/* Fil d'Ariane sur la page admin */}
           {estAdmin && (
             <Link href="/dashboard" className="text-sm text-textMuted hover:text-textPrimary">
               ← Retour au CRM
@@ -112,7 +117,6 @@ function NavBarInterieur() {
             </Link>
           )}
 
-          {/* Lien admin — visible uniquement pour le rôle admin */}
           {estRoleAdmin && !estAdmin && (
             <Link
               href="/admin"
@@ -122,7 +126,6 @@ function NavBarInterieur() {
             </Link>
           )}
 
-          {/* Google status (CRM seulement) */}
           {!estIdel && !estAdmin && googleConnecte === false && (
             <a
               href={urlConnexionGoogle()}
