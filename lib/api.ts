@@ -9,6 +9,7 @@ import {
   MoisAbonnement, RecapEcheances,
   AuthResponse, UserMe, TenantConfig,
   CreerClientInput, ClientCreeOut,
+  AgentMessage, AgentResponse,
   IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
@@ -148,6 +149,10 @@ export const getDevisListe = () => requete<Devis[]>("/api/devis");
 export const getDevis = (id: string) => requete<Devis>(`/api/devis/${id}`);
 export const creerDevis = (data: DevisInput) =>
   requete<Devis>("/api/devis", { method: "POST", body: JSON.stringify(data) });
+export const modifierDevis = (id: string, data: DevisInput) =>
+  requete<Devis>(`/api/devis/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const supprimerDevis = (id: string) =>
+  requete<{ statut: string }>(`/api/devis/${id}`, { method: "DELETE" });
 export const envoyerDevisPourSignature = (id: string) =>
   requete<Devis>(`/api/devis/${id}/envoyer`, { method: "POST" });
 export const getDevisPublic = (token: string) =>
@@ -157,14 +162,30 @@ export const signerDevisPublic = (token: string, signatureImage: string) =>
     method: "POST",
     body: JSON.stringify({ signature_image: signatureImage }),
   });
+export const getAbonnementSuivi = (id: string) =>
+  requete<MoisAbonnement[]>(`/api/devis/${id}/abonnement/suivi`);
+export const genererFactureMois = (id: string, moisIndex: number) =>
+  requete<Facture>(`/api/devis/${id}/abonnement/facturer`, {
+    method: "POST", body: JSON.stringify({ mois_index: moisIndex }),
+  });
 
 // --- Factures ---
 export const getFacturesListe = () => requete<Facture[]>("/api/factures");
 export const getFacture = (id: string) => requete<Facture>(`/api/factures/${id}`);
 export const creerFacture = (data: FactureInput) =>
   requete<Facture>("/api/factures", { method: "POST", body: JSON.stringify(data) });
+export const modifierFacture = (id: string, data: FactureInput) =>
+  requete<Facture>(`/api/factures/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const supprimerFacture = (id: string) =>
+  requete<{ statut: string }>(`/api/factures/${id}`, { method: "DELETE" });
 export const envoyerFacture = (id: string) =>
   requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
+export const marquerFacturePayee = (id: string) =>
+  requete<Facture>(`/api/factures/${id}/payer`, { method: "POST" });
+export const relancerFacture = (id: string) =>
+  requete<Facture>(`/api/factures/${id}/relancer`, { method: "POST" });
+export const getEcheances = () =>
+  requete<RecapEcheances>("/api/factures/echeances");
 
 // --- Dépenses ---
 export const getDepenses = () => requete<Depense[]>("/api/depenses");
@@ -174,8 +195,10 @@ export const modifierDepense = (id: string, data: DepenseInput) =>
   requete<Depense>(`/api/depenses/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const supprimerDepense = (id: string) =>
   requete<{ statut: string }>(`/api/depenses/${id}`, { method: "DELETE" });
-export const getMoisAbonnements = () => requete<MoisAbonnement[]>("/api/depenses/abonnements/mois");
-export const getRecapEcheances = () => requete<RecapEcheances>("/api/depenses/abonnements/recap");
+export const getMoisAbonnements = () =>
+  requete<MoisAbonnement[]>("/api/depenses/abonnements/mois");
+export const getRecapEcheances = () =>
+  requete<RecapEcheances>("/api/depenses/abonnements/recap");
 
 // --- Google ---
 export const getGoogleStatus = () => requete<GoogleStatus>("/api/auth/google/status");
@@ -212,17 +235,24 @@ export const importerProspectsLot = (data: ProspectInput[]) =>
     method: "POST", body: JSON.stringify(data),
   });
 
+// --- Agent IA ---
+export const chatAgent = (message: string, historique: { role: string; content: string }[]) =>
+  requete<AgentResponse>("/api/agent/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, historique }),
+  });
+export const getAgentHistorique = () =>
+  requete<AgentMessage[]>("/api/agent/historique");
+export const effacerAgentHistorique = () =>
+  requete<{ statut: string }>("/api/agent/historique", { method: "DELETE" });
+
 // --- IDEL ---
 export const idelGetOrdonnances = () =>
-  requeteIdel<IdelOrdonnance[]>("/api/encours/ordonnances")
-    .then((encours) =>
-      Promise.all([
-        requeteIdel<IdelOrdonnance[]>("/api/reception/ordonnances"),
-        Promise.resolve(encours),
-        requeteIdel<IdelOrdonnance[]>("/api/traite/ordonnances"),
-      ])
-    )
-    .then(([reception, encours, traite]) => [...reception, ...encours, ...traite]);
+  Promise.all([
+    requeteIdel<IdelOrdonnance[]>("/api/reception/ordonnances"),
+    requeteIdel<IdelOrdonnance[]>("/api/encours/ordonnances"),
+    requeteIdel<IdelOrdonnance[]>("/api/traite/ordonnances"),
+  ]).then(([reception, encours, traite]) => [...reception, ...encours, ...traite]);
 
 export const idelUploaderOrdonnance = (formData: FormData) =>
   requeteIdelFormData<IdelOrdonnance>("/api/reception/ordonnances", formData);

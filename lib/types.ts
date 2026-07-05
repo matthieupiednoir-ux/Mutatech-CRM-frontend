@@ -198,8 +198,10 @@ export interface Depense {
   montant: number;
   categorie: string;
   date_depense: string;
+  type?: string | null;
   recurrente: boolean;
   periodicite?: string | null;
+  date_debut?: string | null;
   date_fin?: string | null;
   notes?: string | null;
 }
@@ -255,6 +257,18 @@ export interface ProspectInput {
   longitude?: number;
   statut: string;
   notes?: string;
+}
+
+// --- Agent IA ---
+export interface AgentMessage {
+  role: string;
+  content: string;
+  actions_effectuees?: string[];
+}
+
+export interface AgentResponse {
+  reply: string;
+  actions_effectuees: string[];
 }
 
 // --- IDEL ---
