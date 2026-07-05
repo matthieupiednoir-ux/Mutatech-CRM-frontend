@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
-import ChatAgentPanel from "@/components/ChatAgentPanel";
 import {
   getClients, getDevisListe, getFacturesListe,
   getTaches, getProspects, getEcheances,
@@ -11,104 +10,65 @@ import {
 } from "@/lib/api";
 import {
   Client, Devis, Facture, Tache, Prospect,
-  RecapEcheances, EcheanceFacture, AbonnementAFacturer,
+  EcheanceFacture, AbonnementAFacturer, RecapEcheances,
 } from "@/lib/types";
 
-const COULEUR_BARRE: Record<string, string> = {
-  brouillon:"#77778A",envoye:"#F0B429",accepte:"#5fe0c0",refuse:"#EF4444",
-  envoyee:"#F0B429",payee:"#5fe0c0",a_contacter:"#77778A",contacte:"#a89eff",
-  rdv_planifie:"#F0B429",converti:"#5fe0c0",perdu:"#EF4444",
-  todo:"#77778A",prog:"#F0B429",done:"#5fe0c0",
+const COULEUR: Record<string, string> = {
+  brouillon:"#77778A", envoye:"#F0B429", accepte:"#5fe0c0", refuse:"#EF4444",
+  envoyee:"#F0B429", payee:"#5fe0c0", a_contacter:"#77778A", contacte:"#a89eff",
+  rdv_planifie:"#F0B429", converti:"#5fe0c0", perdu:"#EF4444",
+  todo:"#77778A", prog:"#F0B429", done:"#5fe0c0",
 };
 const LABEL: Record<string, string> = {
-  brouillon:"Brouillon",envoye:"Envoyé",accepte:"Accepté",refuse:"Refusé",
-  envoyee:"Envoyée",payee:"Payée",a_contacter:"À contacter",contacte:"Contacté",
-  rdv_planifie:"RDV planifié",converti:"Converti",perdu:"Perdu",
-  todo:"À faire",prog:"En cours",done:"Fait",
+  brouillon:"Brouillon", envoye:"Envoyé", accepte:"Accepté", refuse:"Refusé",
+  envoyee:"Envoyée", payee:"Payée", a_contacter:"À contacter", contacte:"Contacté",
+  rdv_planifie:"RDV planifié", converti:"Converti", perdu:"Perdu",
+  todo:"À faire", prog:"En cours", done:"Fait",
 };
 
-function toArr<T>(v: unknown): T[] {
+function safe<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
 function repartir(items: string[]): { statut: string; count: number }[] {
   const map: Record<string, number> = {};
-  toArr<string>(items).forEach((s) => { map[s] = (map[s] || 0) + 1; });
+  safe<string>(items).forEach((s) => { map[s] = (map[s] || 0) + 1; });
   return Object.entries(map).map(([statut, count]) => ({ statut, count })).sort((a, b) => b.count - a.count);
 }
 
 type Taille = "small" | "normal" | "large";
 
-const ORDRE_PAR_DEFAUT = [
+const ORDRE_DEFAUT = [
   "kpi-clients","kpi-ca-signe","kpi-en-attente","kpi-facture","kpi-taches","kpi-prospects",
   "echeances","apercu-devis","apercu-prospects","apercu-factures","apercu-taches",
   "graph-devis","graph-prospects","graph-factures","graph-taches",
 ];
-const TAILLE_PAR_DEFAUT: Record<string, Taille> = {
+const TAILLE_DEFAUT: Record<string, Taille> = {
   "kpi-clients":"small","kpi-ca-signe":"small","kpi-en-attente":"small",
   "kpi-facture":"small","kpi-taches":"small","kpi-prospects":"small",
   echeances:"large","apercu-devis":"normal","apercu-prospects":"normal",
-  "apercu-factures":"normal","apercu-taches":"normal","graph-devis":"normal",
-  "graph-prospects":"normal","graph-factures":"normal","graph-taches":"normal",
+  "apercu-factures":"normal","apercu-taches":"normal",
+  "graph-devis":"normal","graph-prospects":"normal","graph-factures":"normal","graph-taches":"normal",
 };
-const TITRES_CARTES: Record<string, string> = {
+const TITRES: Record<string, string> = {
   "kpi-clients":"KPI · Clients","kpi-ca-signe":"KPI · CA signé",
-  "kpi-en-attente":"KPI · En attente signature","kpi-facture":"KPI · Facturé",
-  "kpi-taches":"KPI · Tâches accomplies","kpi-prospects":"KPI · Prospects actifs",
-  echeances:"Échéances & Relances","apercu-devis":"Aperçu · Devis",
-  "apercu-prospects":"Aperçu · Prospects","apercu-factures":"Aperçu · Factures",
-  "apercu-taches":"Aperçu · Tâches","graph-devis":"Graphique · Devis par statut",
-  "graph-prospects":"Graphique · Prospects par statut","graph-factures":"Graphique · Factures par statut",
-  "graph-taches":"Graphique · Tâches par statut",
+  "kpi-en-attente":"KPI · En attente","kpi-facture":"KPI · Facturé",
+  "kpi-taches":"KPI · Tâches","kpi-prospects":"KPI · Prospects",
+  echeances:"Échéances","apercu-devis":"Aperçu Devis","apercu-prospects":"Aperçu Prospects",
+  "apercu-factures":"Aperçu Factures","apercu-taches":"Aperçu Tâches",
+  "graph-devis":"Graph Devis","graph-prospects":"Graph Prospects",
+  "graph-factures":"Graph Factures","graph-taches":"Graph Tâches",
 };
-const SPAN_CLASSE: Record<Taille, string> = {
+const SPAN: Record<Taille, string> = {
   small:"col-span-6 sm:col-span-3 lg:col-span-2",
   normal:"col-span-6 lg:col-span-3",
   large:"col-span-6",
 };
-const TAILLE_LABEL: Record<Taille, string> = { small:"Petite",normal:"Normale",large:"Large" };
-const STORAGE_KEY = "mutatech-dashboard-cartes-v2";
+const KEY = "mutatech-dashboard-v3";
 
-interface ConfigDashboard { ordre: string[]; masquees: string[]; tailles: Record<string, Taille>; }
-
-function chargerConfig(): ConfigDashboard {
-  if (typeof window === "undefined") return { ordre: ORDRE_PAR_DEFAUT, masquees: [], tailles: TAILLE_PAR_DEFAUT };
-  try {
-    const brut = localStorage.getItem(STORAGE_KEY);
-    if (!brut) return { ordre: ORDRE_PAR_DEFAUT, masquees: [], tailles: TAILLE_PAR_DEFAUT };
-    const parsed = JSON.parse(brut);
-    const src = Array.isArray(parsed.ordre) ? parsed.ordre : [];
-    return {
-      ordre: [...src.filter((id: string) => ORDRE_PAR_DEFAUT.includes(id)), ...ORDRE_PAR_DEFAUT.filter((id) => !src.includes(id))],
-      masquees: Array.isArray(parsed.masquees) ? parsed.masquees : [],
-      tailles: { ...TAILLE_PAR_DEFAUT, ...(parsed.tailles || {}) },
-    };
-  } catch { return { ordre: ORDRE_PAR_DEFAUT, masquees: [], tailles: TAILLE_PAR_DEFAUT }; }
-}
-
-function MiniBarChart({ titre, donnees }: { titre: string; donnees: { statut: string; count: number }[] }) {
-  const items = toArr<{ statut: string; count: number }>(donnees);
-  const total = items.reduce((s, d) => s + (d.count ?? 0), 0);
-  if (total === 0) return <div><h3 className="mb-3 font-display text-sm text-textPrimary">{titre}</h3><p className="text-xs text-textMuted">Aucune donnée.</p></div>;
-  return (
-    <div>
-      <h3 className="mb-3 font-display text-sm text-textPrimary">{titre}</h3>
-      <div className="space-y-2">
-        {items.map((d) => (
-          <div key={d.statut} className="flex items-center gap-2">
-            <span className="w-24 shrink-0 text-[11px] text-textMuted">{LABEL[d.statut] || d.statut}</span>
-            <div className="h-5 flex-1 overflow-hidden rounded bg-surfaceAlt">
-              <div className="h-full rounded transition-all" style={{ width:`${Math.max(((d.count??0)/total)*100,4)}%`, background: COULEUR_BARRE[d.statut]||"#77778A" }} />
-            </div>
-            <span className="w-6 shrink-0 text-right text-[11px] text-textMuted">{d.count}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({ label, valeur, sousLabel, couleur="text-textPrimary" }: { label:string; valeur:string; sousLabel?:string; couleur?:string }) {
+function KpiCard({ label, valeur, sousLabel, couleur="text-textPrimary" }: {
+  label:string; valeur:string; sousLabel?:string; couleur?:string;
+}) {
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wide text-textMuted">{label}</p>
@@ -119,151 +79,130 @@ function KpiCard({ label, valeur, sousLabel, couleur="text-textPrimary" }: { lab
 }
 
 function AperculCard({ titre, lien, items, modePerso }: {
-  titre:string; lien:string; items:{texte:string;sousTexte?:string;couleur?:string}[]; modePerso:boolean;
+  titre:string; lien:string;
+  items:{texte:string;sousTexte?:string;couleur?:string}[];
+  modePerso:boolean;
 }) {
-  const safe = toArr<{texte:string;sousTexte?:string;couleur?:string}>(items);
-  const contenu = (
+  const list = safe<{texte:string;sousTexte?:string;couleur?:string}>(items);
+  const inner = (
     <>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display text-sm text-textPrimary">{titre}</h3>
         {!modePerso && <span className="text-xs text-violet">Voir tout →</span>}
       </div>
-      {safe.length === 0 ? <p className="text-xs text-textMuted">Rien pour l'instant.</p> : (
-        <div className="space-y-1.5">
-          {safe.map((it, i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
-              <span className="truncate text-xs text-textPrimary">{it.texte}</span>
-              {it.sousTexte && <span className="ml-2 shrink-0 text-[11px]" style={{ color: it.couleur||"#77778A" }}>{it.sousTexte}</span>}
-            </div>
-          ))}
-        </div>
-      )}
+      {list.length === 0
+        ? <p className="text-xs text-textMuted">Rien pour l'instant.</p>
+        : <div className="space-y-1.5">
+            {list.map((it, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
+                <span className="truncate text-xs text-textPrimary">{it.texte}</span>
+                {it.sousTexte && <span className="ml-2 shrink-0 text-[11px]" style={{color:it.couleur||"#77778A"}}>{it.sousTexte}</span>}
+              </div>
+            ))}
+          </div>
+      }
     </>
   );
-  if (modePerso) return <div>{contenu}</div>;
-  return <Link href={lien} className="-m-4 block rounded-xl p-4 transition hover:bg-surfaceAlt/40">{contenu}</Link>;
+  if (modePerso) return <div>{inner}</div>;
+  return <Link href={lien} className="-m-4 block rounded-xl p-4 transition hover:bg-surfaceAlt/40">{inner}</Link>;
 }
 
-function EcheancesCard({ modePerso }: { modePerso: boolean }) {
-  const [recap, setRecap] = useState<RecapEcheances | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionEnCours, setActionEnCours] = useState<string | null>(null);
-
-  function charger() {
-    getEcheances().then((d) => setRecap(d || null)).catch(() => {}).finally(() => setLoading(false));
-  }
-  useEffect(() => { charger(); }, []);
-
-  async function handleRelancer(id: string) {
-    setActionEnCours(id);
-    try { await relancerFacture(id); charger(); } catch { }
-    finally { setActionEnCours(null); }
-  }
-  async function handleGenererMois(id: string) {
-    setActionEnCours(id);
-    try { await genererFactureMois(id); charger(); } catch { }
-    finally { setActionEnCours(null); }
-  }
-
-  const enRetard: EcheanceFacture[] = toArr<EcheanceFacture>(recap?.en_retard);
-  const aVenir: EcheanceFacture[] = toArr<EcheanceFacture>(recap?.a_venir);
-  const abonnements: AbonnementAFacturer[] = toArr<AbonnementAFacturer>(recap?.abonnements_a_facturer);
-  const total = enRetard.length + aVenir.length + abonnements.length;
-
+function BarChart({ titre, donnees }: { titre:string; donnees:{statut:string;count:number}[] }) {
+  const items = safe<{statut:string;count:number}>(donnees);
+  const total = items.length === 0 ? 0 : items.reduce((s, d) => s + (d.count || 0), 0);
   return (
     <div>
-      <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances & Relances</h3>
-      {loading ? <p className="text-xs text-textMuted">Chargement…</p> : total === 0 ? (
-        <p className="text-xs text-textMuted">Tout est à jour — rien à signaler.</p>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-3">
-          {enRetard.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber">En retard</p>
-              <div className="space-y-1.5">
-                {enRetard.map((f: EcheanceFacture) => (
-                  <div key={f.id} className="flex items-center justify-between rounded-lg bg-amber/10 px-2.5 py-1.5">
-                    <span className="truncate text-xs text-textPrimary">
-                      {f.numero} — {f.client_nom}{" "}
-                      <span className="text-textMuted">({f.jours} j) · {(f.montant_ttc??0).toFixed(0)} €</span>
-                    </span>
-                    {!modePerso && (
-                      <button onClick={() => handleRelancer(f.id)} disabled={actionEnCours===f.id}
-                        className="ml-2 shrink-0 rounded bg-amber px-2 py-0.5 text-[10px] font-medium text-ink hover:opacity-90 disabled:opacity-50">
-                        {actionEnCours===f.id?"…":"Relancer"}
-                      </button>
-                    )}
-                  </div>
-                ))}
+      <h3 className="mb-3 font-display text-sm text-textPrimary">{titre}</h3>
+      {total === 0
+        ? <p className="text-xs text-textMuted">Aucune donnée.</p>
+        : <div className="space-y-2">
+            {items.map((d) => (
+              <div key={d.statut} className="flex items-center gap-2">
+                <span className="w-24 shrink-0 text-[11px] text-textMuted">{LABEL[d.statut]||d.statut}</span>
+                <div className="h-5 flex-1 overflow-hidden rounded bg-surfaceAlt">
+                  <div className="h-full rounded" style={{width:`${Math.max(((d.count||0)/total)*100,4)}%`,background:COULEUR[d.statut]||"#77778A"}} />
+                </div>
+                <span className="w-6 text-right text-[11px] text-textMuted">{d.count}</span>
               </div>
-            </div>
-          )}
-          {aVenir.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-textMuted">À venir (14 jours)</p>
-              <div className="space-y-1.5">
-                {aVenir.map((f: EcheanceFacture) => (
-                  <div key={f.id} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
-                    <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom}</span>
-                    <span className="ml-2 shrink-0 text-[11px] text-textMuted">dans {-(f.jours??0)} j · {(f.montant_ttc??0).toFixed(0)} €</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {abonnements.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-violet">Abonnements à facturer</p>
-              <div className="space-y-1.5">
-                {abonnements.map((a: AbonnementAFacturer) => (
-                  <div key={a.devis_id} className="flex items-center justify-between rounded-lg bg-violet/10 px-2.5 py-1.5">
-                    <span className="truncate text-xs text-textPrimary">
-                      {a.devis_numero} — {a.client_nom}{" "}
-                      <span className="text-textMuted">(mois {a.mois_index}) · {(a.montant??0).toFixed(0)} €</span>
-                    </span>
-                    {!modePerso && (
-                      <button onClick={() => handleGenererMois(a.devis_id)} disabled={actionEnCours===a.devis_id}
-                        className="ml-2 shrink-0 rounded bg-violet px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 disabled:opacity-50">
-                        {actionEnCours===a.devis_id?"…":"Générer"}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+      }
     </div>
   );
 }
 
-function CarteEditable({ id, taille, draggedId, dropCibleId, peutMonter, peutDescendre,
-  onDragStart, onDragOver, onDragEnd, onDrop, onMasquer, onChangerTaille, onMonter, onDescendre, children }: {
-  id:string; taille:Taille; draggedId:string|null; dropCibleId:string|null;
-  peutMonter:boolean; peutDescendre:boolean;
-  onDragStart:(e:React.DragEvent,id:string)=>void;
-  onDragOver:(e:React.DragEvent,id:string)=>void;
-  onDragEnd:()=>void; onDrop:(e:React.DragEvent,id:string)=>void;
-  onMasquer:(id:string)=>void; onChangerTaille:(id:string)=>void;
-  onMonter:(id:string)=>void; onDescendre:(id:string)=>void;
-  children:React.ReactNode;
-}) {
-  const enTrain = draggedId === id;
-  const survole = dropCibleId === id && draggedId !== id;
+function Echeances({ modePerso }: { modePerso:boolean }) {
+  const [recap, setRecap] = useState<RecapEcheances | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [action, setAction] = useState<string|null>(null);
+
+  useEffect(() => {
+    getEcheances().then((d) => setRecap(d ?? null)).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const enRetard = safe<EcheanceFacture>(recap?.en_retard);
+  const aVenir = safe<EcheanceFacture>(recap?.a_venir);
+  const abo = safe<AbonnementAFacturer>(recap?.abonnements_a_facturer);
+
+  async function relancer(id: string) {
+    setAction(id);
+    try { await relancerFacture(id); } catch {}
+    finally { setAction(null); }
+  }
+  async function generer(id: string) {
+    setAction(id);
+    try { await genererFactureMois(id); } catch {}
+    finally { setAction(null); }
+  }
+
   return (
-    <div className={`${SPAN_CLASSE[taille]} rounded-xl border-2 border-dashed bg-surface/60 p-3 transition ${enTrain?"opacity-30":survole?"border-violet bg-violet/5":"border-line/60"}`}>
-      <div draggable onDragStart={(e)=>onDragStart(e,id)} onDragOver={(e)=>onDragOver(e,id)} onDragEnd={onDragEnd} onDrop={(e)=>onDrop(e,id)}
-        className="mb-2 flex cursor-grab items-center justify-between gap-1 rounded-lg bg-surfaceAlt px-2 py-1.5 active:cursor-grabbing">
-        <span className="flex items-center gap-1.5 text-[11px] text-textMuted"><span className="text-sm leading-none">⠿</span> Glisser</span>
-        <div className="flex items-center gap-1">
-          <button onClick={()=>onMonter(id)} disabled={!peutMonter} className="rounded px-1.5 py-0.5 text-[11px] text-textMuted hover:text-textPrimary disabled:opacity-20">↑</button>
-          <button onClick={()=>onDescendre(id)} disabled={!peutDescendre} className="rounded px-1.5 py-0.5 text-[11px] text-textMuted hover:text-textPrimary disabled:opacity-20">↓</button>
-          <button onClick={()=>onChangerTaille(id)} className="rounded border border-line px-2 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">{TAILLE_LABEL[taille]}</button>
-          <button onClick={()=>onMasquer(id)} className="rounded px-1.5 py-0.5 text-[11px] text-amber hover:bg-amber/10">✕</button>
-        </div>
-      </div>
-      <div className="rounded-xl border border-line bg-surface p-4">{children}</div>
+    <div>
+      <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances & Relances</h3>
+      {loading ? <p className="text-xs text-textMuted">Chargement…</p>
+        : (enRetard.length + aVenir.length + abo.length) === 0
+          ? <p className="text-xs text-textMuted">Tout est à jour.</p>
+          : <div className="grid gap-4 sm:grid-cols-3">
+              {enRetard.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium uppercase text-amber">En retard</p>
+                  <div className="space-y-1.5">
+                    {enRetard.map((f: EcheanceFacture) => (
+                      <div key={f.id} className="flex items-center justify-between rounded-lg bg-amber/10 px-2.5 py-1.5">
+                        <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom} <span className="text-textMuted">({f.jours}j · {(f.montant_ttc??0).toFixed(0)}€)</span></span>
+                        {!modePerso && <button onClick={()=>relancer(f.id)} disabled={action===f.id} className="ml-2 rounded bg-amber px-2 py-0.5 text-[10px] text-ink disabled:opacity-50">{action===f.id?"…":"Relancer"}</button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {aVenir.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium uppercase text-textMuted">À venir</p>
+                  <div className="space-y-1.5">
+                    {aVenir.map((f: EcheanceFacture) => (
+                      <div key={f.id} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
+                        <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom}</span>
+                        <span className="ml-2 text-[11px] text-textMuted">{-(f.jours??0)}j · {(f.montant_ttc??0).toFixed(0)}€</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {abo.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium uppercase text-violet">Abonnements</p>
+                  <div className="space-y-1.5">
+                    {abo.map((a: AbonnementAFacturer) => (
+                      <div key={a.devis_id} className="flex items-center justify-between rounded-lg bg-violet/10 px-2.5 py-1.5">
+                        <span className="truncate text-xs text-textPrimary">{a.devis_numero} — {a.client_nom}</span>
+                        {!modePerso && <button onClick={()=>generer(a.devis_id)} disabled={action===a.devis_id} className="ml-2 rounded bg-violet px-2 py-0.5 text-[10px] text-white disabled:opacity-50">{action===a.devis_id?"…":"Générer"}</button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+      }
     </div>
   );
 }
@@ -275,106 +214,95 @@ export default function DashboardPage() {
   const [taches, setTaches] = useState<Tache[]>([]);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [ordre, setOrdre] = useState<string[]>(ORDRE_PAR_DEFAUT);
+  const [error, setError] = useState<string|null>(null);
+  const [ordre, setOrdre] = useState<string[]>(ORDRE_DEFAUT);
   const [masquees, setMasquees] = useState<string[]>([]);
-  const [tailles, setTailles] = useState<Record<string, Taille>>(TAILLE_PAR_DEFAUT);
+  const [tailles, setTailles] = useState<Record<string,Taille>>(TAILLE_DEFAUT);
   const [modePerso, setModePerso] = useState(false);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dropCibleId, setDropCibleId] = useState<string | null>(null);
 
   useEffect(() => {
-    const config = chargerConfig();
-    setOrdre(config.ordre); setMasquees(config.masquees); setTailles(config.tailles);
+    try {
+      const brut = localStorage.getItem(KEY);
+      if (brut) {
+        const p = JSON.parse(brut);
+        if (Array.isArray(p.ordre)) setOrdre([
+          ...p.ordre.filter((id: string) => ORDRE_DEFAUT.includes(id)),
+          ...ORDRE_DEFAUT.filter((id) => !p.ordre.includes(id)),
+        ]);
+        if (Array.isArray(p.masquees)) setMasquees(p.masquees);
+        if (p.tailles && typeof p.tailles === "object") setTailles({...TAILLE_DEFAUT,...p.tailles});
+      }
+    } catch {}
   }, []);
 
-  function sauvegarder(o: string[], m: string[], t: Record<string, Taille>) {
+  function save(o: string[], m: string[], t: Record<string,Taille>) {
     setOrdre(o); setMasquees(m); setTailles(t);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ordre:o, masquees:m, tailles:t }));
+    try { localStorage.setItem(KEY, JSON.stringify({ordre:o,masquees:m,tailles:t})); } catch {}
   }
-
-  function handleDragStart(e: React.DragEvent, id: string) { e.dataTransfer.setData("text/plain",id); e.dataTransfer.effectAllowed="move"; setDraggedId(id); }
-  function handleDragOver(e: React.DragEvent, id: string) { e.preventDefault(); e.dataTransfer.dropEffect="move"; if(id!==dropCibleId)setDropCibleId(id); }
-  function handleDragEnd() { setDraggedId(null); setDropCibleId(null); }
-  function handleDrop(e: React.DragEvent, cibleId: string) {
-    e.preventDefault();
-    const sourceId = e.dataTransfer.getData("text/plain")||draggedId;
-    if(!sourceId||sourceId===cibleId){handleDragEnd();return;}
-    const nouvelOrdre=[...ordre];
-    const depuis=nouvelOrdre.indexOf(sourceId), vers=nouvelOrdre.indexOf(cibleId);
-    if(depuis===-1||vers===-1){handleDragEnd();return;}
-    nouvelOrdre.splice(depuis,1); nouvelOrdre.splice(vers,0,sourceId);
-    sauvegarder(nouvelOrdre,masquees,tailles); handleDragEnd();
-  }
-  function monter(id: string) {
-    const visibles=ordre.filter((x)=>!masquees.includes(x)); const idx=visibles.indexOf(id);
-    if(idx<=0)return; const voisin=visibles[idx-1];
-    const n=[...ordre]; const a=n.indexOf(id),b=n.indexOf(voisin);
-    [n[a],n[b]]=[n[b],n[a]]; sauvegarder(n,masquees,tailles);
-  }
-  function descendre(id: string) {
-    const visibles=ordre.filter((x)=>!masquees.includes(x)); const idx=visibles.indexOf(id);
-    if(idx===-1||idx>=visibles.length-1)return; const voisin=visibles[idx+1];
-    const n=[...ordre]; const a=n.indexOf(id),b=n.indexOf(voisin);
-    [n[a],n[b]]=[n[b],n[a]]; sauvegarder(n,masquees,tailles);
-  }
-  function changerTaille(id: string) {
-    const oT:Taille[]=["small","normal","large"]; const act=tailles[id]||"normal";
-    sauvegarder(ordre,masquees,{...tailles,[id]:oT[(oT.indexOf(act)+1)%oT.length]});
-  }
-  function masquerCarte(id: string) { sauvegarder(ordre,[...masquees,id],tailles); }
-  function reafficherCarte(id: string) { sauvegarder(ordre,masquees.filter((m)=>m!==id),tailles); }
-  function reinitialiser() { sauvegarder(ORDRE_PAR_DEFAUT,[],TAILLE_PAR_DEFAUT); }
 
   useEffect(() => {
     Promise.all([getClients(),getDevisListe(),getFacturesListe(),getTaches(),getProspects()])
       .then(([c,d,f,t,p]) => {
-        setClients(toArr<Client>(c)); setDevis(toArr<Devis>(d));
-        setFactures(toArr<Facture>(f)); setTaches(toArr<Tache>(t)); setProspects(toArr<Prospect>(p));
+        setClients(safe<Client>(c));
+        setDevis(safe<Devis>(d));
+        setFactures(safe<Facture>(f));
+        setTaches(safe<Tache>(t));
+        setProspects(safe<Prospect>(p));
       })
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur"))
       .finally(() => setLoading(false));
   }, []);
 
-  const sd=toArr<Devis>(devis), sf=toArr<Facture>(factures);
-  const st=toArr<Tache>(taches), sp=toArr<Prospect>(prospects), sc=toArr<Client>(clients);
+  // Toutes les données sont garanties tableaux grâce à safe()
+  const D = safe<Devis>(devis);
+  const F = safe<Facture>(factures);
+  const T = safe<Tache>(taches);
+  const P = safe<Prospect>(prospects);
+  const C = safe<Client>(clients);
 
-  const caSigne=sd.filter((d)=>d.statut==="accepte").reduce((s,d)=>s+(calculerTotaux(d.lignes,d.taux_tva??0).totalHt??0),0);
-  const caEnAttente=sd.filter((d)=>d.statut==="envoye").reduce((s,d)=>s+(calculerTotaux(d.lignes,d.taux_tva??0).totalHt??0),0);
-  const caFacture=sf.filter((f)=>f.statut!=="brouillon").reduce((s,f)=>s+(calculerTotaux(f.lignes,f.taux_tva??0).totalHt??0),0);
-  const tachesDone=st.filter((t)=>t.statut==="done").length;
-  const pctTaches=st.length>0?Math.round((tachesDone/st.length)*100):0;
-  const prospectsActifs=sp.filter((p)=>p.statut!=="converti"&&p.statut!=="perdu").length;
-  const convertis=sp.filter((p)=>p.statut==="converti").length;
-  const tauxConversion=sp.length>0?Math.round((convertis/sp.length)*100):0;
+  // KPIs — avec fallback 0 à chaque étape
+  const caSigne = D.filter(d=>d.statut==="accepte").reduce((s,d)=>{
+    try { return s+(calculerTotaux(d.lignes,d.taux_tva??0).totalHt??0); } catch { return s; }
+  },0);
+  const caEnAttente = D.filter(d=>d.statut==="envoye").reduce((s,d)=>{
+    try { return s+(calculerTotaux(d.lignes,d.taux_tva??0).totalHt??0); } catch { return s; }
+  },0);
+  const caFacture = F.filter(f=>f.statut!=="brouillon").reduce((s,f)=>{
+    try { return s+(calculerTotaux(f.lignes,f.taux_tva??0).totalHt??0); } catch { return s; }
+  },0);
+  const tDone = T.filter(t=>t.statut==="done").length;
+  const pctT = T.length>0?Math.round((tDone/T.length)*100):0;
+  const pActifs = P.filter(p=>p.statut!=="converti"&&p.statut!=="perdu").length;
+  const pConv = P.filter(p=>p.statut==="converti").length;
+  const pctConv = P.length>0?Math.round((pConv/P.length)*100):0;
 
-  const apercuDevis=sd.slice(0,3).map((d)=>({texte:`${d.numero} — ${d.client?.nom||"—"}`,sousTexte:LABEL[d.statut]||d.statut,couleur:COULEUR_BARRE[d.statut]}));
-  const apercuFactures=sf.slice(0,3).map((f)=>({texte:`${f.numero} — ${f.client?.nom||"—"}`,sousTexte:LABEL[f.statut]||f.statut,couleur:COULEUR_BARRE[f.statut]}));
-  const apercuProspects=sp.slice(0,3).map((p)=>({texte:p.nom,sousTexte:LABEL[p.statut]||p.statut,couleur:COULEUR_BARRE[p.statut]}));
-  const apercuTaches=st.slice(0,3).map((t)=>({texte:t.titre,sousTexte:LABEL[t.statut]||t.statut,couleur:COULEUR_BARRE[t.statut]}));
+  const apD = D.slice(0,3).map(d=>({texte:`${d.numero} — ${d.client?.nom||"—"}`,sousTexte:LABEL[d.statut]||d.statut,couleur:COULEUR[d.statut]}));
+  const apF = F.slice(0,3).map(f=>({texte:`${f.numero} — ${f.client?.nom||"—"}`,sousTexte:LABEL[f.statut]||f.statut,couleur:COULEUR[f.statut]}));
+  const apP = P.slice(0,3).map(p=>({texte:p.nom,sousTexte:LABEL[p.statut]||p.statut,couleur:COULEUR[p.statut]}));
+  const apT = T.slice(0,3).map(t=>({texte:t.titre,sousTexte:LABEL[t.statut]||t.statut,couleur:COULEUR[t.statut]}));
 
-  function rendreCarte(id: string): React.ReactNode {
+  const visibles = ordre.filter(id=>!masquees.includes(id));
+
+  function carte(id: string): React.ReactNode {
     switch(id) {
-      case "kpi-clients": return <KpiCard label="Clients" valeur={String(sc.length)} />;
-      case "kpi-ca-signe": return <KpiCard label="CA signé (devis)" valeur={`${caSigne.toFixed(0)} €`} couleur="text-teal" />;
-      case "kpi-en-attente": return <KpiCard label="En attente signature" valeur={`${caEnAttente.toFixed(0)} €`} couleur="text-amber" />;
+      case "kpi-clients": return <KpiCard label="Clients" valeur={String(C.length)} />;
+      case "kpi-ca-signe": return <KpiCard label="CA signé" valeur={`${caSigne.toFixed(0)} €`} couleur="text-teal" />;
+      case "kpi-en-attente": return <KpiCard label="En attente" valeur={`${caEnAttente.toFixed(0)} €`} couleur="text-amber" />;
       case "kpi-facture": return <KpiCard label="Facturé" valeur={`${caFacture.toFixed(0)} €`} couleur="text-violet" />;
-      case "kpi-taches": return <KpiCard label="Tâches accomplies" valeur={`${pctTaches}%`} sousLabel={`${tachesDone}/${st.length}`} />;
-      case "kpi-prospects": return <KpiCard label="Prospects actifs" valeur={String(prospectsActifs)} sousLabel={`${tauxConversion}% de conversion`} />;
-      case "echeances": return <EcheancesCard modePerso={modePerso} />;
-      case "apercu-devis": return <AperculCard titre="Devis" lien="/devis" items={apercuDevis} modePerso={modePerso} />;
-      case "apercu-prospects": return <AperculCard titre="Prospects" lien="/prospects" items={apercuProspects} modePerso={modePerso} />;
-      case "apercu-factures": return <AperculCard titre="Factures" lien="/factures" items={apercuFactures} modePerso={modePerso} />;
-      case "apercu-taches": return <AperculCard titre="Tâches" lien="/taches" items={apercuTaches} modePerso={modePerso} />;
-      case "graph-devis": return <MiniBarChart titre="Devis par statut" donnees={repartir(sd.map((d)=>d.statut))} />;
-      case "graph-prospects": return <MiniBarChart titre="Prospects par statut" donnees={repartir(sp.map((p)=>p.statut))} />;
-      case "graph-factures": return <MiniBarChart titre="Factures par statut" donnees={repartir(sf.map((f)=>f.statut))} />;
-      case "graph-taches": return <MiniBarChart titre="Tâches par statut" donnees={repartir(st.map((t)=>t.statut))} />;
+      case "kpi-taches": return <KpiCard label="Tâches" valeur={`${pctT}%`} sousLabel={`${tDone}/${T.length}`} />;
+      case "kpi-prospects": return <KpiCard label="Prospects actifs" valeur={String(pActifs)} sousLabel={`${pctConv}% convertis`} />;
+      case "echeances": return <Echeances modePerso={modePerso} />;
+      case "apercu-devis": return <AperculCard titre="Devis" lien="/devis" items={apD} modePerso={modePerso} />;
+      case "apercu-prospects": return <AperculCard titre="Prospects" lien="/prospects" items={apP} modePerso={modePerso} />;
+      case "apercu-factures": return <AperculCard titre="Factures" lien="/factures" items={apF} modePerso={modePerso} />;
+      case "apercu-taches": return <AperculCard titre="Tâches" lien="/taches" items={apT} modePerso={modePerso} />;
+      case "graph-devis": return <BarChart titre="Devis par statut" donnees={repartir(D.map(d=>d.statut))} />;
+      case "graph-prospects": return <BarChart titre="Prospects par statut" donnees={repartir(P.map(p=>p.statut))} />;
+      case "graph-factures": return <BarChart titre="Factures par statut" donnees={repartir(F.map(f=>f.statut))} />;
+      case "graph-taches": return <BarChart titre="Tâches par statut" donnees={repartir(T.map(t=>t.statut))} />;
       default: return null;
     }
   }
-
-  const cartesVisibles = ordre.filter((id) => !masquees.includes(id));
 
   return (
     <>
@@ -383,58 +311,44 @@ export default function DashboardPage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-2xl text-textPrimary">Tableau de bord</h1>
           <div className="flex items-center gap-2">
-            {modePerso && masquees.length > 0 && <span className="text-xs text-textMuted">{masquees.length} carte(s) masquée(s)</span>}
-            {modePerso && <button onClick={reinitialiser} className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Réinitialiser</button>}
-            <button onClick={()=>setModePerso((v)=>!v)} className={`rounded-lg px-4 py-1.5 text-sm font-medium ${modePerso?"bg-violet text-white hover:bg-violet/90":"border border-line text-textMuted hover:text-textPrimary"}`}>
+            {modePerso && masquees.length>0 && <span className="text-xs text-textMuted">{masquees.length} masquée(s)</span>}
+            {modePerso && <button onClick={()=>save(ORDRE_DEFAUT,[],TAILLE_DEFAUT)} className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Réinitialiser</button>}
+            <button onClick={()=>setModePerso(v=>!v)} className={`rounded-lg px-4 py-1.5 text-sm font-medium ${modePerso?"bg-violet text-white":"border border-line text-textMuted hover:text-textPrimary"}`}>
               {modePerso?"✓ Terminer":"⚙ Personnaliser"}
             </button>
           </div>
         </div>
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
-        {modePerso && <p className="mb-4 text-xs text-textMuted">Glisse une carte par sa poignée <span className="text-sm">⠿</span> pour la déplacer, ou utilise les flèches ↑↓.</p>}
 
-        {modePerso && masquees.length > 0 && (
+        {modePerso && masquees.length>0 && (
           <div className="mb-6 rounded-xl border border-dashed border-line bg-surface/50 p-4">
-            <p className="mb-2 text-xs uppercase tracking-wide text-textMuted">Cartes masquées — clique pour réafficher</p>
+            <p className="mb-2 text-xs uppercase tracking-wide text-textMuted">Cartes masquées</p>
             <div className="flex flex-wrap gap-2">
-              {masquees.map((id) => (
-                <button key={id} onClick={()=>reafficherCarte(id)} className="rounded-full border border-line px-3 py-1.5 text-xs text-textMuted hover:border-teal hover:text-teal">
-                  + {TITRES_CARTES[id]||id}
+              {masquees.map(id=>(
+                <button key={id} onClick={()=>save(ordre,masquees.filter(m=>m!==id),tailles)} className="rounded-full border border-line px-3 py-1.5 text-xs text-textMuted hover:border-teal hover:text-teal">
+                  + {TITRES[id]||id}
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {loading ? <p className="text-sm text-textMuted">Chargement…</p> : (
-          <div className={`grid gap-6 ${modePerso?"":"lg:grid-cols-[1fr_380px]"}`}>
-            <div className="grid grid-cols-6 gap-4">
-              {cartesVisibles.map((id, index) =>
-                modePerso ? (
-                  <CarteEditable key={id} id={id} taille={tailles[id]||"normal"}
-                    draggedId={draggedId} dropCibleId={dropCibleId}
-                    peutMonter={index>0} peutDescendre={index<cartesVisibles.length-1}
-                    onDragStart={handleDragStart} onDragOver={handleDragOver}
-                    onDragEnd={handleDragEnd} onDrop={handleDrop}
-                    onMasquer={masquerCarte} onChangerTaille={changerTaille}
-                    onMonter={monter} onDescendre={descendre}>
-                    {rendreCarte(id)}
-                  </CarteEditable>
-                ) : (
-                  <div key={id} className={`${SPAN_CLASSE[tailles[id]||"normal"]} rounded-xl border border-line bg-surface p-4`}>
-                    {rendreCarte(id)}
-                  </div>
-                )
-              )}
+        {loading
+          ? <p className="text-sm text-textMuted">Chargement…</p>
+          : <div className="grid grid-cols-6 gap-4">
+              {visibles.map(id => (
+                <div key={id} className={`${SPAN[tailles[id]||"normal"]} rounded-xl border border-line bg-surface p-4`}>
+                  {carte(id)}
+                  {modePerso && (
+                    <div className="mt-3 flex justify-end">
+                      <button onClick={()=>save(ordre,[...masquees,id],tailles)} className="text-[10px] text-textMuted hover:text-amber">Masquer</button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-            {!modePerso && (
-              <div className="h-[calc(100vh-160px)] lg:sticky lg:top-6">
-                <ChatAgentPanel compact />
-              </div>
-            )}
-          </div>
-        )}
+        }
       </main>
     </>
   );
