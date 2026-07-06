@@ -185,7 +185,10 @@ export const idelProposerCotation = async (id: string): Promise<CotationOut[]> =
   return [];
 };
 
-// Le backend exige : { patient_id, lignes, cotations }
+// Le backend exige : { patient_id, lignes } -- "lignes" est le SEUL champ lu
+// cote serveur (routers/encours.py -> valider_cotation), tout autre nom
+// de cle serait silencieusement ignore par Pydantic sans jamais creer de
+// ligne de cotation en base.
 export const idelValiderCotation = (
   id: string,
   items: CotationValidationItem[],
@@ -195,8 +198,7 @@ export const idelValiderCotation = (
     method: "POST",
     body: JSON.stringify({
       ...(patientId ? { patient_id: patientId } : {}),
-      lignes: [],
-      cotations: items,
+      lignes: items,
     }),
   });
 

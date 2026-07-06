@@ -346,8 +346,13 @@ export interface CotationOut {
 
 export interface CotationValidationItem {
   code_acte: string;
+  libelle?: string | null;
+  coefficient: number;
   quantite: number;
-  modificateurs: string[];
+  majoration_dimanche_ferie: boolean;
+  majoration_nuit: boolean;
+  distance_km: number;
+  zone_montagne: boolean;
 }
 
 export interface IdelOrdonnance {

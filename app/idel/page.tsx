@@ -9,7 +9,7 @@ import {
   idelGetPatients, idelCreerPatient, chatAgent, ApiError,
 } from "@/lib/api";
 import {
-  IdelOrdonnance, CotationOut, IdelPatient,
+  IdelOrdonnance, CotationOut, IdelPatient, CotationValidationItem,
   ZoneDeplacement, LigneCotationCalculee, DetailCotationNGAP,
 } from "@/lib/types";
 
@@ -220,9 +220,22 @@ export default function IdelPage() {
     if (!cotProp) return;
     setActionId(id); setCotErr(null);
     try {
-      const items = safeArr<CotationOut>(cotProp).map((c) => ({
-        code_acte: c.code_acte, quantite: c.quantite ?? 1,
-        modificateurs: safeArr<string>(c.modificateurs),
+      const majDimancheFerie = majActives.includes("MJF");
+      const majNuit = majActives.includes("MN");
+      const distanceKm = patientResolu?.distance_km ?? 0;
+      const zoneMontagne = patientResolu?.zone_deplacement === "montagne" || patientResolu?.zone_deplacement === "tres_montagneux";
+      const items: CotationValidationItem[] = safeArr<CotationOut>(cotProp).map((c, i) => ({
+        code_acte: c.code_acte,
+        libelle: c.libelle ?? c.code_acte,
+        coefficient: c.coefficient ?? 0,
+        quantite: c.quantite ?? 1,
+        majoration_dimanche_ferie: majDimancheFerie,
+        majoration_nuit: majNuit,
+        // L'IK (indemnité kilométrique) est due une seule fois par passage,
+        // pas par ligne d'acte : seule la première ligne la porte pour
+        // éviter de la compter en double si plusieurs actes sont cotés.
+        distance_km: i === 0 ? distanceKm : 0,
+        zone_montagne: i === 0 ? zoneMontagne : false,
       }));
       await idelValiderCotation(id, items, pid);
       setCotValidee(true);
