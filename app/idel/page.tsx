@@ -167,17 +167,22 @@ export default function IdelPage() {
     setChatInput((prev) => prev ? prev + " " + transcript : transcript);
   });
 
-  function charger() {
+  function charger(): Promise<IdelOrdonnance[]> {
     setLoading(true);
-    Promise.all([
+    return Promise.all([
       idelGetOrdonnances(),
       idelGetPatients().catch(() => [] as IdelPatient[]),
     ])
       .then(([ordo, pts]) => {
-        setOrdonnances(safeArr<IdelOrdonnance>(ordo));
+        const ordoArr = safeArr<IdelOrdonnance>(ordo);
+        setOrdonnances(ordoArr);
         setPatients(safeArr<IdelPatient>(pts));
+        return ordoArr;
       })
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
+      .catch((e) => {
+        setError(e instanceof ApiError ? e.message : "Erreur de chargement");
+        return [] as IdelOrdonnance[];
+      })
       .finally(() => setLoading(false));
   }
 
@@ -221,7 +226,9 @@ export default function IdelPage() {
       }));
       await idelValiderCotation(id, items, pid);
       setCotValidee(true);
-      setTimeout(() => charger(), 500);
+      const ordoFraiches = await charger();
+      const miseAJour = ordoFraiches.find((o) => o.id === id);
+      if (miseAJour) setPanneau(miseAJour);
     } catch (e) { setCotErr(e instanceof ApiError ? e.message : "Erreur de validation"); }
     finally { setActionId(null); }
   }
@@ -602,7 +609,7 @@ export default function IdelPage() {
                           <span className="font-bold text-textPrimary w-14 shrink-0">{l.code_acte}</span>
                           <span className="text-textMuted flex-1 text-[11px] truncate">{l.libelle}</span>
                           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${l.pourcentage === 100 ? "bg-teal/20 text-teal" : l.pourcentage === 50 ? "bg-amber/20 text-amber" : "bg-surfaceAlt text-textMuted"}`}>
-                            {l.gratuit ? "Gratuit" : `${l.pourcentage}%`}
+                          {l.gratuit ? "Gratuit" : `${l.pourcentage}%`}
                           </span>
                           <span className="shrink-0 font-medium text-textPrimary w-14 text-right">{l.gratuit ? "0.00 €" : `${l.montant_net.toFixed(2)} €`}</span>
                         </div>
