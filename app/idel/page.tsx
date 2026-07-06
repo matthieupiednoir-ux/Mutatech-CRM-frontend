@@ -6,10 +6,10 @@ import {
   idelGetOrdonnances, idelUploaderOrdonnance,
   idelProposerCotation, idelValiderCotation, idelAnnulerCotation,
   idelMarquerTransmis, idelExporterCsv, idelFicheReprise,
-  idelGetPatients, idelCreerPatient, chatAgent, ApiError,
+  idelGetPatients, idelCreerPatient, idelGetMe, chatAgent, ApiError,
 } from "@/lib/api";
 import {
-  IdelOrdonnance, CotationOut, IdelPatient, CotationValidationItem, FicheReprise,
+  IdelOrdonnance, CotationOut, IdelPatient, CotationValidationItem, FicheReprise, IdelMe,
   ZoneDeplacement, LigneCotationCalculee, DetailCotationNGAP,
 } from "@/lib/types";
 
@@ -88,6 +88,18 @@ const STATUT_COL: Record<string, string> = {
   traite: "border-teal/40 bg-teal/10 text-teal",
 };
 
+const LPS_LABELS: Record<string, string> = {
+  vega: "Vega",
+  albus: "Albus",
+  simply_vitale: "Simply Vitale",
+  agathe_you: "Agathe&You",
+  ozzen: "Ozzen",
+  desmos: "Desmos",
+  carecare: "CareCare",
+  infimax: "Infimax",
+  autre: "votre logiciel",
+};
+
 // ===== HOOK VOIX =====
 function useVoice(onResult: (text: string) => void) {
   const [ecoute, setEcoute] = useState(false);
@@ -134,6 +146,7 @@ export default function IdelPage() {
   const [upload, setUpload] = useState(false);
   const [panneau, setPanneau] = useState<IdelOrdonnance | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [moi, setMoi] = useState<IdelMe | null>(null);
 
   // Export CSV / Fiche de reprise
   const [ficheReprise, setFicheReprise] = useState<FicheReprise | null>(null);
@@ -192,6 +205,7 @@ export default function IdelPage() {
   }
 
   useEffect(() => { charger(); }, []);
+  useEffect(() => { idelGetMe().then(setMoi).catch(() => setMoi(null)); }, []);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   function ouvrirPanneau(o: IdelOrdonnance) {
@@ -252,7 +266,10 @@ export default function IdelPage() {
   }
 
   async function handleMarquerTransmis(id: string) {
-    if (!confirm("Confirmer la transmission depuis votre LPS ?")) return;
+    const lpsLabel = moi?.lps_utilise ? LPS_LABELS[moi.lps_utilise] ?? "votre LPS" : "votre LPS";
+    if (!confirm(
+      `Mutatech ne transmet rien à la CPAM elle-même : confirmez uniquement que VOUS avez déjà transmis cette FSE depuis ${lpsLabel}.`
+    )) return;
     setActionId(id);
     try { await idelMarquerTransmis(id); charger(); if (panneau?.id === id) setPanneau(null); }
     catch (e) { setError(e instanceof ApiError ? e.message : "Erreur"); }
@@ -725,9 +742,12 @@ export default function IdelPage() {
                     className="rounded-lg border border-violet/40 bg-violet/10 px-4 py-2 text-center text-sm font-medium text-violet hover:bg-violet/20 disabled:opacity-50">
                     {ficheLoading ? "…" : "↓ Fiche de reprise"}
                   </button>
+                  <p className="text-center text-[10px] text-textMuted italic">
+                    Mutatech ne transmet rien à la CPAM : le bouton ci-dessous ne fait que noter que vous l'avez fait vous-même.
+                  </p>
                   <button onClick={() => handleMarquerTransmis(panneau.id)} disabled={actionId === panneau.id}
                     className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-black disabled:opacity-50">
-                    {actionId === panneau.id ? "…" : "✓ Transmis depuis mon LPS"}
+                    {actionId === panneau.id ? "…" : "✓ J'ai transmis via mon LPS"}
                   </button>
                   <button onClick={() => handleAnnulerCotation(panneau.id)} disabled={actionId === panneau.id}
                     className="rounded-lg border border-amber/40 bg-amber/5 px-4 py-2 text-center text-xs font-medium text-amber hover:bg-amber/10 disabled:opacity-50">
@@ -735,7 +755,11 @@ export default function IdelPage() {
                   </button>
                 </div>
               )}
-              {panneau.statut === "traite" && <p className="text-xs text-teal text-center">✓ Transmise à la CPAM</p>}
+              {panneau.statut === "traite" && (
+                <p className="text-xs text-teal text-center">
+                  ✓ Transmission confirmée par vous {moi?.lps_utilise && `(via ${LPS_LABELS[moi.lps_utilise] ?? moi.lps_utilise})`}
+                </p>
+              )}
             </div>
           </div>
         )}

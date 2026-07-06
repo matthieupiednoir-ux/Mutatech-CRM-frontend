@@ -319,6 +319,28 @@ export interface AgentResponse {
 // --- IDEL ---
 export type ZoneDeplacement = "plaine" | "montagne" | "tres_montagneux";
 
+export type LpsChoisi =
+  | "vega" | "albus" | "simply_vitale" | "agathe_you"
+  | "ozzen" | "desmos" | "carecare" | "infimax" | "autre";
+
+export interface IdelMe {
+  id: string;
+  email: string;
+  nom: string;
+  prenom: string;
+  lps_utilise: LpsChoisi;
+  ville?: string | null;
+  telephone?: string | null;
+  numero_adeli_rpps?: string | null;
+}
+
+export interface IdelUpdateInput {
+  lps_utilise?: LpsChoisi;
+  ville?: string | null;
+  telephone?: string | null;
+  numero_adeli_rpps?: string | null;
+}
+
 export interface IdelPatient {
   id: string;
   nom: string;

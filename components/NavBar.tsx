@@ -22,6 +22,7 @@ const ONGLETS_IDEL = [
   { href: "/idel", label: "Pipeline" },
   { href: "/idel/patients", label: "Patients" },
   { href: "/idel/comptabilite", label: "Trésorerie" },
+  { href: "/idel/parametres", label: "Paramètres" },
 ];
 
 export default function NavBar() {

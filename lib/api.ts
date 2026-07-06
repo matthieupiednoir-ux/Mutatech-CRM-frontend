@@ -11,6 +11,7 @@ import {
   CreerClientInput, ClientCreeOut,
   AgentMessage, AgentResponse,
   IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem, FicheReprise,
+  IdelMe, IdelUpdateInput,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
 
@@ -243,6 +244,12 @@ export const idelFicheReprise = (id: string) =>
 export const idelGetPatients = () => requeteIdel<IdelPatient[]>("/api/patients");
 export const idelCreerPatient = (data: Partial<IdelPatient>) =>
   requeteIdel<IdelPatient>("/api/patients", { method: "POST", body: JSON.stringify(data) });
+
+// Profil IDEL (notamment le LPS utilise, pour un affichage honnete dans
+// le pipeline -- Mutatech ne transmet jamais rien elle-meme).
+export const idelGetMe = () => requeteIdel<IdelMe>("/api/auth/me");
+export const idelUpdateMe = (data: IdelUpdateInput) =>
+  requeteIdel<IdelMe>("/api/auth/me", { method: "PUT", body: JSON.stringify(data) });
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[] | null | undefined, tauxTva: number) {
