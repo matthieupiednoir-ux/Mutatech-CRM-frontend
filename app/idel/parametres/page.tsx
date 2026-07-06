@@ -67,8 +67,10 @@ export default function ParametresPage() {
       <main className="mx-auto max-w-2xl px-4 py-8">
         <h1 className="font-display text-2xl font-bold text-textPrimary mb-1">Paramètres</h1>
         <p className="text-sm text-textMuted mb-6">
-          Ces informations servent uniquement à personnaliser l'affichage — Mutatech ne se
-          connecte à aucun de ces logiciels et ne transmet rien à votre place.
+          Ces informations personnalisent l'affichage et serviront de base à une future
+          intégration directe si votre éditeur LPS propose un jour un accès technique.
+          Aujourd'hui, aucun n'en documente publiquement — l'export CSV et la fiche de
+          reprise sont la solution de démarrage en attendant.
         </p>
 
         {loading ? (
@@ -93,8 +95,9 @@ export default function ParametresPage() {
                 ))}
               </select>
               <p className="mt-1 text-[11px] text-textMuted">
-                Sert uniquement à afficher le bon nom lors de la confirmation de transmission
-                dans le Pipeline — aucune intégration technique n'existe avec ces éditeurs.
+                Sert à afficher le bon nom lors de la confirmation de transmission, et à
+                préparer une intégration API directe le jour où votre éditeur en proposera
+                une — aucun ne le fait à ce jour.
               </p>
             </div>
 
