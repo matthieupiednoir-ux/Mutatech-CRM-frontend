@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import NavBar from "@/components/NavBar";
 import {
   idelGetOrdonnances, idelUploaderOrdonnance,
-  idelProposerCotation, idelValiderCotation,
+  idelProposerCotation, idelValiderCotation, idelAnnulerCotation,
   idelMarquerTransmis, idelExporterCsv, idelFicheReprise,
   idelGetPatients, idelCreerPatient, chatAgent, ApiError,
 } from "@/lib/api";
 import {
-  IdelOrdonnance, CotationOut, IdelPatient, CotationValidationItem,
+  IdelOrdonnance, CotationOut, IdelPatient, CotationValidationItem, FicheReprise,
   ZoneDeplacement, LigneCotationCalculee, DetailCotationNGAP,
 } from "@/lib/types";
 
@@ -135,6 +135,11 @@ export default function IdelPage() {
   const [panneau, setPanneau] = useState<IdelOrdonnance | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
+  // Export CSV / Fiche de reprise
+  const [ficheReprise, setFicheReprise] = useState<FicheReprise | null>(null);
+  const [ficheLoading, setFicheLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+
   // Cotation
   const [cotProp, setCotProp] = useState<CotationOut[] | null>(null);
   const [cotLoading, setCotLoading] = useState(false);
@@ -252,6 +257,49 @@ export default function IdelPage() {
     try { await idelMarquerTransmis(id); charger(); if (panneau?.id === id) setPanneau(null); }
     catch (e) { setError(e instanceof ApiError ? e.message : "Erreur"); }
     finally { setActionId(null); }
+  }
+
+  async function handleAnnulerCotation(id: string) {
+    if (!confirm("Annuler cette cotation et repartir de zéro ?")) return;
+    setActionId(id);
+    try {
+      const miseAJour = await idelAnnulerCotation(id);
+      setCotProp(null); setCotErr(null); setCotValidee(false);
+      setPanneau(miseAJour);
+      charger();
+    } catch (e) { setError(e instanceof ApiError ? e.message : "Erreur lors de l'annulation"); }
+    finally { setActionId(null); }
+  }
+
+  async function handleExporterCsv(id: string) {
+    setExportLoading(true);
+    try {
+      const blob = await idelExporterCsv(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `export_idel_${id}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors de l'export CSV");
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
+  async function handleFicheReprise(id: string) {
+    setFicheLoading(true);
+    try {
+      const data = await idelFicheReprise(id);
+      setFicheReprise(data);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors du chargement de la fiche");
+    } finally {
+      setFicheLoading(false);
+    }
   }
 
   async function handleCreerPatient(e: React.FormEvent) {
@@ -669,13 +717,21 @@ export default function IdelPage() {
 
               {panneau.statut === "en_cours" && cotExist.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  <a href={idelExporterCsv(panneau.id)} target="_blank" rel="noopener noreferrer"
-                    className="rounded-lg border border-teal/40 bg-teal/10 px-4 py-2 text-center text-sm font-medium text-teal hover:bg-teal/20">↓ Export CSV</a>
-                  <a href={idelFicheReprise(panneau.id)} target="_blank" rel="noopener noreferrer"
-                    className="rounded-lg border border-violet/40 bg-violet/10 px-4 py-2 text-center text-sm font-medium text-violet hover:bg-violet/20">↓ Fiche de reprise</a>
+                  <button onClick={() => handleExporterCsv(panneau.id)} disabled={exportLoading}
+                    className="rounded-lg border border-teal/40 bg-teal/10 px-4 py-2 text-center text-sm font-medium text-teal hover:bg-teal/20 disabled:opacity-50">
+                    {exportLoading ? "…" : "↓ Export CSV"}
+                  </button>
+                  <button onClick={() => handleFicheReprise(panneau.id)} disabled={ficheLoading}
+                    className="rounded-lg border border-violet/40 bg-violet/10 px-4 py-2 text-center text-sm font-medium text-violet hover:bg-violet/20 disabled:opacity-50">
+                    {ficheLoading ? "…" : "↓ Fiche de reprise"}
+                  </button>
                   <button onClick={() => handleMarquerTransmis(panneau.id)} disabled={actionId === panneau.id}
                     className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-black disabled:opacity-50">
                     {actionId === panneau.id ? "…" : "✓ Transmis depuis mon LPS"}
+                  </button>
+                  <button onClick={() => handleAnnulerCotation(panneau.id)} disabled={actionId === panneau.id}
+                    className="rounded-lg border border-amber/40 bg-amber/5 px-4 py-2 text-center text-xs font-medium text-amber hover:bg-amber/10 disabled:opacity-50">
+                    ↺ Annuler cette cotation et refaire
                   </button>
                 </div>
               )}
@@ -685,6 +741,74 @@ export default function IdelPage() {
         )}
 
         <p className="mt-8 text-[11px] text-textMuted">⚠ Cotation indicative (Art.11B NGAP). Ne se substitue pas à votre LPS agréé SESAM-Vitale.</p>
+
+        {/* ===== MODAL FICHE DE REPRISE ===== */}
+        {ficheReprise && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:bg-white print:p-0"
+            onClick={(e) => { if (e.target === e.currentTarget) setFicheReprise(null); }}>
+            <div className="w-full max-w-lg rounded-2xl bg-surface p-6 max-h-[90vh] overflow-y-auto space-y-4 print:max-h-none print:rounded-none print:shadow-none">
+              <div className="flex items-center justify-between print:hidden">
+                <h3 className="font-display text-lg font-bold text-textPrimary">Fiche de reprise</h3>
+                <button onClick={() => setFicheReprise(null)} className="text-textMuted hover:text-textPrimary text-xl">✕</button>
+              </div>
+
+              <div className="text-xs text-textMuted">
+                {ficheReprise.idel} · LPS cible : {ficheReprise.lps_cible}
+              </div>
+
+              <div className="rounded-lg bg-surfaceAlt p-3">
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-textMuted font-medium">Patient</p>
+                <p className="text-sm text-textPrimary">{ficheReprise.patient.nom} {ficheReprise.patient.prenom}</p>
+                {ficheReprise.patient.date_naissance && <p className="text-xs text-textMuted">Né(e) le {ficheReprise.patient.date_naissance}</p>}
+                {ficheReprise.patient.numero_secu && <p className="text-xs text-textMuted">N° sécu : {ficheReprise.patient.numero_secu}</p>}
+              </div>
+
+              {ficheReprise.prescription.medecin && (
+                <div className="rounded-lg bg-surfaceAlt p-3">
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-textMuted font-medium">Prescripteur</p>
+                  <p className="text-sm text-textPrimary">{ficheReprise.prescription.medecin}</p>
+                  {ficheReprise.prescription.date && <p className="text-xs text-textMuted">Le {ficheReprise.prescription.date}</p>}
+                </div>
+              )}
+
+              <div className="rounded-lg bg-surfaceAlt p-3">
+                <p className="mb-2 text-[11px] uppercase tracking-wide text-textMuted font-medium">Actes à saisir</p>
+                <div className="space-y-2">
+                  {ficheReprise.actes_a_saisir.map((a, i) => (
+                    <div key={i} className="flex items-start justify-between gap-2 border-b border-line pb-2 text-xs last:border-0 last:pb-0">
+                      <div>
+                        <p className="font-bold text-textPrimary">{a.code} <span className="font-normal text-textMuted">{a.libelle}</span></p>
+                        <p className="text-[11px] text-textMuted">
+                          Coeff. {a.coefficient ?? "—"} · Qté {a.quantite ?? 1}
+                          {a.majorations.dimanche_ferie && " · MJF"}
+                          {a.majorations.nuit && " · MN"}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-medium text-teal">{(a.montant ?? 0).toFixed(2)} €</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex justify-between border-t border-line pt-2 font-bold">
+                  <span className="text-sm text-textPrimary">Total estimé</span>
+                  <span className="text-teal text-lg">{ficheReprise.montant_total_estime.toFixed(2)} €</span>
+                </div>
+              </div>
+
+              <p className="text-xs italic text-textMuted">{ficheReprise.instructions}</p>
+
+              <div className="flex gap-2 print:hidden">
+                <button onClick={() => window.print()}
+                  className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white hover:bg-violet/90">
+                  🖨 Imprimer
+                </button>
+                <button onClick={() => setFicheReprise(null)}
+                  className="flex-1 rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary">
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

@@ -367,6 +367,35 @@ export interface IdelOrdonnance {
   necessite_validation?: boolean | null;
 }
 
+// --- Fiche de reprise assistée (point 3 : ressaisie manuelle dans le LPS) ---
+export interface FicheRepriseActe {
+  code: string;
+  libelle?: string | null;
+  coefficient?: number | null;
+  quantite?: number | null;
+  majorations: { dimanche_ferie: boolean; nuit: boolean };
+  montant?: number | null;
+}
+
+export interface FicheReprise {
+  idel: string;
+  lps_cible: string;
+  patient: {
+    nom: string;
+    prenom: string;
+    date_naissance?: string | null;
+    numero_secu?: string | null;
+  };
+  prescription: {
+    medecin?: string | null;
+    rpps?: string | null;
+    date?: string | null;
+  };
+  actes_a_saisir: FicheRepriseActe[];
+  montant_total_estime: number;
+  instructions: string;
+}
+
 // --- Calcul NGAP Article 11B ---
 export interface LigneCotationCalculee {
   code_acte: string;

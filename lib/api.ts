@@ -10,7 +10,7 @@ import {
   AuthResponse, UserMe, TenantConfig,
   CreerClientInput, ClientCreeOut,
   AgentMessage, AgentResponse,
-  IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem,
+  IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem, FicheReprise,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
 
@@ -69,6 +69,21 @@ function requeteIdel<T>(chemin: string, options?: RequestInit): Promise<T> {
     }
     return res.json() as Promise<T>;
   });
+}
+
+// Comme requeteIdel, mais pour recuperer un fichier binaire (CSV, etc.) --
+// necessaire car un <a href> classique ne peut pas transporter le header
+// Authorization : le navigateur ferait alors une requete non authentifiee.
+async function requeteIdelBlob(chemin: string): Promise<Blob> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${IDEL_API_URL}${chemin}`, { headers });
+  if (!res.ok) {
+    const corps = await res.text();
+    throw new ApiError(corps || `Erreur ${res.status}`);
+  }
+  return res.blob();
 }
 
 // --- Auth CRM ---
@@ -202,17 +217,28 @@ export const idelValiderCotation = (
     }),
   });
 
+// Annule une cotation validee par erreur, pour la refaire depuis zero.
+// Uniquement possible tant que l'ordonnance est encore 'en_cours'.
+export const idelAnnulerCotation = (id: string) =>
+  requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${id}/cotation`, {
+    method: "DELETE",
+  });
+
 export const idelMarquerTransmis = (id: string) =>
   requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${id}/marquer-transmis`, {
     method: "POST",
     body: JSON.stringify({ lps_choisi: "logiciel_metier" }),
   });
 
+// Retourne le CSV comme Blob (telechargement authentifie) -- ne peut pas
+// etre un simple lien <a href>, qui ne transporterait pas le token.
 export const idelExporterCsv = (id: string) =>
-  `${IDEL_API_URL}/api/encours/ordonnances/${id}/export-csv`;
+  requeteIdelBlob(`/api/encours/ordonnances/${id}/export-csv`);
 
+// Renvoie la fiche de reprise structuree (JSON), a afficher a l'ecran --
+// ce n'est pas un fichier, contrairement a l'export CSV.
 export const idelFicheReprise = (id: string) =>
-  `${IDEL_API_URL}/api/encours/ordonnances/${id}/fiche-reprise`;
+  requeteIdel<FicheReprise>(`/api/encours/ordonnances/${id}/fiche-reprise`);
 
 export const idelGetPatients = () => requeteIdel<IdelPatient[]>("/api/patients");
 export const idelCreerPatient = (data: Partial<IdelPatient>) =>
