@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { idelGetPatients, idelCreerPatient, ApiError } from "@/lib/api";
+import { idelGetPatients, idelCreerPatient, idelImporterPatientsLot, ApiError } from "@/lib/api";
 import { IdelPatient, ZoneDeplacement } from "@/lib/types";
 
 const ZONES: { value: ZoneDeplacement; label: string; ik: number }[] = [
@@ -34,6 +34,42 @@ function safeArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+// Colonnes attendues, dans cet ordre, separateur point-virgule (export Excel FR standard) :
+// nom;prenom;date_naissance;numero_secu;telephone;adresse;medecin_traitant;zone_deplacement;distance_km;notes
+const COLONNES_CSV = [
+  "nom", "prenom", "date_naissance", "numero_secu", "telephone",
+  "adresse", "medecin_traitant", "zone_deplacement", "distance_km", "notes",
+] as const;
+
+function parseCsv(texte: string): Partial<IdelPatient>[] {
+  const lignes = texte.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lignes.length === 0) return [];
+
+  // Detecte le separateur (';' prioritaire car standard Excel FR, sinon ',')
+  const sep = lignes[0].includes(";") ? ";" : ",";
+  const entete = lignes[0].split(sep).map((c) => c.trim().toLowerCase());
+  const debutDonnees = COLONNES_CSV.some((c) => entete.includes(c)) ? 1 : 0;
+
+  return lignes.slice(debutDonnees).map((ligne) => {
+    const valeurs = ligne.split(sep).map((v) => v.trim());
+    const obj: Record<string, string> = {};
+    COLONNES_CSV.forEach((col, i) => { obj[col] = valeurs[i] ?? ""; });
+    const zone = obj.zone_deplacement as ZoneDeplacement;
+    return {
+      nom: obj.nom,
+      prenom: obj.prenom,
+      date_naissance: obj.date_naissance || null,
+      numero_secu: obj.numero_secu || null,
+      telephone: obj.telephone || null,
+      adresse: obj.adresse || null,
+      medecin_traitant: obj.medecin_traitant || null,
+      zone_deplacement: ["plaine", "montagne", "tres_montagneux"].includes(zone) ? zone : "plaine",
+      distance_km: obj.distance_km ? parseFloat(obj.distance_km.replace(",", ".")) : null,
+      notes: obj.notes || null,
+    };
+  }).filter((p) => p.nom && p.prenom);
+}
+
 export default function IdelPatientsPage() {
   const [patients, setPatients] = useState<IdelPatient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +78,12 @@ export default function IdelPatientsPage() {
   const [form, setForm] = useState<PatientForm>({ ...VIDE });
   const [enregistrement, setEnregistrement] = useState(false);
   const [recherche, setRecherche] = useState("");
+
+  // Import CSV/Excel
+  const [apercu, setApercu] = useState<Partial<IdelPatient>[] | null>(null);
+  const [importEnCours, setImportEnCours] = useState(false);
+  const [importErreur, setImportErreur] = useState<string | null>(null);
+  const [importSucces, setImportSucces] = useState<string | null>(null);
 
   function charger() {
     setLoading(true);
@@ -85,6 +127,42 @@ export default function IdelPatientsPage() {
     }
   }
 
+  function handleFichierCsv(e: React.ChangeEvent<HTMLInputElement>) {
+    const fichier = e.target.files?.[0];
+    if (!fichier) return;
+    setImportErreur(null); setImportSucces(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const lignes = parseCsv(String(reader.result ?? ""));
+        if (lignes.length === 0) {
+          setImportErreur("Aucune ligne exploitable trouvée (colonnes attendues : nom, prenom, ...).");
+          return;
+        }
+        setApercu(lignes);
+      } catch {
+        setImportErreur("Fichier illisible. Vérifiez qu'il s'agit bien d'un CSV (séparateur ; ou ,).");
+      }
+    };
+    reader.readAsText(fichier, "utf-8");
+    e.target.value = "";
+  }
+
+  async function handleConfirmerImport() {
+    if (!apercu) return;
+    setImportEnCours(true); setImportErreur(null);
+    try {
+      const crees = await idelImporterPatientsLot(apercu);
+      setImportSucces(`${crees.length} patient${crees.length > 1 ? "s" : ""} importé${crees.length > 1 ? "s" : ""} avec succès.`);
+      setApercu(null);
+      charger();
+    } catch (e) {
+      setImportErreur(e instanceof ApiError ? e.message : "Erreur lors de l'import.");
+    } finally {
+      setImportEnCours(false);
+    }
+  }
+
   const patientsFiltres = safeArr<IdelPatient>(patients).filter((p) => {
     if (!recherche) return true;
     const q = recherche.toLowerCase();
@@ -114,11 +192,62 @@ export default function IdelPatientsPage() {
               {patients.length} patient{patients.length !== 1 ? "s" : ""} · Zone et distance pour le calcul IK
             </p>
           </div>
-          <button onClick={() => { setForm({ ...VIDE }); setFormOuvert(true); }}
-            className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
-            + Nouveau patient
-          </button>
+          <div className="flex gap-2">
+            <label className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-textMuted hover:border-violet hover:text-textPrimary">
+              📥 Importer CSV/Excel
+              <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFichierCsv} />
+            </label>
+            <button onClick={() => { setForm({ ...VIDE }); setFormOuvert(true); }}
+              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
+              + Nouveau patient
+            </button>
+          </div>
         </div>
+
+        {importErreur && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{importErreur}</p>}
+        {importSucces && <p className="mb-4 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">✓ {importSucces}</p>}
+
+        {apercu && (
+          <div className="mb-8 rounded-xl border border-violet/30 bg-violet/5 p-5">
+            <h2 className="font-display text-lg text-textPrimary mb-1">Aperçu de l'import</h2>
+            <p className="mb-4 text-sm text-textMuted">
+              {apercu.length} patient{apercu.length > 1 ? "s" : ""} détecté{apercu.length > 1 ? "s" : ""} dans le fichier. Vérifiez avant de confirmer.
+            </p>
+            <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-line bg-surface">
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-surfaceAlt text-textMuted">
+                  <tr>
+                    <th className="px-3 py-2">Nom</th>
+                    <th className="px-3 py-2">Prénom</th>
+                    <th className="px-3 py-2">Adresse</th>
+                    <th className="px-3 py-2">Zone</th>
+                    <th className="px-3 py-2">Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apercu.map((p, i) => (
+                    <tr key={i} className="border-t border-line">
+                      <td className="px-3 py-1.5 text-textPrimary">{p.nom}</td>
+                      <td className="px-3 py-1.5 text-textPrimary">{p.prenom}</td>
+                      <td className="px-3 py-1.5 text-textMuted">{p.adresse ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-textMuted">{p.zone_deplacement ?? "plaine"}</td>
+                      <td className="px-3 py-1.5 text-textMuted">{p.distance_km ?? "—"} km</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleConfirmerImport} disabled={importEnCours}
+                className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50">
+                {importEnCours ? "Import…" : `✓ Confirmer l'import de ${apercu.length} patient${apercu.length > 1 ? "s" : ""}`}
+              </button>
+              <button onClick={() => setApercu(null)} className="text-sm text-textMuted hover:text-textPrimary">
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 

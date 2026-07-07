@@ -244,6 +244,8 @@ export const idelFicheReprise = (id: string) =>
 export const idelGetPatients = () => requeteIdel<IdelPatient[]>("/api/patients");
 export const idelCreerPatient = (data: Partial<IdelPatient>) =>
   requeteIdel<IdelPatient>("/api/patients", { method: "POST", body: JSON.stringify(data) });
+export const idelImporterPatientsLot = (data: Partial<IdelPatient>[]) =>
+  requeteIdel<IdelPatient[]>("/api/patients/import-lot", { method: "POST", body: JSON.stringify(data) });
 
 // Profil IDEL (notamment le LPS utilise, pour un affichage honnete dans
 // le pipeline -- Mutatech ne transmet jamais rien elle-meme).
