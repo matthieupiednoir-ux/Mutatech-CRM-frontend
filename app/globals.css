@@ -8,22 +8,113 @@ html {
 
 body {
   background-color: #0f0f1e;
-  background-image:
-    radial-gradient(circle at 15% 0%, rgba(108, 99, 255, 0.12), transparent 40%),
-    radial-gradient(circle at 85% 100%, rgba(0, 212, 170, 0.08), transparent 45%);
   color: #f4f4fa;
+  transition: background-image 0.7s ease;
+}
+
+/* Mode CRM (Pixel) -- aura violette dominante */
+body[data-mode="crm"] {
+  --accent: #6C63FF;
+  --accent-soft: rgba(108, 99, 255, 0.12);
+  background-image:
+    radial-gradient(circle at 12% -8%, rgba(108, 99, 255, 0.24), transparent 42%),
+    radial-gradient(circle at 90% 105%, rgba(0, 212, 170, 0.05), transparent 45%);
+}
+
+/* Mode IDEL / PSDM (Nova) -- aura teal dominante */
+body[data-mode="idel"] {
+  --accent: #00D4AA;
+  --accent-soft: rgba(0, 212, 170, 0.12);
+  background-image:
+    radial-gradient(circle at 88% -8%, rgba(0, 212, 170, 0.24), transparent 42%),
+    radial-gradient(circle at 10% 105%, rgba(108, 99, 255, 0.05), transparent 45%);
+}
+
+/* Mode Admin -- neutre, ambre (ni Pixel ni Nova, la main de Mutatech) */
+body[data-mode="admin"] {
+  --accent: #F5A623;
+  --accent-soft: rgba(245, 166, 35, 0.10);
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(108, 99, 255, 0.10), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(0, 212, 170, 0.10), transparent 45%);
 }
 
 :focus-visible {
-  outline: 2px solid #00d4aa;
+  outline: 2px solid var(--accent, #00d4aa);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
+  * ,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* --- Anneau 3D de KPI (dashboard) --- */
+.kpi3d-scene {
+  position: relative;
+  height: 260px;
+  margin: 0 auto 2rem;
+  max-width: 620px;
+  perspective: 1100px;
+}
+
+.kpi3d-ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation-name: kpi3d-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.kpi3d-scene:hover .kpi3d-ring,
+.kpi3d-scene:focus-within .kpi3d-ring {
+  animation-play-state: paused;
+}
+
+.kpi3d-orb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 96px;
+  margin: -48px 0 0 -75px;
+  border-radius: 14px;
+  border: 1px solid;
+  background: rgba(22, 22, 44, 0.78);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.kpi3d-label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9999B5;
+}
+
+.kpi3d-valeur {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+@keyframes kpi3d-spin {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi3d-ring {
+    animation: none;
   }
 }

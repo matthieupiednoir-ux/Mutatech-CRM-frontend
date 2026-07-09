@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
+import Kpi3DRing from "@/components/Kpi3DRing";
 import {
   getClients, getDevisListe, getFacturesListe,
   getTaches, getProspects, getEcheances,
@@ -157,51 +158,51 @@ function Echeances({ modePerso }: { modePerso:boolean }) {
 
   return (
     <div>
-      <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances & Relances</h3>
+      <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances &amp; Relances</h3>
       {loading ? <p className="text-xs text-textMuted">Chargement…</p>
-        : (enRetard.length + aVenir.length + abo.length) === 0
-          ? <p className="text-xs text-textMuted">Tout est à jour.</p>
-          : <div className="grid gap-4 sm:grid-cols-3">
-              {enRetard.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase text-amber">En retard</p>
-                  <div className="space-y-1.5">
-                    {enRetard.map((f: EcheanceFacture) => (
-                      <div key={f.id} className="flex items-center justify-between rounded-lg bg-amber/10 px-2.5 py-1.5">
-                        <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom} <span className="text-textMuted">({f.jours}j · {(f.montant_ttc??0).toFixed(0)}€)</span></span>
-                        {!modePerso && <button onClick={()=>relancer(f.id)} disabled={action===f.id} className="ml-2 rounded bg-amber px-2 py-0.5 text-[10px] text-ink disabled:opacity-50">{action===f.id?"…":"Relancer"}</button>}
-                      </div>
-                    ))}
+      : (enRetard.length + aVenir.length + abo.length) === 0
+      ? <p className="text-xs text-textMuted">Tout est à jour.</p>
+      : <div className="grid gap-4 sm:grid-cols-3">
+          {enRetard.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase text-amber">En retard</p>
+              <div className="space-y-1.5">
+                {enRetard.map((f: EcheanceFacture) => (
+                  <div key={f.id} className="flex items-center justify-between rounded-lg bg-amber/10 px-2.5 py-1.5">
+                    <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom} <span className="text-textMuted">({f.jours}j · {(f.montant_ttc??0).toFixed(0)}€)</span></span>
+                    {!modePerso && <button onClick={()=>relancer(f.id)} disabled={action===f.id} className="ml-2 rounded bg-amber px-2 py-0.5 text-[10px] text-ink disabled:opacity-50">{action===f.id?"…":"Relancer"}</button>}
                   </div>
-                </div>
-              )}
-              {aVenir.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase text-textMuted">À venir</p>
-                  <div className="space-y-1.5">
-                    {aVenir.map((f: EcheanceFacture) => (
-                      <div key={f.id} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
-                        <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom}</span>
-                        <span className="ml-2 text-[11px] text-textMuted">{-(f.jours??0)}j · {(f.montant_ttc??0).toFixed(0)}€</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {abo.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase text-violet">Abonnements</p>
-                  <div className="space-y-1.5">
-                    {abo.map((a: AbonnementAFacturer) => (
-                      <div key={a.devis_id} className="flex items-center justify-between rounded-lg bg-violet/10 px-2.5 py-1.5">
-                        <span className="truncate text-xs text-textPrimary">{a.devis_numero} — {a.client_nom}</span>
-                        {!modePerso && <button onClick={()=>generer(a.devis_id)} disabled={action===a.devis_id} className="ml-2 rounded bg-violet px-2 py-0.5 text-[10px] text-white disabled:opacity-50">{action===a.devis_id?"…":"Générer"}</button>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
+          )}
+          {aVenir.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase text-textMuted">À venir</p>
+              <div className="space-y-1.5">
+                {aVenir.map((f: EcheanceFacture) => (
+                  <div key={f.id} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
+                    <span className="truncate text-xs text-textPrimary">{f.numero} — {f.client_nom}</span>
+                    <span className="ml-2 text-[11px] text-textMuted">{-(f.jours??0)}j · {(f.montant_ttc??0).toFixed(0)}€</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {abo.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase text-violet">Abonnements</p>
+              <div className="space-y-1.5">
+                {abo.map((a: AbonnementAFacturer) => (
+                  <div key={a.devis_id} className="flex items-center justify-between rounded-lg bg-violet/10 px-2.5 py-1.5">
+                    <span className="truncate text-xs text-textPrimary">{a.devis_numero} — {a.client_nom}</span>
+                    {!modePerso && <button onClick={()=>generer(a.devis_id)} disabled={action===a.devis_id} className="ml-2 rounded bg-violet px-2 py-0.5 text-[10px] text-white disabled:opacity-50">{action===a.devis_id?"…":"Générer"}</button>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       }
     </div>
   );
@@ -281,6 +282,17 @@ export default function DashboardPage() {
   const apP = P.slice(0,3).map(p=>({texte:p.nom,sousTexte:LABEL[p.statut]||p.statut,couleur:COULEUR[p.statut]}));
   const apT = T.slice(0,3).map(t=>({texte:t.titre,sousTexte:LABEL[t.statut]||t.statut,couleur:COULEUR[t.statut]}));
 
+  // Donnees du meme calcul, reformatees pour l'anneau 3D -- aucun nouveau
+  // fetch, juste une autre presentation des KPI deja charges plus haut.
+  const kpiRingItems = [
+    { label: "Clients", valeur: String(C.length), couleur: "#6C63FF" },
+    { label: "CA signé", valeur: `${caSigne.toFixed(0)} €`, couleur: "#00D4AA" },
+    { label: "En attente", valeur: `${caEnAttente.toFixed(0)} €`, couleur: "#F5A623" },
+    { label: "Facturé", valeur: `${caFacture.toFixed(0)} €`, couleur: "#6C63FF" },
+    { label: "Tâches", valeur: `${pctT}%`, couleur: "#00D4AA" },
+    { label: "Prospects actifs", valeur: String(pActifs), couleur: "#a89eff" },
+  ];
+
   const visibles = ordre.filter(id=>!masquees.includes(id));
 
   function carte(id: string): React.ReactNode {
@@ -321,6 +333,8 @@ export default function DashboardPage() {
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
+        {!loading && !modePerso && <Kpi3DRing items={kpiRingItems} />}
+
         {modePerso && masquees.length>0 && (
           <div className="mb-6 rounded-xl border border-dashed border-line bg-surface/50 p-4">
             <p className="mb-2 text-xs uppercase tracking-wide text-textMuted">Cartes masquées</p>
@@ -335,19 +349,19 @@ export default function DashboardPage() {
         )}
 
         {loading
-          ? <p className="text-sm text-textMuted">Chargement…</p>
-          : <div className="grid grid-cols-6 gap-4">
-              {visibles.map(id => (
-                <div key={id} className={`${SPAN[tailles[id]||"normal"]} rounded-xl border border-line bg-surface p-4`}>
-                  {carte(id)}
-                  {modePerso && (
-                    <div className="mt-3 flex justify-end">
-                      <button onClick={()=>save(ordre,[...masquees,id],tailles)} className="text-[10px] text-textMuted hover:text-amber">Masquer</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+        ? <p className="text-sm text-textMuted">Chargement…</p>
+        : <div className="grid grid-cols-6 gap-4">
+            {visibles.map(id => (
+              <div key={id} className={`${SPAN[tailles[id]||"normal"]} rounded-xl border border-line bg-surface p-4`}>
+                {carte(id)}
+                {modePerso && (
+                  <div className="mt-3 flex justify-end">
+                    <button onClick={()=>save(ordre,[...masquees,id],tailles)} className="text-[10px] text-textMuted hover:text-amber">Masquer</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         }
       </main>
     </>

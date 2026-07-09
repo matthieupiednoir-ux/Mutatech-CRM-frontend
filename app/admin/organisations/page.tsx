@@ -217,23 +217,23 @@ export default function OrganisationsAdminPage() {
           </div>
           <button
             onClick={() => { setFormOuvert(true); setSucces(null); setError(null); }}
-            className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90" style={{ backgroundColor: "var(--accent)" }}
           >
             + Créer une organisation
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</div>
         )}
         {succes && (
-          <div className="mb-4 rounded-lg bg-teal/10 px-4 py-3 text-sm text-teal">{succes}</div>
+          <div className="mb-4 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{succes}</div>
         )}
 
         {formOuvert && (
           <form
             onSubmit={handleCreer}
-            className="mb-6 rounded-xl border border-border bg-white p-5 shadow-sm"
+            className="mb-6 rounded-xl border border-line bg-surface p-5"
           >
             <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -243,7 +243,7 @@ export default function OrganisationsAdminPage() {
                   value={form.nom}
                   onChange={(e) => setForm({ ...form, nom: e.target.value })}
                   placeholder="ex: JMS+ PSDM"
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
                 />
               </div>
               <div>
@@ -251,7 +251,7 @@ export default function OrganisationsAdminPage() {
                 <select
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value as OrganizationType })}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
                 >
                   <option value="psdm">PSDM</option>
                   <option value="idel_independant">IDEL indépendante</option>
@@ -263,14 +263,14 @@ export default function OrganisationsAdminPage() {
               <button
                 type="submit"
                 disabled={creation}
-                className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50" style={{ backgroundColor: "var(--accent)" }}
               >
                 {creation ? "Création..." : "Créer"}
               </button>
               <button
                 type="button"
                 onClick={() => setFormOuvert(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm text-textMuted"
+                className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
               >
                 Annuler
               </button>
@@ -285,7 +285,7 @@ export default function OrganisationsAdminPage() {
         ) : (
           <div className="space-y-4">
             {organisations.map((org) => (
-              <div key={org.id} className="rounded-xl border border-border bg-white p-5 shadow-sm">
+              <div key={org.id} className="rounded-xl border border-line bg-surface p-5">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h2 className="font-display text-lg text-textPrimary">{org.nom}</h2>
@@ -297,13 +297,13 @@ export default function OrganisationsAdminPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => toggleMembres(org.id)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-gray-50"
+                      className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-surfaceAlt"
                     >
                       {membresOuvert === org.id ? "Masquer les membres" : "Voir les membres"}
                     </button>
                     <button
                       onClick={() => setOrgUtilisateur(orgUtilisateur === org.id ? null : org.id)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-gray-50"
+                      className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-surfaceAlt"
                     >
                       + Ajouter un utilisateur
                     </button>
@@ -322,7 +322,7 @@ export default function OrganisationsAdminPage() {
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
                           actif
                             ? "bg-teal/10 text-teal ring-1 ring-teal/30"
-                            : "bg-gray-100 text-textMuted ring-1 ring-border"
+                            : "bg-surfaceAlt text-textMuted ring-1 ring-line"
                         }`}
                       >
                         {actif ? "✓ " : ""}
@@ -334,7 +334,7 @@ export default function OrganisationsAdminPage() {
 
                 {/* Liste des membres */}
                 {membresOuvert === org.id && (
-                  <div className="mt-4 rounded-lg border border-border">
+                  <div className="mt-4 rounded-lg border border-line">
                     {chargementMembres === org.id ? (
                       <p className="p-4 text-sm text-textMuted">Chargement des membres...</p>
                     ) : !membres[org.id] || membres[org.id].length === 0 ? (
@@ -342,7 +342,7 @@ export default function OrganisationsAdminPage() {
                     ) : (
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-border bg-gray-50 text-left text-xs text-textMuted">
+                          <tr className="border-b border-line bg-surfaceAlt text-left text-xs text-textMuted">
                             <th className="px-3 py-2 font-medium">Nom</th>
                             <th className="px-3 py-2 font-medium">Email</th>
                             <th className="px-3 py-2 font-medium">Rôle</th>
@@ -354,7 +354,7 @@ export default function OrganisationsAdminPage() {
                           {membres[org.id].map((membre) => {
                             const enCours = actionMembreEnCours === membre.id;
                             return (
-                              <tr key={membre.id} className="border-b border-border last:border-0">
+                              <tr key={membre.id} className="border-b border-line last:border-0">
                                 <td className="px-3 py-2">{membre.prenom} {membre.nom}</td>
                                 <td className="px-3 py-2 text-textMuted">{membre.email}</td>
                                 <td className="px-3 py-2">
@@ -364,7 +364,7 @@ export default function OrganisationsAdminPage() {
                                     onChange={(e) =>
                                       handleChangerRole(org.id, membre, e.target.value as OrgUserRole)
                                     }
-                                    className="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
+                                    className="rounded border border-line bg-surfaceAlt px-2 py-1 text-xs text-textPrimary disabled:opacity-50"
                                   >
                                     <option value="org_admin">{ROLE_LABEL.org_admin}</option>
                                     <option value="gerant">{ROLE_LABEL.gerant}</option>
@@ -379,7 +379,7 @@ export default function OrganisationsAdminPage() {
                                     className={`rounded-full px-2 py-1 text-xs font-medium disabled:opacity-50 ${
                                       membre.actif
                                         ? "bg-teal/10 text-teal"
-                                        : "bg-red-50 text-red-600"
+                                        : "bg-amber/10 text-amber"
                                     }`}
                                   >
                                     {membre.actif ? "Actif" : "Désactivé"}
@@ -406,7 +406,7 @@ export default function OrganisationsAdminPage() {
                 {orgUtilisateur === org.id && (
                   <form
                     onSubmit={(e) => handleCreerUtilisateur(e, org.id)}
-                    className="mt-4 rounded-lg bg-gray-50 p-4"
+                    className="mt-4 rounded-lg bg-surfaceAlt p-4"
                   >
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <input
@@ -414,7 +414,7 @@ export default function OrganisationsAdminPage() {
                         placeholder="Email"
                         value={userForm.email}
                         onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                        className="rounded-lg border border-border px-3 py-2 text-sm"
+                        className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
                       />
                       <input
                         required
@@ -422,26 +422,26 @@ export default function OrganisationsAdminPage() {
                         placeholder="Mot de passe"
                         value={userForm.password}
                         onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                        className="rounded-lg border border-border px-3 py-2 text-sm"
+                        className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
                       />
                       <input
                         required
                         placeholder="Prénom"
                         value={userForm.prenom}
                         onChange={(e) => setUserForm({ ...userForm, prenom: e.target.value })}
-                        className="rounded-lg border border-border px-3 py-2 text-sm"
+                        className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
                       />
                       <input
                         required
                         placeholder="Nom"
                         value={userForm.nom}
                         onChange={(e) => setUserForm({ ...userForm, nom: e.target.value })}
-                        className="rounded-lg border border-border px-3 py-2 text-sm"
+                        className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
                       />
                       <select
                         value={userForm.role}
                         onChange={(e) => setUserForm({ ...userForm, role: e.target.value as OrgUserRole })}
-                        className="rounded-lg border border-border px-3 py-2 text-sm sm:col-span-2"
+                        className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50 sm:col-span-2"
                       >
                         <option value="org_admin">Admin organisation</option>
                         <option value="gerant">Gérant</option>
@@ -453,14 +453,14 @@ export default function OrganisationsAdminPage() {
                       <button
                         type="submit"
                         disabled={creationUser}
-                        className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+                        className="rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50" style={{ backgroundColor: "var(--accent)" }}
                       >
                         {creationUser ? "Création..." : "Créer le compte"}
                       </button>
                       <button
                         type="button"
                         onClick={() => setOrgUtilisateur(null)}
-                        className="rounded-lg border border-border px-4 py-2 text-sm text-textMuted"
+                        className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
                       >
                         Annuler
                       </button>

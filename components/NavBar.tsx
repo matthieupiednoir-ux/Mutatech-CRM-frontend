@@ -52,12 +52,21 @@ function NavBarInterieur() {
   const aAccesIdel = produit === "idel" || produit === "crm+idel";
   const estRoleAdmin = user?.role === "admin" || user?.role === "owner";
 
+  const mode = estAdmin ? "admin" : estIdel ? "idel" : "crm";
+
+  // Pilote l'aura de fond (definie dans globals.css via body[data-mode])
+  // -- violette cote CRM/Pixel, teal cote IDEL-PSDM/Nova, ambre en admin.
+  useEffect(() => {
+    document.body.dataset.mode = mode;
+  }, [mode]);
+
   const onglets = estAdmin ? ONGLETS_ADMIN : estIdel ? ONGLETS_IDEL : ONGLETS_CRM;
   const labelProduit = estAdmin
-    ? "Mutatech / Admin ⚙"
+    ? "Mutatech / Admin"
     : estIdel
-    ? "Mutatech / IDEL 🩺"
-    : "Mutatech / CRM 🧭";
+    ? "Mutatech / IDEL"
+    : "Mutatech / CRM";
+  const mascotteEmoji = estAdmin ? "⚙" : estIdel ? "🩺" : "🧭";
 
   useEffect(() => {
     if (!estIdel && !estAdmin) {
@@ -72,7 +81,6 @@ function NavBarInterieur() {
     router.push("/login");
   }
 
-  // Détermine si un onglet est actif
   function isActive(href: string): boolean {
     if (href === "/idel") return pathname === "/idel";
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -81,11 +89,22 @@ function NavBarInterieur() {
   }
 
   return (
-    <header className="border-b border-line">
+    <header
+      className="relative border-b border-line"
+      style={{ borderBottomColor: "var(--accent-soft, #2A2A4A)" }}
+    >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div className="flex flex-wrap items-center gap-6">
-          <span className="font-display text-sm font-bold text-teal">
+          <span className="flex items-center gap-2 font-display text-sm font-bold text-[var(--accent)]">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{
+                backgroundColor: "var(--accent)",
+                boxShadow: "0 0 8px 1px var(--accent)",
+              }}
+            />
             {labelProduit}
+            <span className="text-xs opacity-70">{mascotteEmoji}</span>
           </span>
 
           <nav className="flex flex-wrap gap-4">
@@ -93,11 +112,12 @@ function NavBarInterieur() {
               <Link
                 key={onglet.href}
                 href={onglet.href}
-                className={`text-sm font-medium transition ${
+                className="text-sm font-medium transition text-textMuted hover:text-textPrimary"
+                style={
                   isActive(onglet.href)
-                    ? "text-violet"
-                    : "text-textMuted hover:text-textPrimary"
-                }`}
+                    ? { color: "var(--accent)" }
+                    : undefined
+                }
               >
                 {onglet.label}
               </Link>
@@ -116,7 +136,8 @@ function NavBarInterieur() {
           {produit === "crm+idel" && !estAdmin && (
             <Link
               href={estIdel ? "/dashboard" : "/idel"}
-              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-textMuted hover:border-violet hover:text-textPrimary transition"
+              className="rounded-lg border px-3 py-1.5 text-xs font-medium text-textMuted transition hover:text-textPrimary"
+              style={{ borderColor: "var(--accent-soft, #2A2A4A)" }}
             >
               {estIdel ? "← CRM" : "IDEL 🩺"}
             </Link>
@@ -125,7 +146,12 @@ function NavBarInterieur() {
           {estRoleAdmin && !estAdmin && (
             <Link
               href="/admin"
-              className="rounded-lg border border-violet/30 bg-violet/5 px-3 py-1.5 text-xs font-medium text-violet hover:bg-violet/10 transition"
+              className="rounded-lg border px-3 py-1.5 text-xs font-medium transition"
+              style={{
+                borderColor: "var(--accent-soft, #2A2A4A)",
+                backgroundColor: "var(--accent-soft, transparent)",
+                color: "var(--accent)",
+              }}
             >
               ⚙ Admin
             </Link>
@@ -134,7 +160,8 @@ function NavBarInterieur() {
           {!estIdel && !estAdmin && googleConnecte === false && (
             <a
               href={urlConnexionGoogle()}
-              className="rounded-lg bg-violet px-3 py-1.5 text-xs font-medium text-white hover:bg-violet/90"
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-white"
+              style={{ backgroundColor: "var(--accent)" }}
             >
               Connecter Google
             </a>
