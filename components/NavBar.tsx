@@ -25,6 +25,11 @@ const ONGLETS_IDEL = [
   { href: "/idel/parametres", label: "Paramètres" },
 ];
 
+const ONGLETS_ADMIN = [
+  { href: "/admin", label: "Clients SaaS" },
+  { href: "/admin/organisations", label: "Organisations & Modules" },
+];
+
 export default function NavBar() {
   return (
     <Suspense fallback={null}>
@@ -45,9 +50,9 @@ function NavBarInterieur() {
   const estAdmin = pathname.startsWith("/admin");
   const aAccesCrm = produit === "crm" || produit === "crm+idel";
   const aAccesIdel = produit === "idel" || produit === "crm+idel";
-  const estRoleAdmin = user?.role === "admin";
+  const estRoleAdmin = user?.role === "admin" || user?.role === "owner";
 
-  const onglets = estIdel ? ONGLETS_IDEL : ONGLETS_CRM;
+  const onglets = estAdmin ? ONGLETS_ADMIN : estIdel ? ONGLETS_IDEL : ONGLETS_CRM;
   const labelProduit = estAdmin
     ? "Mutatech / Admin ⚙"
     : estIdel
@@ -71,6 +76,7 @@ function NavBarInterieur() {
   function isActive(href: string): boolean {
     if (href === "/idel") return pathname === "/idel";
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/admin") return pathname === "/admin";
     return pathname.startsWith(href);
   }
 
@@ -82,23 +88,21 @@ function NavBarInterieur() {
             {labelProduit}
           </span>
 
-          {!estAdmin && (
-            <nav className="flex flex-wrap gap-4">
-              {onglets.map((onglet) => (
-                <Link
-                  key={onglet.href}
-                  href={onglet.href}
-                  className={`text-sm font-medium transition ${
-                    isActive(onglet.href)
-                      ? "text-violet"
-                      : "text-textMuted hover:text-textPrimary"
-                  }`}
-                >
-                  {onglet.label}
-                </Link>
-              ))}
-            </nav>
-          )}
+          <nav className="flex flex-wrap gap-4">
+            {onglets.map((onglet) => (
+              <Link
+                key={onglet.href}
+                href={onglet.href}
+                className={`text-sm font-medium transition ${
+                  isActive(onglet.href)
+                    ? "text-violet"
+                    : "text-textMuted hover:text-textPrimary"
+                }`}
+              >
+                {onglet.label}
+              </Link>
+            ))}
+          </nav>
 
           {estAdmin && (
             <Link href="/dashboard" className="text-sm text-textMuted hover:text-textPrimary">

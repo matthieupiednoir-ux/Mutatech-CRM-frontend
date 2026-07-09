@@ -69,7 +69,7 @@ export default function AdminPage() {
 
   // Rediriger si pas admin
   useEffect(() => {
-    if (user && user.role !== "admin") {
+    if (user && user.role !== "admin" && user.role !== "owner") {
       router.replace("/dashboard");
     }
   }, [user, router]);
@@ -150,7 +150,7 @@ export default function AdminPage() {
     }
   }
 
-  if (user?.role !== "admin") return null;
+  if (user?.role !== "admin" && user?.role !== "owner") return null;
 
   return (
     <>
