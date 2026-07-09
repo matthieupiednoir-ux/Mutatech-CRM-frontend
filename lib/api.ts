@@ -13,6 +13,7 @@ import {
   IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem, FicheReprise,
   IdelMe, IdelUpdateInput,
   Organization, OrganizationCreateInput, OrgUserCreateInput, OrgUserCreeOut, ModuleType,
+  OrgUser, OrgUserUpdateInput,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
 
@@ -275,6 +276,15 @@ export const adminBasculerModule = (orgId: string, module: ModuleType, actif: bo
 export const adminAjouterUtilisateurOrg = (orgId: string, data: OrgUserCreateInput) =>
   requeteIdel<OrgUserCreeOut>(`/admin/organizations/${orgId}/users`, {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const adminListerUtilisateursOrg = (orgId: string) =>
+  requeteIdel<OrgUser[]>(`/admin/organizations/${orgId}/users`);
+
+export const adminModifierUtilisateurOrg = (orgId: string, userId: string, data: OrgUserUpdateInput) =>
+  requeteIdel<OrgUser>(`/admin/organizations/${orgId}/users/${userId}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 

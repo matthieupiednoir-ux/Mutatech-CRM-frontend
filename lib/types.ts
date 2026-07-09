@@ -484,3 +484,21 @@ export const MODULE_LABELS: Record<ModuleType, string> = {
   ordonnances_vision: "Ordonnances (IA)",
   agenda: "Agenda",
 };
+
+export interface OrgUser {
+  id: string;
+  email: string;
+  role: OrgUserRole;
+  nom: string;
+  prenom: string;
+  actif: boolean;
+  date_creation: string;
+}
+
+export interface OrgUserUpdateInput {
+  role?: OrgUserRole;
+  nom?: string;
+  prenom?: string;
+  actif?: boolean;
+  password?: string;
+}

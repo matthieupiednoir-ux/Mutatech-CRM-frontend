@@ -10,12 +10,15 @@ import {
   adminCreerOrganisation,
   adminBasculerModule,
   adminAjouterUtilisateurOrg,
+  adminListerUtilisateursOrg,
+  adminModifierUtilisateurOrg,
 } from "@/lib/api";
 import {
   Organization,
   OrganizationType,
   ModuleType,
   OrgUserRole,
+  OrgUser,
   MODULE_LABELS,
 } from "@/lib/types";
 
@@ -31,6 +34,14 @@ const TYPE_LABEL: Record<OrganizationType, string> = {
   idel_independant: "IDEL indépendante",
   psdm: "PSDM",
   autre: "Autre",
+};
+
+const ROLE_LABEL: Record<OrgUserRole, string> = {
+  mutatech_admin: "Admin Mutatech",
+  org_admin: "Admin organisation",
+  gerant: "Gérant",
+  idec: "IDEC",
+  idel: "IDEL",
 };
 
 export default function OrganisationsAdminPage() {
@@ -54,8 +65,14 @@ export default function OrganisationsAdminPage() {
   });
   const [creationUser, setCreationUser] = useState(false);
 
+  // Membres par organisation
+  const [membres, setMembres] = useState<Record<string, OrgUser[]>>({});
+  const [membresOuvert, setMembresOuvert] = useState<string | null>(null);
+  const [chargementMembres, setChargementMembres] = useState<string | null>(null);
+  const [actionMembreEnCours, setActionMembreEnCours] = useState<string | null>(null);
+
   useEffect(() => {
-    if (user && user.role !== "admin") {
+    if (user && user.role !== "admin" && user.role !== "owner") {
       router.replace("/dashboard");
     }
   }, [user, router]);
@@ -71,6 +88,22 @@ export default function OrganisationsAdminPage() {
   useEffect(() => {
     charger();
   }, []);
+
+  function chargerMembres(orgId: string) {
+    setChargementMembres(orgId);
+    adminListerUtilisateursOrg(orgId)
+      .then((liste) => setMembres((m) => ({ ...m, [orgId]: liste })))
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement des membres"))
+      .finally(() => setChargementMembres(null));
+  }
+
+  function toggleMembres(orgId: string) {
+    const ouvrir = membresOuvert !== orgId;
+    setMembresOuvert(ouvrir ? orgId : null);
+    if (ouvrir && !membres[orgId]) {
+      chargerMembres(orgId);
+    }
+  }
 
   async function handleCreer(e: React.FormEvent) {
     e.preventDefault();
@@ -114,6 +147,8 @@ export default function OrganisationsAdminPage() {
       setSucces(`Compte ${cree.email} (${cree.role}) créé.`);
       setOrgUtilisateur(null);
       setUserForm({ email: "", password: "", role: "org_admin", nom: "", prenom: "" });
+      chargerMembres(orgId);
+      setMembresOuvert(orgId);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur de création du compte.");
     } finally {
@@ -121,7 +156,49 @@ export default function OrganisationsAdminPage() {
     }
   }
 
-  if (user?.role !== "admin") return null;
+  async function handleChangerRole(orgId: string, membre: OrgUser, role: OrgUserRole) {
+    setActionMembreEnCours(membre.id);
+    setError(null);
+    try {
+      await adminModifierUtilisateurOrg(orgId, membre.id, { role });
+      chargerMembres(orgId);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors du changement de rôle.");
+    } finally {
+      setActionMembreEnCours(null);
+    }
+  }
+
+  async function handleToggleActif(orgId: string, membre: OrgUser) {
+    setActionMembreEnCours(membre.id);
+    setError(null);
+    try {
+      await adminModifierUtilisateurOrg(orgId, membre.id, { actif: !membre.actif });
+      chargerMembres(orgId);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors du changement de statut.");
+    } finally {
+      setActionMembreEnCours(null);
+    }
+  }
+
+  async function handleReinitialiserMotDePasse(orgId: string, membre: OrgUser) {
+    const nouveau = prompt(`Nouveau mot de passe pour ${membre.email} :`);
+    if (!nouveau) return;
+    setActionMembreEnCours(membre.id);
+    setError(null);
+    setSucces(null);
+    try {
+      await adminModifierUtilisateurOrg(orgId, membre.id, { password: nouveau });
+      setSucces(`Mot de passe de ${membre.email} réinitialisé.`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors de la réinitialisation.");
+    } finally {
+      setActionMembreEnCours(null);
+    }
+  }
+
+  if (user?.role !== "admin" && user?.role !== "owner") return null;
 
   return (
     <>
@@ -133,9 +210,9 @@ export default function OrganisationsAdminPage() {
               Administration — Organisations &amp; Modules
             </h1>
             <p className="mt-1 text-sm text-textMuted">
-              Crée les organisations clientes (IDEL, PSDM...) et active les
-              modules dont elles disposent. Seul un compte administrateur
-              Mutatech peut activer un module.
+              Crée les organisations clientes (IDEL, PSDM...), active leurs
+              modules et gère leurs membres. Seul un compte administrateur
+              Mutatech peut activer un module ou modifier un rôle.
             </p>
           </div>
           <button
@@ -217,12 +294,20 @@ export default function OrganisationsAdminPage() {
                       {new Date(org.date_creation).toLocaleDateString("fr-FR")}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setOrgUtilisateur(orgUtilisateur === org.id ? null : org.id)}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-gray-50"
-                  >
-                    + Ajouter un utilisateur
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => toggleMembres(org.id)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-gray-50"
+                    >
+                      {membresOuvert === org.id ? "Masquer les membres" : "Voir les membres"}
+                    </button>
+                    <button
+                      onClick={() => setOrgUtilisateur(orgUtilisateur === org.id ? null : org.id)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-gray-50"
+                    >
+                      + Ajouter un utilisateur
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -246,6 +331,77 @@ export default function OrganisationsAdminPage() {
                     );
                   })}
                 </div>
+
+                {/* Liste des membres */}
+                {membresOuvert === org.id && (
+                  <div className="mt-4 rounded-lg border border-border">
+                    {chargementMembres === org.id ? (
+                      <p className="p-4 text-sm text-textMuted">Chargement des membres...</p>
+                    ) : !membres[org.id] || membres[org.id].length === 0 ? (
+                      <p className="p-4 text-sm text-textMuted">Aucun membre pour cette organisation.</p>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border bg-gray-50 text-left text-xs text-textMuted">
+                            <th className="px-3 py-2 font-medium">Nom</th>
+                            <th className="px-3 py-2 font-medium">Email</th>
+                            <th className="px-3 py-2 font-medium">Rôle</th>
+                            <th className="px-3 py-2 font-medium">Statut</th>
+                            <th className="px-3 py-2 font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {membres[org.id].map((membre) => {
+                            const enCours = actionMembreEnCours === membre.id;
+                            return (
+                              <tr key={membre.id} className="border-b border-border last:border-0">
+                                <td className="px-3 py-2">{membre.prenom} {membre.nom}</td>
+                                <td className="px-3 py-2 text-textMuted">{membre.email}</td>
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={membre.role}
+                                    disabled={enCours}
+                                    onChange={(e) =>
+                                      handleChangerRole(org.id, membre, e.target.value as OrgUserRole)
+                                    }
+                                    className="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
+                                  >
+                                    <option value="org_admin">{ROLE_LABEL.org_admin}</option>
+                                    <option value="gerant">{ROLE_LABEL.gerant}</option>
+                                    <option value="idec">{ROLE_LABEL.idec}</option>
+                                    <option value="idel">{ROLE_LABEL.idel}</option>
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    onClick={() => handleToggleActif(org.id, membre)}
+                                    disabled={enCours}
+                                    className={`rounded-full px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                                      membre.actif
+                                        ? "bg-teal/10 text-teal"
+                                        : "bg-red-50 text-red-600"
+                                    }`}
+                                  >
+                                    {membre.actif ? "Actif" : "Désactivé"}
+                                  </button>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    onClick={() => handleReinitialiserMotDePasse(org.id, membre)}
+                                    disabled={enCours}
+                                    className="text-xs text-violet hover:underline disabled:opacity-50"
+                                  >
+                                    Réinitialiser mot de passe
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
 
                 {orgUtilisateur === org.id && (
                   <form
