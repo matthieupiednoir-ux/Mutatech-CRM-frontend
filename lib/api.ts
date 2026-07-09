@@ -12,6 +12,7 @@ import {
   AgentMessage, AgentResponse,
   IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem, FicheReprise,
   IdelMe, IdelUpdateInput,
+  Organization, OrganizationCreateInput, OrgUserCreateInput, OrgUserCreeOut, ModuleType,
 } from "./types";
 import { getToken, sauvegarderAuth, sauvegarderConfig, deconnecter } from "./auth";
 
@@ -252,6 +253,30 @@ export const idelImporterPatientsLot = (data: Partial<IdelPatient>[]) =>
 export const idelGetMe = () => requeteIdel<IdelMe>("/api/auth/me");
 export const idelUpdateMe = (data: IdelUpdateInput) =>
   requeteIdel<IdelMe>("/api/auth/me", { method: "PUT", body: JSON.stringify(data) });
+
+// --- Admin Organisations (multi-tenant PSDM, backend IDEL) ---
+// Reserve aux comptes mutatech_admin cote serveur -- la page qui appelle
+// ces fonctions doit elle-meme filtrer l'acces (cf. app/admin/organisations).
+export const adminListerOrganisations = () =>
+  requeteIdel<Organization[]>("/admin/organizations");
+
+export const adminCreerOrganisation = (data: OrganizationCreateInput) =>
+  requeteIdel<Organization>("/admin/organizations", { method: "POST", body: JSON.stringify(data) });
+
+export const adminVoirOrganisation = (id: string) =>
+  requeteIdel<Organization>(`/admin/organizations/${id}`);
+
+export const adminBasculerModule = (orgId: string, module: ModuleType, actif: boolean) =>
+  requeteIdel<Organization>(`/admin/organizations/${orgId}/modules`, {
+    method: "PUT",
+    body: JSON.stringify({ module, actif }),
+  });
+
+export const adminAjouterUtilisateurOrg = (orgId: string, data: OrgUserCreateInput) =>
+  requeteIdel<OrgUserCreeOut>(`/admin/organizations/${orgId}/users`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 
 // --- Aide calcul ---
 export function calculerTotaux(lignes: Ligne[] | null | undefined, tauxTva: number) {

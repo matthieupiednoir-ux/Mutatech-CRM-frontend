@@ -436,3 +436,51 @@ export interface DetailCotationNGAP {
   majorations: { code: string; label: string; montant: number }[];
   total: number;
 }
+
+// --- Organisations multi-tenant PSDM (backend IDEL) ---
+export type OrganizationType = "idel_independant" | "psdm" | "autre";
+
+export type ModuleType =
+  | "idel_ngap"
+  | "tournees"
+  | "commandes_pharma"
+  | "ordonnances_vision"
+  | "agenda";
+
+export type OrgUserRole = "mutatech_admin" | "org_admin" | "gerant" | "idec" | "idel";
+
+export interface Organization {
+  id: string;
+  nom: string;
+  type: OrganizationType;
+  actif: boolean;
+  date_creation: string;
+  modules_actifs: ModuleType[];
+}
+
+export interface OrganizationCreateInput {
+  nom: string;
+  type: OrganizationType;
+}
+
+export interface OrgUserCreateInput {
+  email: string;
+  password: string;
+  role: OrgUserRole;
+  nom: string;
+  prenom: string;
+}
+
+export interface OrgUserCreeOut {
+  id: string;
+  email: string;
+  role: OrgUserRole;
+}
+
+export const MODULE_LABELS: Record<ModuleType, string> = {
+  idel_ngap: "NGAP / Cotation",
+  tournees: "Tournées",
+  commandes_pharma: "Commandes Pharma",
+  ordonnances_vision: "Ordonnances (IA)",
+  agenda: "Agenda",
+};
