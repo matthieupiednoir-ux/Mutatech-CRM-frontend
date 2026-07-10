@@ -340,6 +340,13 @@ export interface MonOrganisation {
 export const monOrganisation = () => requeteIdel<MonOrganisation>("/auth-org/me/organization");
 
 // --- Module Tournees ---
+export interface VisitItem {
+  id: string;
+  label: string;
+  quantity: number;
+  unit: string;
+  product_id?: string | null;
+}
 export interface TourneeVisit {
   id: string;
   patient_id: string;
@@ -352,6 +359,7 @@ export interface TourneeVisit {
   status: string;
   notes?: string | null;
   ordre: number;
+  items: VisitItem[];
 }
 export interface Tournee {
   id: string;
@@ -373,6 +381,15 @@ export const tourneesModifierVisite = (tourneeId: string, visitId: string, data:
 }) => requeteIdel<TourneeVisit>(`/api/tournees/${tourneeId}/visits/${visitId}`, { method: "PUT", body: JSON.stringify(data) });
 export const tourneesSupprimerVisite = (tourneeId: string, visitId: string) =>
   requeteIdel<{ ok: boolean }>(`/api/tournees/${tourneeId}/visits/${visitId}`, { method: "DELETE" });
+
+export const tourneesAjouterItem = (tourneeId: string, visitId: string, data: {
+  label: string; quantity?: number; unit?: string; product_id?: string;
+}) => requeteIdel<unknown>(`/api/tournees/${tourneeId}/visits/${visitId}/items`, { method: "POST", body: JSON.stringify(data) })
+  .then(() => tourneesVoir(tourneeId));
+
+export const tourneesSupprimerItem = (tourneeId: string, visitId: string, itemId: string) =>
+  requeteIdel<unknown>(`/api/tournees/${tourneeId}/visits/${visitId}/items/${itemId}`, { method: "DELETE" })
+  .then(() => tourneesVoir(tourneeId));
 
 // --- Module Commandes Pharma ---
 export interface Pharmacy {

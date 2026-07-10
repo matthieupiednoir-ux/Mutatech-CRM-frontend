@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import Kpi3DRing from "@/components/Kpi3DRing";
+import ChatAgentPanel from "@/components/ChatAgentPanel";
 import {
   getClients, getDevisListe, getFacturesListe,
   getTaches, getProspects, getEcheances,
@@ -41,13 +42,13 @@ type Taille = "small" | "normal" | "large";
 
 const ORDRE_DEFAUT = [
   "kpi-clients","kpi-ca-signe","kpi-en-attente","kpi-facture","kpi-taches","kpi-prospects",
-  "echeances","apercu-devis","apercu-prospects","apercu-factures","apercu-taches",
+  "agent-ia","echeances","apercu-devis","apercu-prospects","apercu-factures","apercu-taches",
   "graph-devis","graph-prospects","graph-factures","graph-taches",
 ];
 const TAILLE_DEFAUT: Record<string, Taille> = {
   "kpi-clients":"small","kpi-ca-signe":"small","kpi-en-attente":"small",
   "kpi-facture":"small","kpi-taches":"small","kpi-prospects":"small",
-  echeances:"large","apercu-devis":"normal","apercu-prospects":"normal",
+  "agent-ia":"large",echeances:"large","apercu-devis":"normal","apercu-prospects":"normal",
   "apercu-factures":"normal","apercu-taches":"normal",
   "graph-devis":"normal","graph-prospects":"normal","graph-factures":"normal","graph-taches":"normal",
 };
@@ -55,7 +56,7 @@ const TITRES: Record<string, string> = {
   "kpi-clients":"KPI · Clients","kpi-ca-signe":"KPI · CA signé",
   "kpi-en-attente":"KPI · En attente","kpi-facture":"KPI · Facturé",
   "kpi-taches":"KPI · Tâches","kpi-prospects":"KPI · Prospects",
-  echeances:"Échéances","apercu-devis":"Aperçu Devis","apercu-prospects":"Aperçu Prospects",
+  "agent-ia":"Agent IA",echeances:"Échéances","apercu-devis":"Aperçu Devis","apercu-prospects":"Aperçu Prospects",
   "apercu-factures":"Aperçu Factures","apercu-taches":"Aperçu Tâches",
   "graph-devis":"Graph Devis","graph-prospects":"Graph Prospects",
   "graph-factures":"Graph Factures","graph-taches":"Graph Tâches",
@@ -303,6 +304,7 @@ export default function DashboardPage() {
       case "kpi-facture": return <KpiCard label="Facturé" valeur={`${caFacture.toFixed(0)} €`} couleur="text-violet" />;
       case "kpi-taches": return <KpiCard label="Tâches" valeur={`${pctT}%`} sousLabel={`${tDone}/${T.length}`} />;
       case "kpi-prospects": return <KpiCard label="Prospects actifs" valeur={String(pActifs)} sousLabel={`${pctConv}% convertis`} />;
+      case "agent-ia": return <div className="h-[420px]"><ChatAgentPanel compact /></div>;
       case "echeances": return <Echeances modePerso={modePerso} />;
       case "apercu-devis": return <AperculCard titre="Devis" lien="/devis" items={apD} modePerso={modePerso} />;
       case "apercu-prospects": return <AperculCard titre="Prospects" lien="/prospects" items={apP} modePerso={modePerso} />;
