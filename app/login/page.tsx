@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { loginCrm, loginGoogle, getTenantConfig, ApiError } from "@/lib/api";
+import { loginCrm, loginOrg, loginGoogle, getTenantConfig, ApiError } from "@/lib/api";
 
 declare global {
   interface Window {
@@ -82,18 +82,28 @@ function LoginForm() {
     try {
       const auth = await loginCrm({ email, mot_de_passe: motDePasse });
       await chargerConfigEtRediriger(auth.produit);
-    } catch (e) {
-      let msg = "Email ou mot de passe incorrect.";
-      if (e instanceof ApiError) {
-        try {
-          const parsed = JSON.parse(e.message);
-          msg = parsed.detail ?? e.message;
-        } catch {
-          msg = e.message;
+      return;
+    } catch (erreurCrm) {
+      // Compte introuvable cote CRM classique -- on tente le backend
+      // organisations (JMS+ / PSDM) avant d'abandonner. Meme formulaire,
+      // detection automatique, transparente pour l'utilisateur.
+      try {
+        const auth = await loginOrg({ email, mot_de_passe: motDePasse });
+        await chargerConfigEtRediriger(auth.produit);
+        return;
+      } catch {
+        let msg = "Email ou mot de passe incorrect.";
+        if (erreurCrm instanceof ApiError) {
+          try {
+            const parsed = JSON.parse(erreurCrm.message);
+            msg = parsed.detail ?? erreurCrm.message;
+          } catch {
+            msg = erreurCrm.message;
+          }
         }
+        setErreur(msg);
+        setChargement(false);
       }
-      setErreur(msg);
-      setChargement(false);
     }
   }
 

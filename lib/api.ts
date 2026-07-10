@@ -102,6 +102,34 @@ export const loginGoogle = async (id_token: string): Promise<AuthResponse> => {
   const auth = await requete<AuthResponse>("/api/auth/crm/google", { method: "POST", body: JSON.stringify({ id_token }) });
   sauvegarderAuth(auth); return auth;
 };
+
+// Connexion pour les comptes multi-organisation (JMS+ / PSDM), stockes
+// sur le backend IDEL et non sur le backend CRM classique. Adapte la
+// reponse au format AuthResponse pour reutiliser sauvegarderAuth() et
+// tout le reste du systeme de session sans le dupliquer.
+export const loginOrg = async (data: { email: string; mot_de_passe: string }): Promise<AuthResponse> => {
+  const res = await fetch(`${IDEL_API_URL}/auth-org/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: data.email, password: data.mot_de_passe }),
+  });
+  if (!res.ok) {
+    const corps = await res.text();
+    throw new ApiError(corps || `Erreur ${res.status}`);
+  }
+  const brut = await res.json();
+  const auth: AuthResponse = {
+    access_token: brut.access_token,
+    token_type: brut.token_type,
+    tenant_id: brut.organization_id,
+    role: brut.role,
+    produit: "idel",
+    nom: `${brut.prenom} ${brut.nom}`.trim(),
+    email: data.email,
+  };
+  sauvegarderAuth(auth);
+  return auth;
+};
 export const getMe = () => requete<UserMe>("/api/auth/crm/me");
 export const getTenantConfig = async (): Promise<TenantConfig> => {
   const config = await requete<TenantConfig>("/api/auth/crm/config");
