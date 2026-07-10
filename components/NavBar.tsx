@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { getGoogleStatus, urlConnexionGoogle } from "@/lib/api";
+import { getGoogleStatus, urlConnexionGoogle, monOrganisation } from "@/lib/api";
 import { deconnecter, getUser } from "@/lib/auth";
 
 const ONGLETS_CRM = [
@@ -18,12 +18,18 @@ const ONGLETS_CRM = [
   { href: "/agent", label: "Agent IA" },
 ];
 
-const ONGLETS_IDEL = [
+const ONGLETS_IDEL_BASE = [
   { href: "/idel", label: "Pipeline" },
   { href: "/idel/patients", label: "Patients" },
   { href: "/idel/comptabilite", label: "Trésorerie" },
-  { href: "/idel/parametres", label: "Paramètres" },
 ];
+const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {
+  tournees: { href: "/idel/tournees", label: "Tournées" },
+  commandes_pharma: { href: "/idel/pharma", label: "Commandes" },
+  ordonnances_vision: { href: "/idel/prescriptions", label: "Ordonnances" },
+  agenda: { href: "/idel/agenda", label: "Agenda" },
+};
+const ONGLET_PARAMETRES = { href: "/idel/parametres", label: "Paramètres" };
 
 const ONGLETS_ADMIN = [
   { href: "/admin", label: "Clients SaaS" },
@@ -43,6 +49,7 @@ function NavBarInterieur() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [googleConnecte, setGoogleConnecte] = useState<boolean | null>(null);
+  const [modulesActifs, setModulesActifs] = useState<string[]>([]);
   const user = getUser();
 
   const produit = user?.produit || "crm";
@@ -60,7 +67,12 @@ function NavBarInterieur() {
     document.body.dataset.mode = mode;
   }, [mode]);
 
-  const onglets = estAdmin ? ONGLETS_ADMIN : estIdel ? ONGLETS_IDEL : ONGLETS_CRM;
+  const ongletsIdel = [
+    ...ONGLETS_IDEL_BASE,
+    ...modulesActifs.filter((m) => ONGLETS_MODULES[m]).map((m) => ONGLETS_MODULES[m]),
+    ONGLET_PARAMETRES,
+  ];
+  const onglets = estAdmin ? ONGLETS_ADMIN : estIdel ? ongletsIdel : ONGLETS_CRM;
   const labelProduit = estAdmin
     ? "Mutatech / Admin"
     : estIdel
@@ -75,6 +87,14 @@ function NavBarInterieur() {
         .catch(() => setGoogleConnecte(false));
     }
   }, [searchParams, estIdel, estAdmin]);
+
+  useEffect(() => {
+    if (estIdel) {
+      monOrganisation()
+        .then((org) => setModulesActifs(org.modules_actifs))
+        .catch(() => setModulesActifs([]));
+    }
+  }, [estIdel]);
 
   function handleLogout() {
     deconnecter();

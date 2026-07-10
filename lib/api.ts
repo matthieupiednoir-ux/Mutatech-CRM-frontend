@@ -327,3 +327,48 @@ export function calculerTotaux(lignes: Ligne[] | null | undefined, tauxTva: numb
     return { totalHt: 0, totalTva: 0, totalTtc: 0 };
   }
 }
+// --- Mon organisation (self-service) ---
+export interface MonOrganisation {
+  id: string;
+  nom: string;
+  type: string;
+  modules_actifs: string[];
+  role: string;
+  nom_utilisateur: string;
+  prenom_utilisateur: string;
+}
+export const monOrganisation = () => requeteIdel<MonOrganisation>("/auth-org/me/organization");
+
+// --- Module Tournees ---
+export interface TourneeVisit {
+  id: string;
+  patient_id: string;
+  patient_nom: string;
+  patient_prenom: string;
+  scheduled_time: string;
+  duration_minutes: number;
+  prestation: string;
+  status: string;
+  notes?: string | null;
+  ordre: number;
+}
+export interface Tournee {
+  id: string;
+  date: string;
+  technicien_name: string;
+  status: string;
+  visits: TourneeVisit[];
+}
+export const tourneesLister = (date?: string) =>
+  requeteIdel<Tournee[]>(`/api/tournees${date ? `?date=${date}` : ""}`);
+export const tourneesCreer = (data: { date: string; technicien_name: string }) =>
+  requeteIdel<Tournee>("/api/tournees", { method: "POST", body: JSON.stringify(data) });
+export const tourneesVoir = (id: string) => requeteIdel<Tournee>(`/api/tournees/${id}`);
+export const tourneesAjouterVisite = (tourneeId: string, data: {
+  patient_id: string; scheduled_time: string; duration_minutes?: number; prestation: string; notes?: string;
+}) => requeteIdel<TourneeVisit>(`/api/tournees/${tourneeId}/visits`, { method: "POST", body: JSON.stringify(data) });
+export const tourneesModifierVisite = (tourneeId: string, visitId: string, data: {
+  status?: string; scheduled_time?: string; notes?: string; ordre?: number;
+}) => requeteIdel<TourneeVisit>(`/api/tournees/${tourneeId}/visits/${visitId}`, { method: "PUT", body: JSON.stringify(data) });
+export const tourneesSupprimerVisite = (tourneeId: string, visitId: string) =>
+  requeteIdel<{ ok: boolean }>(`/api/tournees/${tourneeId}/visits/${visitId}`, { method: "DELETE" });
