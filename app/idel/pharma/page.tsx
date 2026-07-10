@@ -21,6 +21,8 @@ const STATUT_COULEUR: Record<string, string> = {
 };
 const ORDRE_STATUTS = ["brouillon", "envoyee", "en_preparation", "prete", "livree", "annulee"];
 
+interface LigneProduit { produit: string; quantite: string; }
+
 export default function PharmaPage() {
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
   const [commandes, setCommandes] = useState<PharmaOrder[]>([]);
@@ -35,10 +37,15 @@ export default function PharmaPage() {
   const [pharmForm, setPharmForm] = useState({ name: "", phone: "", ville: "" });
   const [creationPharm, setCreationPharm] = useState(false);
 
+  const [importOuvert, setImportOuvert] = useState(false);
+  const [csvTexte, setCsvTexte] = useState("");
+  const [importEnCours, setImportEnCours] = useState(false);
+  const [importResultat, setImportResultat] = useState<string | null>(null);
+
   const [formCommande, setFormCommande] = useState(false);
-  const [commandeForm, setCommandeForm] = useState({
-    patient_id: "", pharmacy_id: "", produit: "", quantite: "1",
-  });
+  const [commandePatientId, setCommandePatientId] = useState("");
+  const [commandePharmacyId, setCommandePharmacyId] = useState("");
+  const [lignesProduits, setLignesProduits] = useState<LigneProduit[]>([{ produit: "", quantite: "1" }]);
   const [creationCommande, setCreationCommande] = useState(false);
 
   function charger() {
@@ -67,17 +74,61 @@ export default function PharmaPage() {
     }
   }
 
+  // Import CSV/Excel simplifie : une ligne par pharmacie, format
+  // "nom;telephone;ville" (le point-virgule est le separateur standard
+  // d'Excel FR ; la virgule fonctionne aussi si pas d'ambiguite).
+  async function handleImporterCsv() {
+    setImportEnCours(true);
+    setImportResultat(null);
+    setError(null);
+    const lignes = csvTexte.split("\n").map((l) => l.trim()).filter(Boolean);
+    let ok = 0, echecs = 0;
+    for (const ligne of lignes) {
+      const sep = ligne.includes(";") ? ";" : ",";
+      const [name, phone, ville] = ligne.split(sep).map((x) => x?.trim() || "");
+      if (!name || !phone) { echecs++; continue; }
+      try {
+        await pharmaCreerPharmacie({ name, phone, ville: ville || undefined });
+        ok++;
+      } catch {
+        echecs++;
+      }
+    }
+    setImportResultat(`${ok} pharmacie(s) importée(s)${echecs > 0 ? `, ${echecs} ligne(s) ignorée(s)` : ""}.`);
+    setImportEnCours(false);
+    setCsvTexte("");
+    charger();
+  }
+
+  function ajouterLigneProduit() {
+    setLignesProduits([...lignesProduits, { produit: "", quantite: "1" }]);
+  }
+  function retirerLigneProduit(index: number) {
+    setLignesProduits(lignesProduits.filter((_, i) => i !== index));
+  }
+  function modifierLigneProduit(index: number, champ: keyof LigneProduit, valeur: string) {
+    const copie = [...lignesProduits];
+    copie[index] = { ...copie[index], [champ]: valeur };
+    setLignesProduits(copie);
+  }
+
   async function handleCreerCommande(e: React.FormEvent) {
     e.preventDefault();
     setCreationCommande(true);
     setError(null);
     try {
-      await pharmaCreerCommande({
-        patient_id: commandeForm.patient_id,
-        pharmacy_id: commandeForm.pharmacy_id,
-        items: [{ product_name: commandeForm.produit, quantity: parseFloat(commandeForm.quantite) || 1 }],
-      });
-      setCommandeForm({ patient_id: "", pharmacy_id: "", produit: "", quantite: "1" });
+      const items = lignesProduits
+        .filter((l) => l.produit.trim())
+        .map((l) => ({ product_name: l.produit.trim(), quantity: parseFloat(l.quantite) || 1 }));
+      if (items.length === 0) {
+        setError("Ajoute au moins un produit à la commande.");
+        setCreationCommande(false);
+        return;
+      }
+      await pharmaCreerCommande({ patient_id: commandePatientId, pharmacy_id: commandePharmacyId, items });
+      setCommandePatientId("");
+      setCommandePharmacyId("");
+      setLignesProduits([{ produit: "", quantite: "1" }]);
       setFormCommande(false);
       charger();
     } catch (e) {
@@ -114,13 +165,21 @@ export default function PharmaPage() {
             <h1 className="font-display text-2xl text-textPrimary">Commandes Pharma</h1>
             <p className="mt-1 text-sm text-textMuted">Pharmacies partenaires et suivi des commandes patients.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setOngletPharmacies(!ongletPharmacies)}
               className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
             >
               {ongletPharmacies ? "← Commandes" : "Pharmacies →"}
             </button>
+            {ongletPharmacies && (
+              <button
+                onClick={() => setImportOuvert(true)}
+                className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
+              >
+                📥 Importer CSV/Excel
+              </button>
+            )}
             <button
               onClick={() => ongletPharmacies ? setFormPharmacie(true) : setFormCommande(true)}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
@@ -133,6 +192,38 @@ export default function PharmaPage() {
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
         {succes && <p className="mb-4 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{succes}</p>}
+
+        {importOuvert && (
+          <div className="mb-6 rounded-xl border border-line bg-surface p-5">
+            <p className="mb-2 text-sm font-medium text-textPrimary">Importer des pharmacies (CSV / Excel)</p>
+            <p className="mb-3 text-xs text-textMuted">
+              Colle le contenu de ton fichier (une ligne par pharmacie) au format :{" "}
+              <code className="rounded bg-surfaceAlt px-1.5 py-0.5 text-[11px]">nom;téléphone;ville</code>{" "}
+              — depuis Excel, sélectionne les colonnes puis colle directement ici.
+            </p>
+            <textarea
+              value={csvTexte}
+              onChange={(e) => setCsvTexte(e.target.value)}
+              rows={6}
+              placeholder={"Pharmacie du Centre;0493123456;Nice\nPharmacie des Fleurs;0493654321;Cannes"}
+              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 font-mono text-xs text-textPrimary placeholder:text-textMuted/50"
+            />
+            {importResultat && <p className="mt-2 text-xs text-teal">{importResultat}</p>}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={handleImporterCsv}
+                disabled={importEnCours || !csvTexte.trim()}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                {importEnCours ? "Import en cours..." : "Importer"}
+              </button>
+              <button onClick={() => { setImportOuvert(false); setImportResultat(null); }} className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted">
+                Fermer
+              </button>
+            </div>
+          </div>
+        )}
 
         {ongletPharmacies ? (
           <>
@@ -170,22 +261,49 @@ export default function PharmaPage() {
         ) : (
           <>
             {formCommande && (
-              <form onSubmit={handleCreerCommande} className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-5 sm:grid-cols-2">
-                <select required value={commandeForm.patient_id} onChange={(e) => setCommandeForm({ ...commandeForm, patient_id: e.target.value })}
-                  className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
-                  <option value="">— Patient —</option>
-                  {patients.map((p) => <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>)}
-                </select>
-                <select required value={commandeForm.pharmacy_id} onChange={(e) => setCommandeForm({ ...commandeForm, pharmacy_id: e.target.value })}
-                  className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
-                  <option value="">— Pharmacie —</option>
-                  {pharmacies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <input required placeholder="Produit" value={commandeForm.produit} onChange={(e) => setCommandeForm({ ...commandeForm, produit: e.target.value })}
-                  className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50" />
-                <input type="number" min="1" step="1" placeholder="Quantité" value={commandeForm.quantite} onChange={(e) => setCommandeForm({ ...commandeForm, quantite: e.target.value })}
-                  className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
-                <div className="flex gap-2 sm:col-span-2">
+              <form onSubmit={handleCreerCommande} className="mb-6 rounded-xl border border-line bg-surface p-5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <select required value={commandePatientId} onChange={(e) => setCommandePatientId(e.target.value)}
+                    className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
+                    <option value="">— Patient —</option>
+                    {patients.map((p) => <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>)}
+                  </select>
+                  <select required value={commandePharmacyId} onChange={(e) => setCommandePharmacyId(e.target.value)}
+                    className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
+                    <option value="">— Pharmacie —</option>
+                    {pharmacies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+
+                <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-textMuted">Produits</p>
+                <div className="space-y-2">
+                  {lignesProduits.map((ligne, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        placeholder="Nom du produit"
+                        value={ligne.produit}
+                        onChange={(e) => modifierLigneProduit(i, "produit", e.target.value)}
+                        className="flex-1 rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
+                      />
+                      <input
+                        type="number" min="1" step="1"
+                        value={ligne.quantite}
+                        onChange={(e) => modifierLigneProduit(i, "quantite", e.target.value)}
+                        className="w-24 rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary"
+                      />
+                      {lignesProduits.length > 1 && (
+                        <button type="button" onClick={() => retirerLigneProduit(i)} className="rounded-lg border border-line px-3 text-sm text-textMuted hover:text-amber">
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={ajouterLigneProduit} className="mt-2 text-xs text-textMuted hover:text-textPrimary" style={{ color: "var(--accent)" }}>
+                  + Ajouter un produit
+                </button>
+
+                <div className="mt-4 flex gap-2">
                   <button type="submit" disabled={creationCommande} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: "var(--accent)" }}>
                     {creationCommande ? "..." : "Créer la commande"}
                   </button>

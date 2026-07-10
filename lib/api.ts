@@ -345,6 +345,7 @@ export interface TourneeVisit {
   patient_id: string;
   patient_nom: string;
   patient_prenom: string;
+  patient_adresse?: string | null;
   scheduled_time: string;
   duration_minutes: number;
   prestation: string;
@@ -425,7 +426,7 @@ export const prescriptionsRenouveler = (id: string, data: {
 // --- Module Agenda ---
 export interface CalendarEvent {
   id: string; title: string; event_type: string; start_datetime: string; end_datetime: string;
-  all_day: boolean; status: string; location?: string | null; description?: string | null;
+  all_day: boolean; status: string; location?: string | null; description?: string | null; patient_id?: string | null;
 }
 export const agendaListerEvenements = (start?: string, end?: string) => {
   const params = new URLSearchParams();
@@ -436,9 +437,11 @@ export const agendaListerEvenements = (start?: string, end?: string) => {
 };
 export const agendaCreerEvenement = (data: {
   title: string; event_type: string; start_datetime: string; end_datetime: string;
-  location?: string; description?: string;
+  location?: string; description?: string; patient_id?: string;
 }) => requeteIdel<CalendarEvent>("/api/agenda/events", { method: "POST", body: JSON.stringify(data) });
-export const agendaModifierEvenement = (id: string, data: { status?: string; title?: string }) =>
-  requeteIdel<CalendarEvent>(`/api/agenda/events/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const agendaModifierEvenement = (id: string, data: {
+  status?: string; title?: string; start_datetime?: string; end_datetime?: string;
+  location?: string; description?: string;
+}) => requeteIdel<CalendarEvent>(`/api/agenda/events/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const agendaSupprimerEvenement = (id: string) =>
   requeteIdel<{ ok: boolean }>(`/api/agenda/events/${id}`, { method: "DELETE" });

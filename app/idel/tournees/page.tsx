@@ -38,6 +38,17 @@ function aujourdHui(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function urlWaze(adresse: string): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(adresse)}&navigate=yes`;
+}
+function urlMaps(adresse: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adresse)}`;
+}
+function urlMapsItineraire(adresses: string[]): string {
+  const segments = adresses.map((a) => encodeURIComponent(a));
+  return `https://www.google.com/maps/dir/${segments.join("/")}`;
+}
+
 export default function TourneesPage() {
   const [date, setDate] = useState(aujourdHui());
   const [tournees, setTournees] = useState<Tournee[]>([]);
@@ -189,108 +200,140 @@ export default function TourneesPage() {
           </p>
         ) : (
           <div className="space-y-4">
-            {tournees.map((t) => (
-              <div key={t.id} className="rounded-xl border border-line bg-surface p-5">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="font-display text-lg text-textPrimary">{t.technicien_name}</h2>
-                  <button
-                    onClick={() => setVisiteTourneeId(visiteTourneeId === t.id ? null : t.id)}
-                    className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-surfaceAlt"
-                  >
-                    + Ajouter une visite
-                  </button>
-                </div>
-
-                {t.visits.length === 0 ? (
-                  <p className="text-xs text-textMuted">Aucune visite planifiée.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {t.visits.map((v) => (
-                      <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surfaceAlt px-3 py-2">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs text-textMuted">{v.scheduled_time}</span>
-                          <span className="text-sm text-textPrimary">{v.patient_prenom} {v.patient_nom}</span>
-                          <span className="text-xs text-textMuted">{PRESTATION_LABEL[v.prestation] || v.prestation}</span>
-                        </div>
-                        <select
-                          value={v.status}
-                          onChange={(e) => handleChangerStatutVisite(t.id, v, e.target.value)}
-                          className="rounded-full border-0 px-2.5 py-1 text-xs font-medium"
-                          style={{
-                            backgroundColor: `${STATUS_COULEUR[v.status]}22`,
-                            color: STATUS_COULEUR[v.status],
-                          }}
+            {tournees.map((t) => {
+              const adressesOrdonnees = t.visits
+                .filter((v) => v.patient_adresse)
+                .map((v) => v.patient_adresse as string);
+              return (
+                <div key={t.id} className="rounded-xl border border-line bg-surface p-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-display text-lg text-textPrimary">{t.technicien_name}</h2>
+                    <div className="flex gap-2">
+                      {adressesOrdonnees.length > 1 && (
+                        <a
+                          href={urlMapsItineraire(adressesOrdonnees)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
+                          style={{ backgroundColor: "var(--accent)" }}
                         >
-                          {Object.entries(STATUS_LABEL).map(([val, label]) => (
+                          🗺️ Itinéraire complet ({adressesOrdonnees.length} arrêts)
+                        </a>
+                      )}
+                      <button
+                        onClick={() => setVisiteTourneeId(visiteTourneeId === t.id ? null : t.id)}
+                        className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-textPrimary hover:bg-surfaceAlt"
+                      >
+                        + Ajouter une visite
+                      </button>
+                    </div>
+                  </div>
+
+                  {t.visits.length === 0 ? (
+                    <p className="text-xs text-textMuted">Aucune visite planifiée.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {t.visits.map((v) => (
+                        <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surfaceAlt px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="font-mono text-xs text-textMuted">{v.scheduled_time}</span>
+                            <span className="text-sm text-textPrimary">{v.patient_prenom} {v.patient_nom}</span>
+                            <span className="text-xs text-textMuted">{PRESTATION_LABEL[v.prestation] || v.prestation}</span>
+                            {v.patient_adresse ? (
+                              <span className="flex gap-1.5">
+                                <a href={urlWaze(v.patient_adresse)} target="_blank" rel="noopener noreferrer"
+                                  className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary" title={v.patient_adresse}>
+                                  🧭 Waze
+                                </a>
+                                <a href={urlMaps(v.patient_adresse)} target="_blank" rel="noopener noreferrer"
+                                  className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary" title={v.patient_adresse}>
+                                  📍 Maps
+                                </a>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-textMuted/60">— pas d'adresse renseignée —</span>
+                            )}
+                          </div>
+                          <select
+                            value={v.status}
+                            onChange={(e) => handleChangerStatutVisite(t.id, v, e.target.value)}
+                            className="rounded-full border-0 px-2.5 py-1 text-xs font-medium"
+                            style={{
+                              backgroundColor: `${STATUS_COULEUR[v.status]}22`,
+                              color: STATUS_COULEUR[v.status],
+                            }}
+                          >
+                            {Object.entries(STATUS_LABEL).map(([val, label]) => (
+                              <option key={val} value={val}>{label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {visiteTourneeId === t.id && (
+                    <form
+                      onSubmit={(e) => handleAjouterVisite(e, t.id)}
+                      className="mt-4 rounded-lg bg-surfaceAlt p-4"
+                    >
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <select
+                          required
+                          value={visiteForm.patient_id}
+                          onChange={(e) => setVisiteForm({ ...visiteForm, patient_id: e.target.value })}
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary sm:col-span-2"
+                        >
+                          <option value="">— Sélectionner un patient —</option>
+                          {patients.map((p) => (
+                            <option key={p.id} value={p.id}>{p.prenom} {p.nom}{p.adresse ? "" : " (pas d'adresse)"}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="time"
+                          required
+                          value={visiteForm.scheduled_time}
+                          onChange={(e) => setVisiteForm({ ...visiteForm, scheduled_time: e.target.value })}
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
+                        />
+                        <select
+                          value={visiteForm.prestation}
+                          onChange={(e) => setVisiteForm({ ...visiteForm, prestation: e.target.value })}
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
+                        >
+                          {Object.entries(PRESTATION_LABEL).map(([val, label]) => (
                             <option key={val} value={val}>{label}</option>
                           ))}
                         </select>
+                        <input
+                          value={visiteForm.notes}
+                          onChange={(e) => setVisiteForm({ ...visiteForm, notes: e.target.value })}
+                          placeholder="Notes (optionnel)"
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50 sm:col-span-2"
+                        />
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {visiteTourneeId === t.id && (
-                  <form
-                    onSubmit={(e) => handleAjouterVisite(e, t.id)}
-                    className="mt-4 rounded-lg bg-surfaceAlt p-4"
-                  >
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <select
-                        required
-                        value={visiteForm.patient_id}
-                        onChange={(e) => setVisiteForm({ ...visiteForm, patient_id: e.target.value })}
-                        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary sm:col-span-2"
-                      >
-                        <option value="">— Sélectionner un patient —</option>
-                        {patients.map((p) => (
-                          <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="time"
-                        required
-                        value={visiteForm.scheduled_time}
-                        onChange={(e) => setVisiteForm({ ...visiteForm, scheduled_time: e.target.value })}
-                        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
-                      />
-                      <select
-                        value={visiteForm.prestation}
-                        onChange={(e) => setVisiteForm({ ...visiteForm, prestation: e.target.value })}
-                        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
-                      >
-                        {Object.entries(PRESTATION_LABEL).map(([val, label]) => (
-                          <option key={val} value={val}>{label}</option>
-                        ))}
-                      </select>
-                      <input
-                        value={visiteForm.notes}
-                        onChange={(e) => setVisiteForm({ ...visiteForm, notes: e.target.value })}
-                        placeholder="Notes (optionnel)"
-                        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50 sm:col-span-2"
-                      />
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="submit"
-                        disabled={ajoutVisite}
-                        className="rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
-                        style={{ backgroundColor: "var(--accent)" }}
-                      >
-                        {ajoutVisite ? "Ajout..." : "Ajouter la visite"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setVisiteTourneeId(null)}
-                        className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            ))}
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={ajoutVisite}
+                          className="rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
+                          style={{ backgroundColor: "var(--accent)" }}
+                        >
+                          {ajoutVisite ? "Ajout..." : "Ajouter la visite"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVisiteTourneeId(null)}
+                          className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
