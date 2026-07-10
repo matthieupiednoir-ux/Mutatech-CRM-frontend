@@ -372,3 +372,73 @@ export const tourneesModifierVisite = (tourneeId: string, visitId: string, data:
 }) => requeteIdel<TourneeVisit>(`/api/tournees/${tourneeId}/visits/${visitId}`, { method: "PUT", body: JSON.stringify(data) });
 export const tourneesSupprimerVisite = (tourneeId: string, visitId: string) =>
   requeteIdel<{ ok: boolean }>(`/api/tournees/${tourneeId}/visits/${visitId}`, { method: "DELETE" });
+
+// --- Module Commandes Pharma ---
+export interface Pharmacy {
+  id: string; name: string; phone: string; siret?: string | null; finess?: string | null;
+  adresse?: string | null; code_postal?: string | null; ville?: string | null; email?: string | null; actif: boolean;
+}
+export interface Product {
+  id: string; name: string; category: string; code_lppr?: string | null; code_cip?: string | null;
+  unit: string; actif: boolean; needs_review: boolean;
+}
+export interface OrderItem { id: string; product_id?: string | null; product_name: string; quantity: number; unit: string; }
+export interface PharmaOrder {
+  id: string; order_number: string; patient_id: string; patient_nom: string; patient_prenom: string;
+  pharmacy_id: string; pharmacy_name: string; status: string; date_creation: string;
+  scheduled_delivery_date?: string | null; items: OrderItem[];
+}
+export const pharmaListerPharmacies = () => requeteIdel<Pharmacy[]>("/api/pharma/pharmacies");
+export const pharmaCreerPharmacie = (data: { name: string; phone: string; adresse?: string; ville?: string; code_postal?: string; email?: string }) =>
+  requeteIdel<Pharmacy>("/api/pharma/pharmacies", { method: "POST", body: JSON.stringify(data) });
+export const pharmaListerProduits = () => requeteIdel<Product[]>("/api/pharma/products");
+export const pharmaCreerProduit = (data: { name: string; category: string; unit?: string; code_lppr?: string }) =>
+  requeteIdel<Product>("/api/pharma/products", { method: "POST", body: JSON.stringify(data) });
+export const pharmaListerCommandes = (status?: string) =>
+  requeteIdel<PharmaOrder[]>(`/api/pharma/orders${status ? `?status=${status}` : ""}`);
+export const pharmaCreerCommande = (data: {
+  patient_id: string; pharmacy_id: string; scheduled_delivery_date?: string;
+  items: { product_name: string; quantity: number; unit?: string }[];
+}) => requeteIdel<PharmaOrder>("/api/pharma/orders", { method: "POST", body: JSON.stringify(data) });
+export const pharmaChangerStatutCommande = (id: string, status: string, comment?: string) =>
+  requeteIdel<PharmaOrder>(`/api/pharma/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status, comment }) });
+
+// --- Module Ordonnances (suivi de validite / renouvellement) ---
+export interface Prescription {
+  id: string; patient_id?: string | null; patient_nom: string; patient_prenom: string;
+  reference?: string | null; medecin_prescripteur?: string | null; doctor_mssante?: string | null;
+  date_prescription?: string | null; date_expiration?: string | null;
+  statut_validite?: string | null; renewal_of_id?: string | null; renewed_by_id?: string | null;
+}
+export const prescriptionsLister = (statutValidite?: string) =>
+  requeteIdel<Prescription[]>(`/api/prescriptions${statutValidite ? `?statut_validite=${statutValidite}` : ""}`);
+export const prescriptionsCreer = (data: {
+  patient_id: string; reference?: string; medecin_prescripteur?: string; doctor_mssante?: string;
+  date_prescription?: string; date_expiration?: string;
+}) => requeteIdel<Prescription>("/api/prescriptions", { method: "POST", body: JSON.stringify(data) });
+export const prescriptionsChangerValidite = (id: string, statutValidite: string) =>
+  requeteIdel<Prescription>(`/api/prescriptions/${id}/validite`, { method: "PUT", body: JSON.stringify({ statut_validite: statutValidite }) });
+export const prescriptionsRenouveler = (id: string, data: {
+  patient_id: string; reference?: string; date_prescription?: string; date_expiration?: string;
+}) => requeteIdel<Prescription>(`/api/prescriptions/${id}/renouveler`, { method: "POST", body: JSON.stringify(data) });
+
+// --- Module Agenda ---
+export interface CalendarEvent {
+  id: string; title: string; event_type: string; start_datetime: string; end_datetime: string;
+  all_day: boolean; status: string; location?: string | null; description?: string | null;
+}
+export const agendaListerEvenements = (start?: string, end?: string) => {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const qs = params.toString();
+  return requeteIdel<CalendarEvent[]>(`/api/agenda/events${qs ? `?${qs}` : ""}`);
+};
+export const agendaCreerEvenement = (data: {
+  title: string; event_type: string; start_datetime: string; end_datetime: string;
+  location?: string; description?: string;
+}) => requeteIdel<CalendarEvent>("/api/agenda/events", { method: "POST", body: JSON.stringify(data) });
+export const agendaModifierEvenement = (id: string, data: { status?: string; title?: string }) =>
+  requeteIdel<CalendarEvent>(`/api/agenda/events/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const agendaSupprimerEvenement = (id: string) =>
+  requeteIdel<{ ok: boolean }>(`/api/agenda/events/${id}`, { method: "DELETE" });
