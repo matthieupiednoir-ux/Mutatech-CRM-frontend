@@ -93,44 +93,45 @@ export interface ClientInput {
 }
 
 // --- Devis ---
+// IMPORTANT : ces champs sont alignes exactement sur schemas_crm.py
+// (DevisCreate / DevisOut) cote backend CRM. Ne pas renommer sans
+// verifier le schema serveur -- un ecart ici cause un 422 silencieux
+// ou une perte de donnees (champ envoye mais jamais persiste).
 export type StatutDevis = "brouillon" | "envoye" | "accepte" | "refuse";
-export type TypeDevis = "ponctuel" | "abonnement";
+export type TypeFacturation = "ponctuelle" | "abonnement";
 
 export interface Devis {
   id: string;
   numero: string;
   statut: StatutDevis;
-  type_devis?: TypeDevis | null;
+  type_facturation?: TypeFacturation | null;
   client?: Client | null;
-  client_id?: string | null;
+  client_id: string;
   objet?: string | null;
+  contexte?: string | null;
   lignes: Ligne[];
   taux_tva: number;
   date_creation?: string;
-  date_envoi?: string | null;
-  date_acceptation?: string | null;
-  date_expiration?: string | null;
-  signature_image?: string | null;
+  drive_file_url?: string | null;
   token_signature?: string | null;
+  signe_le?: string | null;
   montant_mensuel?: number | null;
   duree_mois?: number | null;
-  premier_versement_differe?: boolean | null;
+  date_debut_abonnement?: string | null;
   premier_versement?: number | null;
-  notes?: string | null;
 }
 
 export interface DevisInput {
-  client_id?: string | null;
+  client_id: string;
   objet?: string | null;
-  lignes: Ligne[];
+  contexte?: string | null;
   taux_tva: number;
-  type_devis?: TypeDevis | null;
-  date_expiration?: string | null;
+  lignes: Ligne[];
+  type_facturation?: TypeFacturation;
   montant_mensuel?: number | null;
   duree_mois?: number | null;
-  premier_versement_differe?: boolean | null;
+  date_debut_abonnement?: string | null;
   premier_versement?: number | null;
-  notes?: string | null;
 }
 
 export interface DevisPublic {
@@ -144,12 +145,14 @@ export interface DevisPublic {
   client?: Client | null;
   client_nom?: string | null;
   date_creation?: string;
-  date_expiration?: string | null;
   signature_image?: string | null;
   signe_le?: string | null;
   nom_entreprise?: string | null;
   logo_url?: string | null;
   mentions_legales?: string | null;
+  type_facturation?: TypeFacturation | null;
+  montant_mensuel?: number | null;
+  duree_mois?: number | null;
 }
 
 // --- Factures ---

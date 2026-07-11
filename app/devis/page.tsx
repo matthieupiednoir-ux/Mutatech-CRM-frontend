@@ -7,7 +7,7 @@ import {
   envoyerDevisPourSignature, getAbonnementSuivi, genererFactureMois,
   calculerTotaux, ApiError,
 } from "@/lib/api";
-import { Client, Devis, DevisInput, Ligne, TypeDevis, MoisAbonnement } from "@/lib/types";
+import { Client, Devis, DevisInput, Ligne, TypeFacturation, MoisAbonnement } from "@/lib/types";
 
 const STATUT_LABEL: Record<string, string> = {
   brouillon: "Brouillon", envoye: "Envoyé", accepte: "Accepté", refuse: "Refusé",
@@ -132,15 +132,13 @@ export default function DevisPage() {
   // Champs formulaire
   const [clientId, setClientId] = useState("");
   const [objet, setObjet] = useState("");
-  const [typeDevis, setTypeDevis] = useState<TypeDevis>("ponctuel");
+  const [typeFacturation, setTypeFacturation] = useState<TypeFacturation>("ponctuelle");
   const [tauxTva, setTauxTva] = useState(20);
-  const [dateExpiration, setDateExpiration] = useState("");
-  const [notes, setNotes] = useState("");
+  const [contexte, setContexte] = useState("");
   const [lignes, setLignes] = useState<Ligne[]>([{ ...LIGNE_VIDE }]);
   // Abonnement
   const [montantMensuel, setMontantMensuel] = useState("");
   const [dureeMois, setDureeMois] = useState("");
-  const [premierDiffere, setPremierDiffere] = useState(false);
   const [premierVersement, setPremierVersement] = useState("");
 
   const charger = useCallback(() => {
@@ -162,14 +160,12 @@ export default function DevisPage() {
     setForfaitChoisi(0);
     setClientId("");
     setObjet("");
-    setTypeDevis("ponctuel");
+    setTypeFacturation("ponctuelle");
     setTauxTva(20);
-    setDateExpiration("");
-    setNotes("");
+    setContexte("");
     setLignes([{ ...LIGNE_VIDE }]);
     setMontantMensuel("");
     setDureeMois("");
-    setPremierDiffere(false);
     setPremierVersement("");
   }
 
@@ -185,14 +181,12 @@ export default function DevisPage() {
     setForfaitChoisi(0);
     setClientId(d.client_id ?? "");
     setObjet(d.objet ?? "");
-    setTypeDevis(d.type_devis ?? "ponctuel");
+    setTypeFacturation(d.type_facturation ?? "ponctuelle");
     setTauxTva(d.taux_tva ?? 20);
-    setDateExpiration(d.date_expiration ?? "");
-    setNotes(d.notes ?? "");
+    setContexte(d.contexte ?? "");
     setLignes(safeArr<Ligne>(d.lignes).length > 0 ? safeArr<Ligne>(d.lignes).map((l) => ({ ...l })) : [{ ...LIGNE_VIDE }]);
     setMontantMensuel(d.montant_mensuel != null ? String(d.montant_mensuel) : "");
     setDureeMois(d.duree_mois != null ? String(d.duree_mois) : "");
-    setPremierDiffere(d.premier_versement_differe ?? false);
     setPremierVersement(d.premier_versement != null ? String(d.premier_versement) : "");
     setFormOuvert(true);
     setError(null);
@@ -220,22 +214,24 @@ export default function DevisPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!clientId) {
+      setError("Sélectionne un client — un devis doit obligatoirement être rattaché à un client.");
+      return;
+    }
     setEnregistrement(true);
     setError(null);
     const lignesValides = lignes.filter((l) => l.description.trim() !== "");
     const payload: DevisInput = {
-      client_id: clientId || null,
+      client_id: clientId,
       objet: objet.trim() || null,
-      type_devis: typeDevis,
+      contexte: contexte.trim() || null,
+      type_facturation: typeFacturation,
       taux_tva: tauxTva,
-      date_expiration: dateExpiration || null,
-      notes: notes.trim() || null,
       lignes: lignesValides,
-      ...(typeDevis === "abonnement" ? {
+      ...(typeFacturation === "abonnement" ? {
         montant_mensuel: parseFloat(montantMensuel) || null,
         duree_mois: parseInt(dureeMois) || null,
-        premier_versement_differe: premierDiffere,
-        premier_versement: premierDiffere && premierVersement ? parseFloat(premierVersement) : null,
+        premier_versement: premierVersement ? parseFloat(premierVersement) : null,
       } : {}),
     };
     try {
@@ -357,14 +353,17 @@ export default function DevisPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Client</span>
-                <select value={clientId} onChange={(e) => setClientId(e.target.value)}
+                <span className="mb-1 block text-sm text-textMuted">Client <span className="text-amber">*</span></span>
+                <select required value={clientId} onChange={(e) => setClientId(e.target.value)}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary">
-                  <option value="">— Sans client —</option>
+                  <option value="" disabled>— Choisir un client —</option>
                   {safeArr<Client>(clients).map((c) => (
                     <option key={c.id} value={c.id}>{c.nom}</option>
                   ))}
                 </select>
+                {clients.length === 0 && (
+                  <span className="mt-1 block text-[11px] text-amber">Aucun client enregistré — crée d'abord un client.</span>
+                )}
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Objet</span>
@@ -374,9 +373,9 @@ export default function DevisPage() {
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Type</span>
-                <select value={typeDevis} onChange={(e) => setTypeDevis(e.target.value as TypeDevis)}
+                <select value={typeFacturation} onChange={(e) => setTypeFacturation(e.target.value as TypeFacturation)}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary">
-                  <option value="ponctuel">Ponctuel</option>
+                  <option value="ponctuelle">Ponctuel</option>
                   <option value="abonnement">Abonnement mensuel</option>
                 </select>
               </label>
@@ -386,15 +385,10 @@ export default function DevisPage() {
                   onChange={(e) => setTauxTva(parseFloat(e.target.value) || 0)}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-textMuted">Date d'expiration</span>
-                <input type="date" value={dateExpiration} onChange={(e) => setDateExpiration(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
-              </label>
             </div>
 
             {/* Options abonnement */}
-            {typeDevis === "abonnement" && (
+            {typeFacturation === "abonnement" && (
               <div className="rounded-xl border border-teal/20 bg-teal/5 p-4 space-y-3">
                 <p className="text-sm font-medium text-textPrimary">Configuration abonnement</p>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -410,20 +404,13 @@ export default function DevisPage() {
                       placeholder="12"
                       className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary text-sm" />
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer pt-5">
-                    <input type="checkbox" checked={premierDiffere} onChange={(e) => setPremierDiffere(e.target.checked)}
-                      className="accent-violet" />
-                    <span className="text-xs text-textMuted">1er versement différé</span>
-                  </label>
-                </div>
-                {premierDiffere && (
                   <label className="block">
-                    <span className="mb-1 block text-xs text-textMuted">Montant du 1er versement (€ HT)</span>
+                    <span className="mb-1 block text-xs text-textMuted">1er versement (€ HT, si différent)</span>
                     <input type="number" value={premierVersement} onChange={(e) => setPremierVersement(e.target.value)}
-                      placeholder="0"
+                      placeholder="Laisser vide = identique au mensuel"
                       className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary text-sm" />
                   </label>
-                )}
+                </div>
               </div>
             )}
 
@@ -463,8 +450,8 @@ export default function DevisPage() {
             </div>
 
             <label className="block">
-              <span className="mb-1 block text-sm text-textMuted">Notes internes</span>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              <span className="mb-1 block text-sm text-textMuted">Contexte / conditions particulières</span>
+              <textarea value={contexte} onChange={(e) => setContexte(e.target.value)} rows={2}
                 placeholder="Conditions particulières, contexte…"
                 className="w-full resize-none rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary text-sm" />
             </label>
@@ -505,7 +492,7 @@ export default function DevisPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-display text-sm font-bold text-textPrimary">{d.numero}</span>
                         <span className={`text-xs font-medium ${STATUT_COULEUR[d.statut]}`}>{STATUT_LABEL[d.statut]}</span>
-                        {d.type_devis === "abonnement" && (
+                        {d.type_facturation === "abonnement" && (
                           <span className="rounded-full bg-teal/10 border border-teal/30 px-2 py-0.5 text-[11px] text-teal">Abonnement</span>
                         )}
                       </div>
@@ -514,7 +501,6 @@ export default function DevisPage() {
                         {d.client?.nom && <span>👤 {d.client.nom}</span>}
                         <span className="font-medium text-textPrimary">{ttc.toFixed(2)} € TTC</span>
                         {d.date_creation && <span>{new Date(d.date_creation).toLocaleDateString("fr-FR")}</span>}
-                        {d.date_expiration && <span>Exp. {new Date(d.date_expiration).toLocaleDateString("fr-FR")}</span>}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2 shrink-0">
@@ -530,7 +516,7 @@ export default function DevisPage() {
                           Voir lien
                         </a>
                       )}
-                      {d.type_devis === "abonnement" && d.statut === "accepte" && (
+                      {d.type_facturation === "abonnement" && d.statut === "accepte" && (
                         <button onClick={() => setSuivi(suivi === d.id ? null : d.id)}
                           className="rounded-lg border border-teal/40 bg-teal/10 px-3 py-1.5 text-xs text-teal hover:bg-teal/20">
                           {suivi === d.id ? "Masquer" : "Suivi mensuel"}
