@@ -205,8 +205,8 @@ export const importerProspectsLot = (data: ProspectInput[]) => requete<Prospect[
 // --- Agent IA ---
 export const chatAgent = (message: string, historique: { role: string; content: string }[]) =>
   requete<AgentResponse>("/api/agent/chat", { method: "POST", body: JSON.stringify({ message, historique }) });
-export const getAgentHistorique = () => requete<AgentMessage[]>("/api/agent/historique");
-export const effacerAgentHistorique = () => requete<{ statut: string }>("/api/agent/historique", { method: "DELETE" });
+export const getAgentHistorique = () => requete<AgentMessage[]>("/api/agent/history");
+export const effacerAgentHistorique = () => requete<{ statut: string }>("/api/agent/history", { method: "DELETE" });
 
 // --- IDEL ---
 export const idelGetOrdonnances = () =>
