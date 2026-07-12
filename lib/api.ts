@@ -426,7 +426,9 @@ export interface Prescription {
   id: string; patient_id?: string | null; patient_nom: string; patient_prenom: string;
   reference?: string | null; medecin_prescripteur?: string | null; doctor_mssante?: string | null;
   date_prescription?: string | null; date_expiration?: string | null;
+  acte_prescrit_texte?: string | null; duree_traitement?: string | null;
   statut_validite?: string | null; renewal_of_id?: string | null; renewed_by_id?: string | null;
+  fichier_nom_original?: string | null; confiance_ocr?: number | null;
 }
 export const prescriptionsLister = (statutValidite?: string) =>
   requeteIdel<Prescription[]>(`/api/prescriptions${statutValidite ? `?statut_validite=${statutValidite}` : ""}`);
@@ -434,6 +436,26 @@ export const prescriptionsCreer = (data: {
   patient_id: string; reference?: string; medecin_prescripteur?: string; doctor_mssante?: string;
   date_prescription?: string; date_expiration?: string;
 }) => requeteIdel<Prescription>("/api/prescriptions", { method: "POST", body: JSON.stringify(data) });
+
+// Depot photo/PDF avec extraction OCR automatique (Claude Vision, meme
+// moteur que le pipeline IDEL classique) -- FormData, pas de JSON.stringify.
+export const prescriptionsUploader = (patientId: string, file: File) => {
+  const formData = new FormData();
+  formData.append("patient_id", patientId);
+  formData.append("file", file);
+  const token = getToken();
+  return fetch(`${IDEL_API_URL}/api/prescriptions/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  }).then(async (res) => {
+    if (!res.ok) {
+      const corps = await res.text();
+      throw new ApiError(corps || `Erreur ${res.status}`);
+    }
+    return res.json() as Promise<Prescription>;
+  });
+};
 export const prescriptionsChangerValidite = (id: string, statutValidite: string) =>
   requeteIdel<Prescription>(`/api/prescriptions/${id}/validite`, { method: "PUT", body: JSON.stringify({ statut_validite: statutValidite }) });
 export const prescriptionsRenouveler = (id: string, data: {
