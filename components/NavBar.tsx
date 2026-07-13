@@ -34,6 +34,7 @@ const ONGLET_PARAMETRES = { href: "/idel/parametres", label: "Paramètres" };
 const ONGLETS_ADMIN = [
   { href: "/admin", label: "Clients SaaS" },
   { href: "/admin/organisations", label: "Organisations & Modules" },
+  { href: "/admin/equipe", label: "Équipe Mutatech" },
 ];
 
 export default function NavBar() {
