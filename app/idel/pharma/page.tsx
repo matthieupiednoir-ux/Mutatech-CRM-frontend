@@ -8,8 +8,9 @@ import {
   pharmaListerCommandes, pharmaCreerCommande, pharmaChangerStatutCommande,
   Pharmacy, PharmaOrder,
 } from "@/lib/api";
-import { idelGetPatients } from "@/lib/api";
+import { idelGetPatients, idelInsights } from "@/lib/api";
 import { IdelPatient } from "@/lib/types";
+import InsightStrip from "@/components/InsightStrip";
 
 const STATUT_LABEL: Record<string, string> = {
   brouillon: "Brouillon", envoyee: "Envoyée", en_preparation: "En préparation",
@@ -160,6 +161,7 @@ export default function PharmaPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-5xl px-4 py-8">
+        <InsightStrip fetcher={idelInsights} module="pharma" />
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Commandes Pharma</h1>

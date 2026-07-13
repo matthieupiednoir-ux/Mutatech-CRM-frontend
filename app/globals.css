@@ -21,13 +21,14 @@ body[data-mode="crm"] {
     radial-gradient(circle at 90% 105%, rgba(0, 212, 170, 0.05), transparent 45%);
 }
 
-/* Mode IDEL / PSDM (Nova) -- aura teal dominante */
+/* Mode IDEL / PSDM (Nova) -- aura rose hi-tech dominante */
 body[data-mode="idel"] {
-  --accent: #00D4AA;
-  --accent-soft: rgba(0, 212, 170, 0.12);
+  --accent: #FF2E9A;
+  --accent-soft: rgba(255, 46, 154, 0.12);
   background-image:
-    radial-gradient(circle at 88% -8%, rgba(0, 212, 170, 0.24), transparent 42%),
-    radial-gradient(circle at 10% 105%, rgba(108, 99, 255, 0.05), transparent 45%);
+    radial-gradient(circle at 88% -8%, rgba(255, 46, 154, 0.28), transparent 42%),
+    radial-gradient(circle at 10% 105%, rgba(255, 46, 154, 0.10), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(108, 99, 255, 0.05), transparent 60%);
 }
 
 /* Mode Admin -- neutre, ambre (ni Pixel ni Nova, la main de Mutatech) */

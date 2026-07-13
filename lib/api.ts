@@ -161,6 +161,14 @@ export const equipeModifier = (id: string, data: { nom?: string; role?: string; 
 export const equipeRetirer = (id: string) =>
   requete<{ statut: string }>(`/api/admin/equipe/${id}`, { method: "DELETE" });
 
+// --- Insights discrets (suggestions passives, pas de chat) ---
+export interface Insight {
+  module: string;
+  texte: string;
+  urgence: "info" | "attention" | "important";
+}
+export const agentInsights = () => requete<Insight[]>("/api/agent/insights");
+
 // --- Clients ---
 export const getClients = () => requete<Client[]>("/api/clients");
 export const getClient = (id: string) => requete<Client>(`/api/clients/${id}`);
@@ -502,3 +510,6 @@ export const agendaModifierEvenement = (id: string, data: {
 }) => requeteIdel<CalendarEvent>(`/api/agenda/events/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const agendaSupprimerEvenement = (id: string) =>
   requeteIdel<{ ok: boolean }>(`/api/agenda/events/${id}`, { method: "DELETE" });
+
+// --- Insights discrets IDEL/PSDM (tournees, pharma, prescriptions, agenda) ---
+export const idelInsights = () => requeteIdel<Insight[]>("/api/insights");

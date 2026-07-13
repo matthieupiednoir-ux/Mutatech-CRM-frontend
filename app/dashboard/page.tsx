@@ -5,6 +5,8 @@ import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import Kpi3DRing from "@/components/Kpi3DRing";
 import ChatAgentPanel from "@/components/ChatAgentPanel";
+import InsightStrip from "@/components/InsightStrip";
+import { agentInsights } from "@/lib/api";
 import {
   getClients, getDevisListe, getFacturesListe,
   getTaches, getProspects, getEcheances,
@@ -322,6 +324,7 @@ export default function DashboardPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-6xl px-4 py-8">
+        <InsightStrip fetcher={agentInsights} />
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-2xl text-textPrimary">Tableau de bord</h1>
           <div className="flex items-center gap-2">

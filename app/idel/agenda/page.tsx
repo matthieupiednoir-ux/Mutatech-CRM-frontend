@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { ApiError } from "@/lib/api";
-import { agendaListerEvenements, agendaCreerEvenement, agendaModifierEvenement, agendaSupprimerEvenement, CalendarEvent } from "@/lib/api";
+import { agendaListerEvenements, agendaCreerEvenement, agendaModifierEvenement, agendaSupprimerEvenement, idelInsights, CalendarEvent } from "@/lib/api";
+import InsightStrip from "@/components/InsightStrip";
 import { idelGetPatients } from "@/lib/api";
 import { IdelPatient } from "@/lib/types";
 
@@ -170,6 +171,7 @@ export default function AgendaPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-6xl px-4 py-8">
+        <InsightStrip fetcher={idelInsights} module="agenda" />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Agenda</h1>

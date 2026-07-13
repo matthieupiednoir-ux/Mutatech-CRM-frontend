@@ -8,9 +8,10 @@ import {
   tourneesAjouterItem, tourneesSupprimerItem,
   Tournee, TourneeVisit,
 } from "@/lib/api";
-import { idelGetPatients, pharmaListerProduits } from "@/lib/api";
+import { idelGetPatients, pharmaListerProduits, idelInsights } from "@/lib/api";
 import { Product } from "@/lib/api";
 import { IdelPatient } from "@/lib/types";
+import InsightStrip from "@/components/InsightStrip";
 
 const PRESTATION_LABEL: Record<string, string> = {
   oxygenotherapie: "Oxygénothérapie",
@@ -181,6 +182,7 @@ export default function TourneesPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-5xl px-4 py-8">
+        <InsightStrip fetcher={idelInsights} module="tournees" />
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Tournées</h1>
