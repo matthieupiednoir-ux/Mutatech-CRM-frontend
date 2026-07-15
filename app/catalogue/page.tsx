@@ -20,6 +20,11 @@ export default function CataloguePage() {
   const [tauxTva, setTauxTva] = useState("20");
   const [enregistrement, setEnregistrement] = useState(false);
 
+  const [importOuvert, setImportOuvert] = useState(false);
+  const [csvTexte, setCsvTexte] = useState("");
+  const [importEnCours, setImportEnCours] = useState(false);
+  const [importResultat, setImportResultat] = useState<string | null>(null);
+
   function charger() {
     setLoading(true);
     catalogueLister()
@@ -75,6 +80,35 @@ export default function CataloguePage() {
     }
   }
 
+  // Import CSV/Excel simplifie : une ligne par produit, format
+  // "nom;prix;type_facturation;description" -- type_facturation et
+  // description optionnels (ponctuelle par defaut). Colle directement
+  // depuis Excel (le point-virgule est le separateur standard FR).
+  async function handleImporterCsv() {
+    setImportEnCours(true);
+    setImportResultat(null);
+    setError(null);
+    const lignes = csvTexte.split("\n").map((l) => l.trim()).filter(Boolean);
+    let ok = 0, echecs = 0;
+    for (const ligne of lignes) {
+      const sep = ligne.includes(";") ? ";" : ",";
+      const [nomBrut, prixBrut, typeBrut, descBrut] = ligne.split(sep).map((x) => x?.trim() || "");
+      const prixNombre = parseFloat((prixBrut || "").replace(",", "."));
+      if (!nomBrut || isNaN(prixNombre)) { echecs++; continue; }
+      const type = typeBrut?.toLowerCase().startsWith("abo") ? "abonnement" : "ponctuelle";
+      try {
+        await catalogueCreer({ nom: nomBrut, prix: prixNombre, type_facturation: type, description: descBrut || undefined });
+        ok++;
+      } catch {
+        echecs++;
+      }
+    }
+    setImportResultat(`${ok} produit(s) importé(s)${echecs > 0 ? `, ${echecs} ligne(s) ignorée(s)` : ""}.`);
+    setImportEnCours(false);
+    setCsvTexte("");
+    charger();
+  }
+
   async function handleToggleActif(p: ProduitCatalogue) {
     setError(null);
     try {
@@ -107,15 +141,54 @@ export default function CataloguePage() {
               Tes produits, services et prestations réutilisables — piochés directement dans tes devis.
             </p>
           </div>
-          <button
-            onClick={() => { resetForm(); setFormOuvert(true); }}
-            className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
-          >
-            + Ajouter
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setImportOuvert(true)}
+              className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
+            >
+              📥 Importer CSV/Excel
+            </button>
+            <button
+              onClick={() => { resetForm(); setFormOuvert(true); }}
+              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
+            >
+              + Ajouter
+            </button>
+          </div>
         </div>
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
+
+        {importOuvert && (
+          <div className="mb-6 rounded-xl border border-line bg-surface p-5">
+            <p className="mb-2 text-sm font-medium text-textPrimary">Importer des produits (CSV / Excel)</p>
+            <p className="mb-3 text-xs text-textMuted">
+              Colle le contenu (une ligne par produit) au format :{" "}
+              <code className="rounded bg-surfaceAlt px-1.5 py-0.5 text-[11px]">nom;prix;type;description</code>{" "}
+              — type vaut "ponctuelle" ou "abonnement" (optionnel), description optionnelle.
+            </p>
+            <textarea
+              value={csvTexte}
+              onChange={(e) => setCsvTexte(e.target.value)}
+              rows={6}
+              placeholder={"Diagnostic IA;490;ponctuelle;Audit organisation + rapport\nSuivi Mensuel;290;abonnement;Point visio mensuel"}
+              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 font-mono text-xs text-textPrimary placeholder:text-textMuted/50"
+            />
+            {importResultat && <p className="mt-2 text-xs text-teal">{importResultat}</p>}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={handleImporterCsv}
+                disabled={importEnCours || !csvTexte.trim()}
+                className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-violet/90"
+              >
+                {importEnCours ? "Import en cours..." : "Importer"}
+              </button>
+              <button onClick={() => { setImportOuvert(false); setImportResultat(null); }} className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted">
+                Fermer
+              </button>
+            </div>
+          </div>
+        )}
 
         {formOuvert && (
           <form onSubmit={handleSubmit} className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-5 sm:grid-cols-2">
