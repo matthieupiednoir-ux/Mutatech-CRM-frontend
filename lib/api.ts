@@ -144,6 +144,24 @@ export const creerCompteClient = (data: CreerClientInput) =>
   requete<ClientCreeOut>("/api/auth/crm/clients", { method: "POST", body: JSON.stringify(data) });
 export const listerComptesClients = () => requete<UserMe[]>("/api/auth/crm/clients");
 
+// --- Equipe cote client (le proprietaire du tenant invite ses collegues) ---
+// Distinct de MembreEquipe (equipe interne Mutatech, /api/admin/equipe).
+export interface MembreEquipeClient {
+  id: string;
+  email: string;
+  nom?: string | null;
+  role: string;
+  actif: boolean;
+  cree_le: string;
+}
+export const membresLister = () => requete<MembreEquipeClient[]>("/api/auth/crm/membres");
+export const membresInviter = (data: { email: string; nom?: string }) =>
+  requete<{ user_id: string; email: string; mot_de_passe_temporaire: string }>("/api/auth/crm/membres", { method: "POST", body: JSON.stringify(data) });
+export const membresModifier = (id: string, data: { actif?: boolean; nom?: string }) =>
+  requete<MembreEquipeClient>(`/api/auth/crm/membres/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const membresRetirer = (id: string) =>
+  requete<{ statut: string }>(`/api/auth/crm/membres/${id}`, { method: "DELETE" });
+
 // --- Equipe Mutatech (interne, distincte des clients) ---
 export interface MembreEquipe {
   id: string;

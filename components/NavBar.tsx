@@ -18,6 +18,10 @@ const ONGLETS_CRM = [
   { id: "catalogue", href: "/catalogue", label: "Catalogue" },
   { id: "agent", href: "/agent", label: "Agent IA" },
 ];
+// Onglet a part (pas dans ONGLETS_CRM) : visible uniquement pour le
+// proprietaire du tenant, jamais masquable via /parametres (c'est une
+// question de permission, pas de preference d'affichage).
+const ONGLET_EQUIPE_CLIENT = { id: "equipe", href: "/equipe", label: "Mon équipe" };
 
 const ONGLETS_IDEL_BASE = [
   { href: "/idel", label: "Pipeline" },
@@ -80,11 +84,16 @@ function NavBarInterieur() {
   const ongletsCrmFiltres = ONGLETS_CRM.filter(
     (o) => o.id === "dashboard" || o.id === "agent" || !ongletsMasques.has(o.id)
   );
+  const peutGererEquipe = user?.role === "owner" || user?.role === "admin";
   const onglets = estAdmin
     ? ONGLETS_ADMIN
     : estIdel
     ? ongletsIdel
-    : [...ongletsCrmFiltres, { id: "parametres", href: "/parametres", label: "⚙" }];
+    : [
+        ...ongletsCrmFiltres,
+        ...(peutGererEquipe ? [ONGLET_EQUIPE_CLIENT] : []),
+        { id: "parametres", href: "/parametres", label: "⚙" },
+      ];
   const labelProduit = estAdmin
     ? "Mutatech / Admin"
     : estIdel
