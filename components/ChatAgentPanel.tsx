@@ -10,24 +10,49 @@ interface MessageAffiche {
   actions?: string[];
 }
 
-const SUGGESTIONS = [
+interface ReponseAgent {
+  reply: string;
+  actions_effectuees?: string[];
+}
+
+interface ChatAgentPanelProps {
+  compact?: boolean;
+  // Permet de reutiliser ce composant pour Nova (IDEL/PSDM) en passant
+  // les fonctions API du backend IDEL au lieu du CRM -- sans props,
+  // comportement inchange (Pixel/CRM par defaut).
+  chatFn?: (message: string, historique: { role: string; content: string }[]) => Promise<ReponseAgent>;
+  historyFn?: () => Promise<AgentMessage[]>;
+  clearFn?: () => Promise<unknown>;
+  messageAccueil?: string;
+  suggestions?: string[];
+  accentClass?: string; // classe Tailwind pour la bulle utilisateur/bouton, ex. "bg-violet hover:bg-violet/90"
+}
+
+const SUGGESTIONS_DEFAUT = [
   "Quelles sont mes tâches en cours ?",
   "Liste les prospects SSIAD à contacter",
   "Combien de devis sont en attente de signature ?",
 ];
 
-const MESSAGE_ACCUEIL: MessageAffiche = {
-  role: "assistant",
-  content: "Salut ! Je peux consulter tes tâches, prospects, clients, devis et factures. Pour toute action, je décris d'abord ce que je vais faire et j'attends ta confirmation. Qu'est-ce que je peux faire pour toi ?",
-};
+const MESSAGE_ACCUEIL_DEFAUT =
+  "Salut ! Je peux consulter tes tâches, prospects, clients, devis et factures. Pour toute action, je décris d'abord ce que je vais faire et j'attends ta confirmation. Qu'est-ce que je peux faire pour toi ?";
 
-function safeMessages(v: unknown): MessageAffiche[] {
-  if (!Array.isArray(v)) return [MESSAGE_ACCUEIL];
-  return v.length === 0 ? [MESSAGE_ACCUEIL] : v;
+function safeMessages(v: unknown, accueil: MessageAffiche): MessageAffiche[] {
+  if (!Array.isArray(v)) return [accueil];
+  return v.length === 0 ? [accueil] : (v as MessageAffiche[]);
 }
 
-export default function ChatAgentPanel({ compact = false }: { compact?: boolean }) {
-  const [messages, setMessages] = useState<MessageAffiche[]>([MESSAGE_ACCUEIL]);
+export default function ChatAgentPanel({
+  compact = false,
+  chatFn = chatAgent,
+  historyFn = getAgentHistorique,
+  clearFn = effacerAgentHistorique,
+  messageAccueil = MESSAGE_ACCUEIL_DEFAUT,
+  suggestions = SUGGESTIONS_DEFAUT,
+  accentClass = "bg-violet hover:bg-violet/90",
+}: ChatAgentPanelProps) {
+  const accueil: MessageAffiche = { role: "assistant", content: messageAccueil };
+  const [messages, setMessages] = useState<MessageAffiche[]>([accueil]);
   const [historiquePret, setHistoriquePret] = useState(false);
   const [saisie, setSaisie] = useState("");
   const [envoi, setEnvoi] = useState(false);
@@ -35,7 +60,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
   const finRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getAgentHistorique()
+    historyFn()
       .then((data: unknown) => {
         if (!Array.isArray(data) || data.length === 0) return;
         const mapped: MessageAffiche[] = (data as AgentMessage[]).map((m) => ({
@@ -47,6 +72,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
       })
       .catch(() => {})
       .finally(() => setHistoriquePret(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -57,7 +83,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
     const message = (texte ?? saisie).trim();
     if (!message || envoi) return;
 
-    const safeMsg = safeMessages(messages);
+    const safeMsg = safeMessages(messages, accueil);
     const historique = safeMsg.map((m) => ({ role: m.role, content: m.content }));
     setMessages([...safeMsg, { role: "user", content: message }]);
     setSaisie("");
@@ -65,9 +91,9 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
     setError(null);
 
     try {
-      const reponse = await chatAgent(message, historique);
+      const reponse = await chatFn(message, historique);
       setMessages((prev) => [
-        ...safeMessages(prev),
+        ...safeMessages(prev, accueil),
         {
           role: "assistant",
           content: reponse.reply ?? "",
@@ -84,8 +110,8 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
   async function effacer() {
     if (!confirm("Effacer tout l'historique ?")) return;
     try {
-      await effacerAgentHistorique();
-      setMessages([MESSAGE_ACCUEIL]);
+      await clearFn();
+      setMessages([accueil]);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur.");
     }
@@ -95,7 +121,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); }
   }
 
-  const safeMsg = safeMessages(messages);
+  const safeMsg = safeMessages(messages, accueil);
 
   return (
     <div className="flex h-full flex-col">
@@ -120,7 +146,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
         {safeMsg.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
-              m.role === "user" ? "bg-violet text-white" : "bg-surfaceAlt text-textPrimary"
+              m.role === "user" ? `${accentClass.split(" ")[0]} text-white` : "bg-surfaceAlt text-textPrimary"
             }`}>
               {m.content}
               {Array.isArray(m.actions) && m.actions.length > 0 && (
@@ -147,7 +173,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
 
       {safeMsg.length <= 1 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {SUGGESTIONS.map((s) => (
+          {suggestions.map((s) => (
             <button key={s} onClick={() => envoyer(s)}
               className="rounded-full border border-line px-2.5 py-1 text-[11px] text-textMuted hover:border-violet hover:text-textPrimary">
               {s}
@@ -168,7 +194,7 @@ export default function ChatAgentPanel({ compact = false }: { compact?: boolean 
         <button
           onClick={() => envoyer()}
           disabled={envoi || !saisie.trim()}
-          className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+          className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${accentClass}`}
         >
           Envoyer
         </button>

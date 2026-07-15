@@ -24,6 +24,7 @@ const ONGLETS_IDEL_BASE = [
   { href: "/idel/patients", label: "Patients" },
   { href: "/idel/comptabilite", label: "Trésorerie" },
   { href: "/idel/catalogue", label: "Catalogue" },
+  { href: "/idel/nova", label: "✨ Nova" },
 ];
 const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {
   tournees: { href: "/idel/tournees", label: "Tournées" },

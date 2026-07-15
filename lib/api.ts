@@ -163,10 +163,16 @@ export const equipeRetirer = (id: string) =>
   requete<{ statut: string }>(`/api/admin/equipe/${id}`, { method: "DELETE" });
 
 // --- Insights discrets (suggestions passives, pas de chat) ---
+export interface InsightItem {
+  id: string;
+  label: string;
+}
 export interface Insight {
   module: string;
   texte: string;
   urgence: "info" | "attention" | "important";
+  action_type?: "relancer_facture" | "renvoyer_devis" | "marquer_prospect_contacte";
+  items?: InsightItem[];
 }
 export const agentInsights = () => requete<Insight[]>("/api/agent/insights");
 
@@ -524,6 +530,12 @@ export const agendaSupprimerEvenement = (id: string) =>
 
 // --- Insights discrets IDEL/PSDM (tournees, pharma, prescriptions, agenda) ---
 export const idelInsights = () => requeteIdel<Insight[]>("/api/insights");
+
+// --- Nova : agent IA conversationnel cote IDEL/PSDM (equivalent de Pixel) ---
+export const novaChat = (message: string, historique: { role: string; content: string }[]) =>
+  requeteIdel<AgentResponse>("/api/nova/chat", { method: "POST", body: JSON.stringify({ message, historique }) });
+export const novaHistorique = () => requeteIdel<AgentMessage[]>("/api/nova/history");
+export const novaEffacerHistorique = () => requeteIdel<{ statut: string }>("/api/nova/history", { method: "DELETE" });
 
 // --- Catalogue prestations (IDEL/PSDM) ---
 export interface PrestationCatalogue {
