@@ -33,6 +33,34 @@ export interface TenantConfig {
   site_web?: string;
   mentions_legales?: string;
   taux_tva_defaut?: number;
+  // Liste d'identifiants d'onglets masques, separes par des virgules
+  // (ex: "prospects,depenses") -- pilote l'affichage de la navigation
+  // CRM selon le metier du tenant (ex: une coiffeuse n'a pas besoin de
+  // Prospects). Null/vide = tous les onglets sont affiches.
+  onglets_masques?: string | null;
+}
+
+// --- Catalogue produits/services ---
+export type TypeFacturationProduit = "ponctuelle" | "abonnement";
+
+export interface ProduitCatalogue {
+  id: string;
+  nom: string;
+  description?: string | null;
+  type_facturation: TypeFacturationProduit;
+  prix: number;
+  taux_tva: number;
+  actif: boolean;
+  cree_le?: string;
+}
+
+export interface ProduitCatalogueInput {
+  nom: string;
+  description?: string | null;
+  type_facturation?: TypeFacturationProduit;
+  prix: number;
+  taux_tva?: number;
+  actif?: boolean;
 }
 
 export interface GoogleStatus {

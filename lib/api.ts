@@ -1,6 +1,7 @@
 import {
   Client, ClientInput,
   Devis, DevisInput, DevisPublic,
+  ProduitCatalogue, ProduitCatalogueInput,
   Facture, FactureInput,
   GoogleStatus, Ligne,
   Tache, TacheInput,
@@ -168,6 +169,16 @@ export interface Insight {
   urgence: "info" | "attention" | "important";
 }
 export const agentInsights = () => requete<Insight[]>("/api/agent/insights");
+
+// --- Catalogue produits/services (CRM) ---
+export const catalogueLister = (actifSeulement?: boolean) =>
+  requete<ProduitCatalogue[]>(`/api/catalogue${actifSeulement ? "?actif_seulement=true" : ""}`);
+export const catalogueCreer = (data: ProduitCatalogueInput) =>
+  requete<ProduitCatalogue>("/api/catalogue", { method: "POST", body: JSON.stringify(data) });
+export const catalogueModifier = (id: string, data: Partial<ProduitCatalogueInput>) =>
+  requete<ProduitCatalogue>(`/api/catalogue/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const catalogueSupprimer = (id: string) =>
+  requete<{ statut: string }>(`/api/catalogue/${id}`, { method: "DELETE" });
 
 // --- Clients ---
 export const getClients = () => requete<Client[]>("/api/clients");
@@ -513,3 +524,22 @@ export const agendaSupprimerEvenement = (id: string) =>
 
 // --- Insights discrets IDEL/PSDM (tournees, pharma, prescriptions, agenda) ---
 export const idelInsights = () => requeteIdel<Insight[]>("/api/insights");
+
+// --- Catalogue prestations (IDEL/PSDM) ---
+export interface PrestationCatalogue {
+  id: string;
+  nom: string;
+  description?: string | null;
+  type_facturation: "ponctuelle" | "abonnement";
+  prix: number;
+  actif: boolean;
+}
+export const prestationsCatalogueLister = () => requeteIdel<PrestationCatalogue[]>("/api/catalogue");
+export const prestationsCatalogueCreer = (data: {
+  nom: string; description?: string; type_facturation?: string; prix: number;
+}) => requeteIdel<PrestationCatalogue>("/api/catalogue", { method: "POST", body: JSON.stringify(data) });
+export const prestationsCatalogueModifier = (id: string, data: {
+  nom?: string; description?: string; type_facturation?: string; prix?: number; actif?: boolean;
+}) => requeteIdel<PrestationCatalogue>(`/api/catalogue/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const prestationsCatalogueSupprimer = (id: string) =>
+  requeteIdel<{ ok: boolean }>(`/api/catalogue/${id}`, { method: "DELETE" });

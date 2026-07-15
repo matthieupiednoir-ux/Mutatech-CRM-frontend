@@ -7,7 +7,8 @@ import {
   envoyerDevisPourSignature, getAbonnementSuivi, genererFactureMois,
   calculerTotaux, ApiError,
 } from "@/lib/api";
-import { Client, Devis, DevisInput, Ligne, TypeFacturation, MoisAbonnement } from "@/lib/types";
+import { Client, Devis, DevisInput, Ligne, TypeFacturation, MoisAbonnement, ProduitCatalogue } from "@/lib/types";
+import { catalogueLister } from "@/lib/api";
 
 const STATUT_LABEL: Record<string, string> = {
   brouillon: "Brouillon", envoye: "Envoyé", accepte: "Accepté", refuse: "Refusé",
@@ -17,48 +18,6 @@ const STATUT_COULEUR: Record<string, string> = {
 };
 
 const LIGNE_VIDE: Ligne = { description: "", quantite: 1, prix_unitaire: 0 };
-
-const FORFAITS: Array<{ label: string; lignes: Ligne[]; taux_tva: number }> = [
-  {
-    label: "Diagnostic IA",
-    lignes: [{ description: "Diagnostic IA — audit organisation + rapport + restitution", quantite: 1, prix_unitaire: 490 }],
-    taux_tva: 20,
-  },
-  {
-    label: "Pack Lancement",
-    lignes: [
-      { description: "Diagnostic IA inclus", quantite: 1, prix_unitaire: 490 },
-      { description: "Déploiement 2 outils IA + formation individuelle 2h", quantite: 1, prix_unitaire: 500 },
-      { description: "Support 2 semaines", quantite: 1, prix_unitaire: 200 },
-    ],
-    taux_tva: 20,
-  },
-  {
-    label: "Suivi Mensuel",
-    lignes: [{ description: "Suivi mensuel IA — point visio + optimisations + messagerie prioritaire", quantite: 1, prix_unitaire: 290 }],
-    taux_tva: 20,
-  },
-  {
-    label: "Atelier Collectif",
-    lignes: [{ description: "Atelier collectif IA métier — 3h (par participant)", quantite: 1, prix_unitaire: 120 }],
-    taux_tva: 20,
-  },
-  {
-    label: "Agent IA Métier",
-    lignes: [{ description: "Agent IA Métier — abonnement mensuel sur-mesure", quantite: 1, prix_unitaire: 350 }],
-    taux_tva: 20,
-  },
-  {
-    label: "Diagnostic IDEL",
-    lignes: [{ description: "Diagnostic IDEL — audit 2h adapté infirmier libéral", quantite: 1, prix_unitaire: 250 }],
-    taux_tva: 20,
-  },
-  {
-    label: "Suivi IDEL",
-    lignes: [{ description: "Suivi IDEL mensuel — CPAM, cotation NGAP, DSI", quantite: 1, prix_unitaire: 89 }],
-    taux_tva: 20,
-  },
-];
 
 function safeArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
@@ -125,9 +84,9 @@ export default function DevisPage() {
   const [envoi, setEnvoi] = useState<string | null>(null);
   const [suppression, setSuppression] = useState<string | null>(null);
 
-  // Mode forfait vs sur mesure
-  const [modeForfait, setModeForfait] = useState<"forfait" | "mesure">("mesure");
-  const [forfaitChoisi, setForfaitChoisi] = useState(0);
+  // Catalogue reel (remplace l'ancienne liste de forfaits codee en dur)
+  const [catalogue, setCatalogue] = useState<ProduitCatalogue[]>([]);
+  const [catalogueOuvert, setCatalogueOuvert] = useState(false);
 
   // Champs formulaire
   const [clientId, setClientId] = useState("");
@@ -153,11 +112,13 @@ export default function DevisPage() {
   }, []);
 
   useEffect(() => { charger(); }, [charger]);
+  useEffect(() => {
+    catalogueLister(true).then(setCatalogue).catch(() => setCatalogue([]));
+  }, []);
 
   function resetForm() {
     setDevisEnEdition(null);
-    setModeForfait("mesure");
-    setForfaitChoisi(0);
+    setCatalogueOuvert(false);
     setClientId("");
     setObjet("");
     setTypeFacturation("ponctuelle");
@@ -177,8 +138,7 @@ export default function DevisPage() {
 
   function ouvrirEdition(d: Devis) {
     setDevisEnEdition(d);
-    setModeForfait("mesure");
-    setForfaitChoisi(0);
+    setCatalogueOuvert(false);
     setClientId(d.client_id ?? "");
     setObjet(d.objet ?? "");
     setTypeFacturation(d.type_facturation ?? "ponctuelle");
@@ -192,11 +152,17 @@ export default function DevisPage() {
     setError(null);
   }
 
-  function appliquerForfait(idx: number) {
-    const f = FORFAITS[idx];
-    setLignes(f.lignes.map((l) => ({ ...l })));
-    setTauxTva(f.taux_tva);
-    if (!objet) setObjet(f.label);
+  function ajouterDepuisCatalogue(produit: ProduitCatalogue) {
+    setLignes((prev) => {
+      const sansLigneVide = prev.filter((l) => l.description.trim() !== "");
+      return [...sansLigneVide, { description: produit.nom, quantite: 1, prix_unitaire: produit.prix }];
+    });
+    if (produit.type_facturation === "abonnement") {
+      setTypeFacturation("abonnement");
+      setMontantMensuel(String(produit.prix));
+    }
+    if (!objet) setObjet(produit.nom);
+    setCatalogueOuvert(false);
   }
 
   function modifierLigne(i: number, champ: keyof Ligne, val: string) {
@@ -316,40 +282,34 @@ export default function DevisPage() {
             </h2>
             {error && <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-amber">{error}</p>}
 
-            {/* Mode forfait / sur mesure */}
+            {/* Depuis le catalogue */}
             <div>
-              <p className="mb-2 text-sm font-medium text-textMuted">Type de devis</p>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setModeForfait("forfait")}
-                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${modeForfait === "forfait" ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted hover:border-violet/40"}`}>
-                  📦 Forfait standard
-                </button>
-                <button type="button" onClick={() => setModeForfait("mesure")}
-                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${modeForfait === "mesure" ? "border-teal bg-teal/10 text-teal" : "border-line text-textMuted hover:border-teal/40"}`}>
-                  ✏️ Sur mesure
-                </button>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium text-textMuted">Lignes du devis</p>
+                {catalogue.length > 0 && (
+                  <button type="button" onClick={() => setCatalogueOuvert(!catalogueOuvert)}
+                    className="rounded-lg border border-violet/40 bg-violet/10 px-3 py-1.5 text-xs font-medium text-violet hover:bg-violet/20">
+                    📦 Depuis le catalogue
+                  </button>
+                )}
               </div>
-            </div>
-
-            {/* Sélecteur forfait */}
-            {modeForfait === "forfait" && (
-              <div className="rounded-xl border border-violet/20 bg-violet/5 p-4">
-                <p className="mb-3 text-sm font-medium text-textPrimary">Choisir un forfait</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {FORFAITS.map((f, i) => (
-                    <button key={i} type="button"
-                      onClick={() => { setForfaitChoisi(i); appliquerForfait(i); }}
-                      className={`rounded-lg border p-3 text-left text-sm transition ${forfaitChoisi === i ? "border-violet bg-violet/15 text-textPrimary" : "border-line text-textMuted hover:border-violet/40 hover:text-textPrimary"}`}>
-                      <span className="font-semibold">{f.label}</span>
-                      <span className="ml-2 text-xs opacity-70">
-                        {f.lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0).toFixed(0)} € HT
-                      </span>
-                    </button>
-                  ))}
+              {catalogueOuvert && (
+                <div className="mb-3 rounded-xl border border-violet/20 bg-violet/5 p-4">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {catalogue.map((p) => (
+                      <button key={p.id} type="button" onClick={() => ajouterDepuisCatalogue(p)}
+                        className="rounded-lg border border-line p-3 text-left text-sm text-textMuted transition hover:border-violet/40 hover:text-textPrimary">
+                        <span className="font-semibold">{p.nom}</span>
+                        <span className="ml-2 text-xs opacity-70">
+                          {p.prix.toFixed(0)} € HT{p.type_facturation === "abonnement" ? "/mois" : ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] text-textMuted">Chaque clic ajoute une ligne — modifiable ensuite. Gère le catalogue depuis l'onglet "Catalogue".</p>
                 </div>
-                <p className="mt-2 text-[11px] text-textMuted">Les lignes seront pré-remplies — vous pouvez les modifier ensuite.</p>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
@@ -416,7 +376,7 @@ export default function DevisPage() {
 
             {/* Lignes */}
             <div>
-              <p className="mb-2 text-sm font-medium text-textPrimary">Lignes du devis</p>
+              <p className="mb-2 text-sm font-medium text-textPrimary">Ajouter une ligne manuellement</p>
               <div className="space-y-2">
                 {lignes.map((l, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">

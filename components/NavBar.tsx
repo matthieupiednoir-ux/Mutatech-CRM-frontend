@@ -3,25 +3,27 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { getGoogleStatus, urlConnexionGoogle, monOrganisation } from "@/lib/api";
+import { getGoogleStatus, urlConnexionGoogle, monOrganisation, getTenantConfig } from "@/lib/api";
 import { deconnecter, getUser } from "@/lib/auth";
 
 const ONGLETS_CRM = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/clients", label: "Clients" },
-  { href: "/devis", label: "Devis" },
-  { href: "/factures", label: "Factures" },
-  { href: "/depenses", label: "Dépenses" },
-  { href: "/taches", label: "Tâches" },
-  { href: "/prospects", label: "Prospects" },
-  { href: "/comptabilite", label: "Comptabilité" },
-  { href: "/agent", label: "Agent IA" },
+  { id: "dashboard", href: "/dashboard", label: "Dashboard" },
+  { id: "clients", href: "/clients", label: "Clients" },
+  { id: "devis", href: "/devis", label: "Devis" },
+  { id: "factures", href: "/factures", label: "Factures" },
+  { id: "depenses", href: "/depenses", label: "Dépenses" },
+  { id: "taches", href: "/taches", label: "Tâches" },
+  { id: "prospects", href: "/prospects", label: "Prospects" },
+  { id: "comptabilite", href: "/comptabilite", label: "Comptabilité" },
+  { id: "catalogue", href: "/catalogue", label: "Catalogue" },
+  { id: "agent", href: "/agent", label: "Agent IA" },
 ];
 
 const ONGLETS_IDEL_BASE = [
   { href: "/idel", label: "Pipeline" },
   { href: "/idel/patients", label: "Patients" },
   { href: "/idel/comptabilite", label: "Trésorerie" },
+  { href: "/idel/catalogue", label: "Catalogue" },
 ];
 const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {
   tournees: { href: "/idel/tournees", label: "Tournées" },
@@ -51,6 +53,7 @@ function NavBarInterieur() {
   const searchParams = useSearchParams();
   const [googleConnecte, setGoogleConnecte] = useState<boolean | null>(null);
   const [modulesActifs, setModulesActifs] = useState<string[]>([]);
+  const [ongletsMasques, setOngletsMasques] = useState<Set<string>>(new Set());
   const user = getUser();
 
   const produit = user?.produit || "crm";
@@ -63,7 +66,7 @@ function NavBarInterieur() {
   const mode = estAdmin ? "admin" : estIdel ? "idel" : "crm";
 
   // Pilote l'aura de fond (definie dans globals.css via body[data-mode])
-  // -- violette cote CRM/Pixel, teal cote IDEL-PSDM/Nova, ambre en admin.
+  // -- violette cote CRM/Pixel, rose hi-tech cote IDEL-PSDM/Nova, ambre en admin.
   useEffect(() => {
     document.body.dataset.mode = mode;
   }, [mode]);
@@ -73,7 +76,14 @@ function NavBarInterieur() {
     ...modulesActifs.filter((m) => ONGLETS_MODULES[m]).map((m) => ONGLETS_MODULES[m]),
     ONGLET_PARAMETRES,
   ];
-  const onglets = estAdmin ? ONGLETS_ADMIN : estIdel ? ongletsIdel : ONGLETS_CRM;
+  const ongletsCrmFiltres = ONGLETS_CRM.filter(
+    (o) => o.id === "dashboard" || o.id === "agent" || !ongletsMasques.has(o.id)
+  );
+  const onglets = estAdmin
+    ? ONGLETS_ADMIN
+    : estIdel
+    ? ongletsIdel
+    : [...ongletsCrmFiltres, { id: "parametres", href: "/parametres", label: "⚙" }];
   const labelProduit = estAdmin
     ? "Mutatech / Admin"
     : estIdel
@@ -86,6 +96,12 @@ function NavBarInterieur() {
       getGoogleStatus()
         .then((s) => setGoogleConnecte(s.connecte))
         .catch(() => setGoogleConnecte(false));
+      getTenantConfig()
+        .then((config) => {
+          const liste = (config.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
+          setOngletsMasques(new Set(liste));
+        })
+        .catch(() => setOngletsMasques(new Set()));
     }
   }, [searchParams, estIdel, estAdmin]);
 
