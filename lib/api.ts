@@ -582,3 +582,48 @@ export interface IdelResume {
   ordonnances_actives: number;
 }
 export const idelDashboardResume = () => requeteIdel<IdelResume>("/api/dashboard-resume");
+
+// --- Planning partage (Google Calendar personnel par utilisateur) ---
+export interface MembrePlanning {
+  contexte: string;
+  nom: string;
+  connecte: boolean;
+  email_google?: string | null;
+}
+export interface EvenementPlanning {
+  id: string;
+  titre: string;
+  debut?: string | null;
+  fin?: string | null;
+  lieu?: string | null;
+  proprietaire_contexte: string;
+  proprietaire_nom: string;
+}
+export interface EvenementPlanningInput {
+  titre: string;
+  debut: string;
+  fin: string;
+  description?: string;
+  lieu?: string;
+  assigne_a_contexte: string;
+}
+
+// CRM
+export const planningLoginPersonnelUrl = () => requete<{ url: string }>("/api/auth/google/login-personnel-url");
+export const planningStatutPersonnel = () => requete<{ connecte: boolean; email_google?: string | null }>("/api/auth/google/statut-personnel");
+export const planningDeconnexionPersonnelle = () => requete<{ statut: string }>("/api/auth/google/deconnexion-personnelle", { method: "DELETE" });
+export const planningMembres = () => requete<MembrePlanning[]>("/api/planning/membres");
+export const planningEvenements = (debut: string, fin: string) =>
+  requete<EvenementPlanning[]>(`/api/planning/evenements?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
+export const planningCreerEvenement = (data: EvenementPlanningInput) =>
+  requete<EvenementPlanning>("/api/planning/evenements", { method: "POST", body: JSON.stringify(data) });
+
+// IDEL (memes formes, endpoints relayes cote backend IDEL)
+export const idelPlanningLoginPersonnelUrl = () => requeteIdel<{ url: string }>("/api/planning/login-personnel-url");
+export const idelPlanningStatutPersonnel = () => requeteIdel<{ connecte: boolean; email_google?: string | null }>("/api/planning/statut-personnel");
+export const idelPlanningDeconnexionPersonnelle = () => requeteIdel<{ statut: string }>("/api/planning/deconnexion-personnelle", { method: "DELETE" });
+export const idelPlanningMembres = () => requeteIdel<MembrePlanning[]>("/api/planning/membres");
+export const idelPlanningEvenements = (debut: string, fin: string) =>
+  requeteIdel<EvenementPlanning[]>(`/api/planning/evenements?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
+export const idelPlanningCreerEvenement = (data: EvenementPlanningInput) =>
+  requeteIdel<EvenementPlanning>("/api/planning/evenements", { method: "POST", body: JSON.stringify(data) });

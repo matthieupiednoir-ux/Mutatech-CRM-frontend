@@ -29,6 +29,16 @@ function safeArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+// Memes fonctions que cote IDEL (tournees) -- ouvrent Waze/Maps avec
+// l'adresse en destination, sans jamais transmettre de donnees a un
+// tiers autre que le navigateur/l'app de nav elle-meme.
+function urlWaze(adresse: string): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(adresse)}&navigate=yes`;
+}
+function urlMaps(adresse: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adresse)}`;
+}
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -277,10 +287,22 @@ export default function ClientsPage() {
                   {c.activite_description && (
                     <p className="mt-0.5 text-xs text-textMuted">{c.activite_description}</p>
                   )}
-                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-textMuted">
                     {c.email && <span>✉ {c.email}</span>}
                     {c.telephone && <span>📞 {c.telephone}</span>}
-                    {c.adresse && <span>📍 {c.adresse}</span>}
+                    {c.adresse && (
+                      <span className="flex items-center gap-1.5">
+                        📍 {c.adresse}
+                        <a href={urlWaze(c.adresse)} target="_blank" rel="noopener noreferrer"
+                          className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
+                          🧭 Waze
+                        </a>
+                        <a href={urlMaps(c.adresse)} target="_blank" rel="noopener noreferrer"
+                          className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
+                          🗺️ Maps
+                        </a>
+                      </span>
+                    )}
                     {c.siret && <span className="font-mono">SIRET {c.siret}</span>}
                   </div>
                   {c.notes && <p className="mt-1 text-[11px] italic text-textMuted">{c.notes}</p>}

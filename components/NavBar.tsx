@@ -22,12 +22,14 @@ const ONGLETS_CRM = [
 // proprietaire du tenant, jamais masquable via /parametres (c'est une
 // question de permission, pas de preference d'affichage).
 const ONGLET_EQUIPE_CLIENT = { id: "equipe", href: "/equipe", label: "Mon équipe" };
+const ONGLET_PLANNING_CRM = { id: "planning", href: "/planning", label: "Planning" };
 
 const ONGLETS_IDEL_BASE = [
   { href: "/idel", label: "Pipeline" },
   { href: "/idel/patients", label: "Patients" },
   { href: "/idel/comptabilite", label: "Trésorerie" },
   { href: "/idel/catalogue", label: "Catalogue" },
+  { href: "/idel/planning", label: "Planning" },
   { href: "/idel/nova", label: "✨ Nova" },
 ];
 const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {
@@ -91,6 +93,7 @@ function NavBarInterieur() {
     ? ongletsIdel
     : [
         ...ongletsCrmFiltres,
+        ONGLET_PLANNING_CRM,
         ...(peutGererEquipe ? [ONGLET_EQUIPE_CLIENT] : []),
         { id: "parametres", href: "/parametres", label: "⚙" },
       ];

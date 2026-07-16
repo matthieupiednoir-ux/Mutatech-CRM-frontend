@@ -5,7 +5,7 @@ import NavBar from "@/components/NavBar";
 import { Tache, TacheInput, StatutTache } from "@/lib/types";
 import {
   getTaches, creerTache, modifierTache, supprimerTache,
-  importerTachesLot, ApiError,
+  ApiError,
 } from "@/lib/api";
 
 const PILIERS: Record<number, string> = {
@@ -48,7 +48,6 @@ export default function TachesPage() {
   const [formOuvert, setFormOuvert] = useState(false);
   const [form, setForm] = useState<TacheInput>({ ...TACHE_VIDE });
   const [enregistrement, setEnregistrement] = useState(false);
-  const [importEnCours, setImportEnCours] = useState(false);
   const [recherche, setRecherche] = useState("");
   const [pilierFiltre, setPilierFiltre] = useState<number | null>(null);
 
@@ -109,22 +108,6 @@ export default function TachesPage() {
     }
   }
 
-  async function handleImporter() {
-    // Tentative d'import depuis seed-taches si le fichier existe
-    try {
-      const { TACHES_SEED } = await import("@/lib/seed-taches");
-      if (!confirm(`Importer les ${TACHES_SEED.length} tâches ? Les tâches existantes ne seront pas supprimées.`)) return;
-      setImportEnCours(true);
-      setError(null);
-      await importerTachesLot(TACHES_SEED);
-      charger();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur d'import");
-    } finally {
-      setImportEnCours(false);
-    }
-  }
-
   const tachesFiltrees = safeArr<Tache>(taches).filter((t) => {
     if (pilierFiltre !== null && t.pilier !== pilierFiltre) return false;
     if (recherche) {
@@ -151,10 +134,6 @@ export default function TachesPage() {
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={handleImporter} disabled={importEnCours}
-              className="rounded-lg border border-violet/40 px-4 py-2 text-sm font-medium text-violet hover:bg-violet/10 disabled:opacity-50">
-              {importEnCours ? "Import…" : "Importer seed"}
-            </button>
             <button onClick={() => { setForm({ ...TACHE_VIDE }); setFormOuvert(true); }}
               className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
               + Nouvelle tâche

@@ -45,6 +45,15 @@ function safeArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+// Memes fonctions que cote IDEL (tournees) et cote CRM (clients) -- ouvrent
+// Waze/Maps avec l'adresse en destination.
+function urlWaze(adresse: string): string {
+  return `https://waze.com/ul?q=${encodeURIComponent(adresse)}&navigate=yes`;
+}
+function urlMaps(adresse: string): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adresse)}`;
+}
+
 const PROSPECT_VIDE: ProspectInput = {
   nom: "", secteur: "SSIAD", email: "", telephone: "",
   adresse: "", statut: "a_contacter", notes: "",
@@ -348,10 +357,22 @@ export default function PageProspects() {
                       <span className="rounded-full bg-violet/10 border border-violet/20 px-2 py-0.5 text-[11px] text-violet">{p.secteur}</span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-textMuted">
                     {p.telephone && <span>📞 {p.telephone}</span>}
                     {p.email && <span>✉ {p.email}</span>}
-                    {p.adresse && <span>📍 {p.adresse}</span>}
+                    {p.adresse && (
+                      <span className="flex items-center gap-1.5">
+                        📍 {p.adresse}
+                        <a href={urlWaze(p.adresse)} target="_blank" rel="noopener noreferrer"
+                          className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
+                          🧭 Waze
+                        </a>
+                        <a href={urlMaps(p.adresse)} target="_blank" rel="noopener noreferrer"
+                          className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
+                          🗺️ Maps
+                        </a>
+                      </span>
+                    )}
                   </div>
                   {p.notes && <p className="mt-1 text-[11px] italic text-textMuted">{p.notes}</p>}
                 </div>
