@@ -573,3 +573,12 @@ export const prestationsCatalogueModifier = (id: string, data: {
 }) => requeteIdel<PrestationCatalogue>(`/api/catalogue/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const prestationsCatalogueSupprimer = (id: string) =>
   requeteIdel<{ ok: boolean }>(`/api/catalogue/${id}`, { method: "DELETE" });
+
+// --- Resume IDEL pour le dashboard combine (comptes crm+idel) ---
+export interface IdelResume {
+  patients: number;
+  tournees_aujourdhui: number;
+  commandes_en_attente: number;
+  ordonnances_actives: number;
+}
+export const idelDashboardResume = () => requeteIdel<IdelResume>("/api/dashboard-resume");

@@ -6,7 +6,8 @@ import NavBar from "@/components/NavBar";
 import Kpi3DRing from "@/components/Kpi3DRing";
 import ChatAgentPanel from "@/components/ChatAgentPanel";
 import InsightStrip from "@/components/InsightStrip";
-import { agentInsights } from "@/lib/api";
+import { agentInsights, idelInsights, idelDashboardResume, IdelResume } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 import {
   getClients, getDevisListe, getFacturesListe,
   getTaches, getProspects, getEcheances,
@@ -220,6 +221,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [ordre, setOrdre] = useState<string[]>(ORDRE_DEFAUT);
+  const [idelResume, setIdelResume] = useState<IdelResume | null>(null);
+  const utilisateur = getUser();
+  const aAccesIdel = utilisateur?.produit === "crm+idel";
   const [masquees, setMasquees] = useState<string[]>([]);
   const [tailles, setTailles] = useState<Record<string,Taille>>(TAILLE_DEFAUT);
   const [modePerso, setModePerso] = useState(false);
@@ -256,6 +260,15 @@ export default function DashboardPage() {
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur"))
       .finally(() => setLoading(false));
   }, []);
+
+  // Compte crm+idel : charge en plus un resume ultra-leger du cote IDEL
+  // (compteurs seulement -- l'analyse detaillee reste sur les pages IDEL
+  // dediees), pour une vraie vue combinee sans dupliquer tout le pipeline.
+  useEffect(() => {
+    if (aAccesIdel) {
+      idelDashboardResume().then(setIdelResume).catch(() => setIdelResume(null));
+    }
+  }, [aAccesIdel]);
 
   // Toutes les données sont garanties tableaux grâce à safe()
   const D = safe<Devis>(devis);
@@ -368,6 +381,49 @@ export default function DashboardPage() {
             ))}
           </div>
         }
+
+        {/* Section IDEL -- uniquement pour les comptes crm+idel, vue
+            combinee cote a cote plutot qu'un aller-retour entre deux
+            dashboards separes. */}
+        {aAccesIdel && (
+          <div className="mt-8 border-t border-line pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-lg text-textPrimary">
+                <span style={{ color: "#FF2E9A" }}>●</span> Côté IDEL
+              </h2>
+              <Link href="/idel" className="text-xs text-textMuted hover:text-textPrimary">
+                Ouvrir le pipeline complet →
+              </Link>
+            </div>
+
+            <InsightStrip fetcher={idelInsights} />
+
+            {idelResume && (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="rounded-xl border border-line bg-surface p-4">
+                  <KpiCard label="Patients" valeur={String(idelResume.patients)} />
+                </div>
+                <div className="rounded-xl border border-line bg-surface p-4">
+                  <KpiCard label="Tournées aujourd'hui" valeur={String(idelResume.tournees_aujourdhui)} />
+                </div>
+                <div className="rounded-xl border border-line bg-surface p-4">
+                  <KpiCard label="Commandes en attente" valeur={String(idelResume.commandes_en_attente)} couleur="text-amber" />
+                </div>
+                <div className="rounded-xl border border-line bg-surface p-4">
+                  <KpiCard label="Ordonnances actives" valeur={String(idelResume.ordonnances_actives)} couleur="text-teal" />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/idel/tournees" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Tournées</Link>
+              <Link href="/idel/pharma" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Commandes</Link>
+              <Link href="/idel/prescriptions" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Ordonnances</Link>
+              <Link href="/idel/agenda" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Agenda</Link>
+              <Link href="/idel/nova" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">✨ Nova</Link>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );
