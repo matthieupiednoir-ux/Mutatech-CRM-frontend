@@ -27,7 +27,6 @@ const TACHE_VIDE: TacheInput = {
   statut: "todo",
 };
 
-const STATUTS_CYCLE: StatutTache[] = ["todo", "prog", "done"];
 const STATUT_LABEL: Record<string, string> = {
   todo: "À faire", prog: "En cours", done: "Fait",
 };
@@ -46,6 +45,7 @@ export default function TachesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
+  const [editionId, setEditionId] = useState<string | null>(null);
   const [form, setForm] = useState<TacheInput>({ ...TACHE_VIDE });
   const [enregistrement, setEnregistrement] = useState(false);
   const [recherche, setRecherche] = useState("");
@@ -61,19 +61,48 @@ export default function TachesPage() {
 
   useEffect(() => { charger(); }, []);
 
+  function ouvrirCreation() {
+    setEditionId(null);
+    setForm({ ...TACHE_VIDE });
+    setFormOuvert(true);
+    setError(null);
+  }
+
+  function ouvrirEdition(t: Tache) {
+    setEditionId(t.id);
+    setForm({
+      pilier: t.pilier,
+      titre: t.titre,
+      description: t.description ?? "",
+      statut: t.statut,
+    });
+    setFormOuvert(true);
+    setError(null);
+  }
+
+  function fermerForm() {
+    setFormOuvert(false);
+    setEditionId(null);
+    setForm({ ...TACHE_VIDE });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setEnregistrement(true);
     setError(null);
     try {
-      await creerTache({
+      const payload: TacheInput = {
         pilier: form.pilier,
         titre: form.titre.trim(),
         description: form.description?.trim() || null,
         statut: form.statut ?? "todo",
-      });
-      setForm({ ...TACHE_VIDE });
-      setFormOuvert(false);
+      };
+      if (editionId) {
+        await modifierTache(editionId, payload);
+      } else {
+        await creerTache(payload);
+      }
+      fermerForm();
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur d'enregistrement");
@@ -82,9 +111,12 @@ export default function TachesPage() {
     }
   }
 
-  async function handleCycleStatut(tache: Tache) {
-    const indexActuel = STATUTS_CYCLE.indexOf(tache.statut as StatutTache);
-    const nouveauStatut = STATUTS_CYCLE[(indexActuel + 1) % STATUTS_CYCLE.length];
+  // Changement de statut direct depuis la liste (menu deroulant, plus
+  // le clic-pour-cycler d'avant -- trop facile a declencher par erreur
+  // sur un statut voisin).
+  async function handleChangerStatut(tache: Tache, nouveauStatut: StatutTache) {
+    if (nouveauStatut === tache.statut) return;
+    setError(null);
     try {
       await modifierTache(tache.id, {
         pilier: tache.pilier,
@@ -134,7 +166,7 @@ export default function TachesPage() {
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => { setForm({ ...TACHE_VIDE }); setFormOuvert(true); }}
+            <button onClick={ouvrirCreation}
               className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
               + Nouvelle tâche
             </button>
@@ -143,10 +175,12 @@ export default function TachesPage() {
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
-        {/* Formulaire */}
+        {/* Formulaire (creation ou edition) */}
         {formOuvert && (
           <form onSubmit={handleSubmit} className="mb-6 space-y-3 rounded-xl border border-line bg-surface p-4">
-            <h2 className="font-display text-base text-textPrimary">Nouvelle tâche</h2>
+            <h2 className="font-display text-base text-textPrimary">
+              {editionId ? "Modifier la tâche" : "Nouvelle tâche"}
+            </h2>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Pilier</span>
@@ -173,18 +207,18 @@ export default function TachesPage() {
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary" />
               </label>
               <label className="block sm:col-span-2">
-                <span className="mb-1 block text-sm text-textMuted">Description</span>
+                <span className="mb-1 block text-sm text-textMuted">Description / notes d'avancement</span>
                 <textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  rows={2} placeholder="Détails optionnels…"
+                  rows={3} placeholder="Détails, points bloquants, avancement…"
                   className="w-full resize-none rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-textPrimary text-sm" />
               </label>
             </div>
             <div className="flex gap-3">
               <button type="submit" disabled={enregistrement}
                 className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white disabled:opacity-50">
-                {enregistrement ? "…" : "Créer"}
+                {enregistrement ? "…" : editionId ? "Enregistrer" : "Créer"}
               </button>
-              <button type="button" onClick={() => setFormOuvert(false)}
+              <button type="button" onClick={fermerForm}
                 className="text-sm text-textMuted hover:text-textPrimary">Annuler</button>
             </div>
           </form>
@@ -233,19 +267,30 @@ export default function TachesPage() {
                   </div>
                   <div className="space-y-1.5">
                     {items.map((t) => (
-                      <div key={t.id} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2.5">
-                        <button onClick={() => handleCycleStatut(t)}
-                          className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition hover:opacity-80 ${STATUT_COULEUR[t.statut]}`}>
-                          {STATUT_LABEL[t.statut]}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm ${t.statut === "done" ? "line-through text-textMuted" : "text-textPrimary"}`}>
-                            {t.titre}
-                          </p>
-                          {t.description && <p className="text-xs text-textMuted truncate">{t.description}</p>}
+                      <div key={t.id} className="rounded-lg border border-line bg-surface px-3 py-2.5">
+                        <div className="flex items-center gap-3">
+                          <select
+                            value={t.statut}
+                            onChange={(e) => handleChangerStatut(t, e.target.value as StatutTache)}
+                            className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${STATUT_COULEUR[t.statut]}`}
+                          >
+                            <option value="todo">À faire</option>
+                            <option value="prog">En cours</option>
+                            <option value="done">Fait</option>
+                          </select>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm ${t.statut === "done" ? "line-through text-textMuted" : "text-textPrimary"}`}>
+                              {t.titre}
+                            </p>
+                            {t.description && <p className="text-xs text-textMuted whitespace-pre-wrap">{t.description}</p>}
+                          </div>
+                          <button onClick={() => ouvrirEdition(t)}
+                            className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-textPrimary">
+                            Modifier
+                          </button>
+                          <button onClick={() => handleSupprimer(t.id)}
+                            className="shrink-0 text-textMuted hover:text-amber text-xs px-1.5">✕</button>
                         </div>
-                        <button onClick={() => handleSupprimer(t.id)}
-                          className="shrink-0 text-textMuted hover:text-amber text-xs px-1.5">✕</button>
                       </div>
                     ))}
                   </div>
