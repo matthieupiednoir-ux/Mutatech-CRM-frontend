@@ -47,6 +47,21 @@ async function requete<T>(
   return res.json();
 }
 
+// Comme requeteIdel, mais pour recuperer un fichier binaire (PDF, etc.) --
+// necessaire car un <a href> classique ne peut pas transporter le header
+// Authorization : le navigateur ferait alors une requete non authentifiee.
+async function requeteBlob(chemin: string): Promise<Blob> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}${chemin}`, { headers });
+  if (!res.ok) {
+    const corps = await res.text();
+    throw new ApiError(corps || `Erreur ${res.status}`);
+  }
+  return res.blob();
+}
+
 async function requeteIdelFormData<T>(chemin: string, formData: FormData): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {};
@@ -243,6 +258,10 @@ export const modifierDepense = (id: string, data: DepenseInput) => requete<Depen
 export const supprimerDepense = (id: string) => requete<{ statut: string }>(`/api/depenses/${id}`, { method: "DELETE" });
 export const getMoisAbonnements = () => requete<MoisAbonnement[]>("/api/depenses/abonnements/mois");
 export const getRecapEcheances = () => requete<RecapEcheances>("/api/depenses/abonnements/recap");
+
+// --- Bilan annuel ---
+export const exporterBilanAnnuel = (annee: number) =>
+  requeteBlob(`/api/bilan/annuel?annee=${annee}`);
 
 // --- Google ---
 export const getGoogleStatus = () => requete<GoogleStatus>("/api/auth/google/status");

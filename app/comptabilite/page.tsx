@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { getFacturesListe, getDepenses, calculerTotaux, ApiError } from "@/lib/api";
+import { getFacturesListe, getDepenses, calculerTotaux, exporterBilanAnnuel, ApiError } from "@/lib/api";
 import { Facture, Depense } from "@/lib/types";
 
 const MOIS_LABEL = [
@@ -44,6 +44,7 @@ export default function ComptabilitePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [exportEnCours, setExportEnCours] = useState(false);
 
   useEffect(() => {
     Promise.all([getFacturesListe(), getDepenses()])
@@ -133,6 +134,26 @@ export default function ComptabilitePage() {
     });
   }, [recettes, sortiesDepenses]);
 
+  async function handleExporterBilan() {
+    setExportEnCours(true);
+    setError(null);
+    try {
+      const blob = await exporterBilanAnnuel(annee);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Bilan annuel ${annee}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors de l'export du bilan.");
+    } finally {
+      setExportEnCours(false);
+    }
+  }
+
   return (
     <>
       <NavBar />
@@ -142,15 +163,24 @@ export default function ComptabilitePage() {
             <h1 className="font-display text-2xl text-textPrimary">Comptabilité</h1>
             <p className="mt-0.5 text-sm text-textMuted">Recettes encaissées vs dépenses réelles</p>
           </div>
-          <select
-            value={annee}
-            onChange={(e) => setAnnee(parseInt(e.target.value))}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
-          >
-            {anneesDisponibles.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={annee}
+              onChange={(e) => setAnnee(parseInt(e.target.value))}
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary"
+            >
+              {anneesDisponibles.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleExporterBilan}
+              disabled={exportEnCours || loading}
+              className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+            >
+              {exportEnCours ? "Génération…" : "📄 Exporter le bilan annuel"}
+            </button>
+          </div>
         </div>
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}

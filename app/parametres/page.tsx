@@ -64,12 +64,25 @@ export default function ParametresPage() {
   const [succes, setSucces] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Informations legales -- necessaires pour que le bilan annuel exporte
+  // depuis /comptabilite soit un document complet, exploitable tel quel
+  // par un expert-comptable (nom, SIRET, adresse, TVA intracommunautaire).
+  const [siret, setSiret] = useState("");
+  const [adresseEntreprise, setAdresseEntreprise] = useState("");
+  const [tvaIntra, setTvaIntra] = useState("");
+  const [enregistrementLegal, setEnregistrementLegal] = useState(false);
+  const [succesLegal, setSuccesLegal] = useState<string | null>(null);
+  const [errorLegal, setErrorLegal] = useState<string | null>(null);
+
   useEffect(() => {
     getTenantConfig()
       .then((config) => {
         const liste = (config.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
         setMasques(new Set(liste));
         setTheme(config.theme || "defaut");
+        setSiret(config.siret || "");
+        setAdresseEntreprise(config.adresse || "");
+        setTvaIntra(config.tva_intracommunautaire || "");
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
@@ -115,6 +128,24 @@ export default function ParametresPage() {
     }
   }
 
+  async function handleEnregistrerLegal() {
+    setEnregistrementLegal(true);
+    setErrorLegal(null);
+    setSuccesLegal(null);
+    try {
+      await updateTenantConfig({
+        siret: siret.trim() || undefined,
+        adresse: adresseEntreprise.trim() || undefined,
+        tva_intracommunautaire: tvaIntra.trim() || undefined,
+      });
+      setSuccesLegal("Informations légales enregistrées.");
+    } catch (e) {
+      setErrorLegal(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.");
+    } finally {
+      setEnregistrementLegal(false);
+    }
+  }
+
   return (
     <>
       <NavBar />
@@ -154,6 +185,60 @@ export default function ParametresPage() {
                   <p className="text-xs text-textMuted">{t.description}</p>
                 </button>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* Informations légales */}
+        <section className="mt-10">
+          <h2 className="font-display text-lg text-textPrimary">Informations légales</h2>
+          <p className="mt-1 text-sm text-textMuted">
+            Utilisées sur le bilan annuel exporté depuis Comptabilité, pour un document directement
+            exploitable par ton expert-comptable.
+          </p>
+
+          {errorLegal && <p className="mt-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{errorLegal}</p>}
+          {succesLegal && <p className="mt-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{succesLegal}</p>}
+
+          {loading ? (
+            <p className="mt-4 text-sm text-textMuted">Chargement...</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-sm text-textMuted">SIRET</span>
+                <input
+                  value={siret}
+                  onChange={(e) => setSiret(e.target.value)}
+                  placeholder="123 456 789 00012"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary font-mono placeholder:text-textMuted/60"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-textMuted">Adresse de l'entreprise</span>
+                <textarea
+                  value={adresseEntreprise}
+                  onChange={(e) => setAdresseEntreprise(e.target.value)}
+                  rows={2}
+                  placeholder="12 rue de la Paix, 06000 Nice"
+                  className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/60"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-textMuted">TVA intracommunautaire</span>
+                <input
+                  value={tvaIntra}
+                  onChange={(e) => setTvaIntra(e.target.value)}
+                  placeholder="FR12345678901"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary font-mono placeholder:text-textMuted/60"
+                />
+              </label>
+              <button
+                onClick={handleEnregistrerLegal}
+                disabled={enregistrementLegal}
+                className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
+              >
+                {enregistrementLegal ? "Enregistrement..." : "Enregistrer"}
+              </button>
             </div>
           )}
         </section>
