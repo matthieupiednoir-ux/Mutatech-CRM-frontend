@@ -100,7 +100,7 @@ function NavBarInterieur() {
   const labelProduit = estAdmin
     ? "Mutatech / Admin"
     : estIdel
-    ? "Mutatech / IDEL"
+    ? "Mutatech / IDEL · PSDM · Médical"
     : "Mutatech / CRM";
   const mascotteEmoji = estAdmin ? "⚙" : estIdel ? "🩺" : "🧭";
 
@@ -189,7 +189,7 @@ function NavBarInterieur() {
               className="rounded-lg border px-3 py-1.5 text-xs font-medium text-textMuted transition hover:text-textPrimary"
               style={{ borderColor: "var(--accent-soft, #2A2A4A)" }}
             >
-              {estIdel ? "← CRM" : "IDEL 🩺"}
+              {estIdel ? "← CRM" : "IDEL/PSDM 🩺"}
             </Link>
           )}
 

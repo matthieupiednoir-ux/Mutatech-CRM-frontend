@@ -389,7 +389,7 @@ export default function DashboardPage() {
           <div className="mt-8 border-t border-line pt-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg text-textPrimary">
-                <span style={{ color: "#FF2E9A" }}>●</span> Côté IDEL
+                <span style={{ color: "#FF2E9A" }}>●</span> Côté IDEL · PSDM · Médical
               </h2>
               <Link href="/idel" className="text-xs text-textMuted hover:text-textPrimary">
                 Ouvrir le pipeline complet →
