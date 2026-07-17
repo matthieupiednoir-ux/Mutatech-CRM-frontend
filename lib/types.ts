@@ -38,6 +38,10 @@ export interface TenantConfig {
   // CRM selon le metier du tenant (ex: une coiffeuse n'a pas besoin de
   // Prospects). Null/vide = tous les onglets sont affiches.
   onglets_masques?: string | null;
+  // Theme visuel choisi par le tenant (voir /parametres) -- "defaut" si
+  // non renseigne. Pilote body[data-theme] dans NavBar.tsx, qui bascule
+  // toute la palette de couleurs via des variables CSS (globals.css).
+  theme?: string | null;
 }
 
 // --- Catalogue produits/services ---

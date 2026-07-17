@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { getGoogleStatus, urlConnexionGoogle, monOrganisation, getTenantConfig } from "@/lib/api";
 import { deconnecter, getUser } from "@/lib/auth";
+import FallingPetals from "@/components/FallingPetals";
 
 const ONGLETS_CRM = [
   { id: "dashboard", href: "/dashboard", label: "Dashboard" },
@@ -61,6 +62,7 @@ function NavBarInterieur() {
   const [googleConnecte, setGoogleConnecte] = useState<boolean | null>(null);
   const [modulesActifs, setModulesActifs] = useState<string[]>([]);
   const [ongletsMasques, setOngletsMasques] = useState<Set<string>>(new Set());
+  const [theme, setTheme] = useState<string>("defaut");
   const user = getUser();
 
   const produit = user?.produit || "crm";
@@ -77,6 +79,10 @@ function NavBarInterieur() {
   useEffect(() => {
     document.body.dataset.mode = mode;
   }, [mode]);
+
+  useEffect(() => {
+    document.body.dataset.theme = theme;
+  }, [theme]);
 
   const ongletsIdel = [
     ...ONGLETS_IDEL_BASE,
@@ -113,6 +119,7 @@ function NavBarInterieur() {
         .then((config) => {
           const liste = (config.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
           setOngletsMasques(new Set(liste));
+          setTheme(config.theme || "defaut");
         })
         .catch(() => setOngletsMasques(new Set()));
     }
@@ -139,10 +146,12 @@ function NavBarInterieur() {
   }
 
   return (
-    <header
-      className="relative border-b border-line"
-      style={{ borderBottomColor: "var(--accent-soft, #2A2A4A)" }}
-    >
+    <>
+      {!estIdel && !estAdmin && theme === "sakura" && <FallingPetals />}
+      <header
+        className="relative border-b border-line"
+        style={{ borderBottomColor: "var(--accent-soft, #2A2A4A)" }}
+      >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div className="flex flex-wrap items-center gap-6">
           <span className="flex items-center gap-2 font-display text-sm font-bold text-[var(--accent)]">
@@ -235,11 +244,12 @@ function NavBarInterieur() {
         </div>
       </div>
 
-      {searchParams.get("google") === "connecte" && (
-        <div className="bg-teal/10 px-4 py-2 text-center text-xs text-teal">
-          ✓ Google connecté avec succès — Drive et Gmail sont actifs.
-        </div>
-      )}
-    </header>
+        {searchParams.get("google") === "connecte" && (
+          <div className="bg-teal/10 px-4 py-2 text-center text-xs text-teal">
+            ✓ Google connecté avec succès — Drive et Gmail sont actifs.
+          </div>
+        )}
+      </header>
+    </>
   );
 }
