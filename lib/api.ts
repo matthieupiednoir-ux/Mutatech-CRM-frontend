@@ -267,6 +267,32 @@ export const exporterBilanAnnuel = (annee: number) =>
 export const getGoogleStatus = () => requete<GoogleStatus>("/api/auth/google/status");
 export const urlConnexionGoogle = () => `${API_URL}/api/auth/google/login`;
 
+// --- Journal d'activite IA (Pixel) ---
+export interface EntreeJournal {
+  id: string;
+  auteur: string;
+  type_action: "creation" | "modification" | "suppression";
+  description: string;
+  cree_le: string;
+}
+export const getJournal = (limite?: number) =>
+  requete<EntreeJournal[]>(`/api/journal${limite ? `?limite=${limite}` : ""}`);
+
+// --- Piliers (categories de taches, propres a chaque tenant) ---
+export interface Pilier {
+  id: string;
+  numero: number;
+  nom: string;
+  ordre: number;
+}
+export const getPiliers = () => requete<Pilier[]>("/api/piliers");
+export const creerPilier = (nom: string) =>
+  requete<Pilier>("/api/piliers", { method: "POST", body: JSON.stringify({ nom }) });
+export const modifierPilier = (id: string, nom: string) =>
+  requete<Pilier>(`/api/piliers/${id}`, { method: "PUT", body: JSON.stringify({ nom }) });
+export const supprimerPilier = (id: string) =>
+  requete<{ statut: string }>(`/api/piliers/${id}`, { method: "DELETE" });
+
 // --- Tâches ---
 export const getTaches = () => requete<Tache[]>("/api/taches");
 export const creerTache = (data: TacheInput) => requete<Tache>("/api/taches", { method: "POST", body: JSON.stringify(data) });
@@ -636,6 +662,10 @@ export const planningEvenements = (debut: string, fin: string) =>
   requete<EvenementPlanning[]>(`/api/planning/evenements?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
 export const planningCreerEvenement = (data: EvenementPlanningInput) =>
   requete<EvenementPlanning>("/api/planning/evenements", { method: "POST", body: JSON.stringify(data) });
+
+// --- Journal d'activite IA (Nova, cote IDEL) ---
+export const idelGetJournal = (limite?: number) =>
+  requeteIdel<EntreeJournal[]>(`/api/journal${limite ? `?limite=${limite}` : ""}`);
 
 // IDEL (memes formes, endpoints relayes cote backend IDEL)
 export const idelPlanningLoginPersonnelUrl = () => requeteIdel<{ url: string }>("/api/planning/login-personnel-url");

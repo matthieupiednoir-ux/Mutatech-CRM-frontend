@@ -5,27 +5,9 @@ import NavBar from "@/components/NavBar";
 import { Tache, TacheInput, StatutTache } from "@/lib/types";
 import {
   getTaches, creerTache, modifierTache, supprimerTache,
+  getPiliers, creerPilier, modifierPilier, supprimerPilier, Pilier,
   ApiError,
 } from "@/lib/api";
-
-const PILIERS: Record<number, string> = {
-  1: "Structure juridique & administrative",
-  2: "Identité de marque & site web",
-  3: "Documents commerciaux",
-  4: "Présentations client",
-  5: "Documents juridiques & conformité",
-  6: "Prospection & acquisition clients",
-  7: "Partenariats & financement client",
-  8: "Outil Orchestrateur IA & Audit",
-  9: "CRM Mutatech",
-};
-
-const TACHE_VIDE: TacheInput = {
-  pilier: 9,
-  titre: "",
-  description: "",
-  statut: "todo",
-};
 
 const STATUT_LABEL: Record<string, string> = {
   todo: "À faire", prog: "En cours", done: "Fait",
@@ -42,48 +24,60 @@ function safeArr<T>(v: unknown): T[] {
 
 export default function TachesPage() {
   const [taches, setTaches] = useState<Tache[]>([]);
+  const [piliers, setPiliers] = useState<Pilier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [formOuvert, setFormOuvert] = useState(false);
   const [editionId, setEditionId] = useState<string | null>(null);
-  const [form, setForm] = useState<TacheInput>({ ...TACHE_VIDE });
+  const [form, setForm] = useState<TacheInput>({ pilier: 0, titre: "", description: "", statut: "todo" });
   const [enregistrement, setEnregistrement] = useState(false);
+
   const [recherche, setRecherche] = useState("");
   const [pilierFiltre, setPilierFiltre] = useState<number | null>(null);
 
+  // Gestion des piliers
+  const [panneauPiliersOuvert, setPanneauPiliersOuvert] = useState(false);
+  const [nouveauPilierNom, setNouveauPilierNom] = useState("");
+  const [pilierEnEdition, setPilierEnEdition] = useState<string | null>(null);
+  const [pilierEditionNom, setPilierEditionNom] = useState("");
+  const [erreurPiliers, setErreurPiliers] = useState<string | null>(null);
+
   function charger() {
     setLoading(true);
-    getTaches()
-      .then((data) => setTaches(safeArr<Tache>(data)))
+    Promise.all([getTaches(), getPiliers()])
+      .then(([t, p]) => {
+        setTaches(safeArr<Tache>(t));
+        setPiliers(safeArr<Pilier>(p));
+        if (safeArr<Pilier>(p).length > 0 && form.pilier === 0) {
+          setForm((f) => ({ ...f, pilier: p[0].numero }));
+        }
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { charger(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function nomPilier(numero: number): string {
+    return piliers.find((p) => p.numero === numero)?.nom ?? `Pilier ${numero}`;
+  }
 
   function ouvrirCreation() {
     setEditionId(null);
-    setForm({ ...TACHE_VIDE });
+    setForm({ pilier: piliers[0]?.numero ?? 1, titre: "", description: "", statut: "todo" });
     setFormOuvert(true);
-    setError(null);
   }
 
   function ouvrirEdition(t: Tache) {
     setEditionId(t.id);
-    setForm({
-      pilier: t.pilier,
-      titre: t.titre,
-      description: t.description ?? "",
-      statut: t.statut,
-    });
+    setForm({ pilier: t.pilier, titre: t.titre, description: t.description ?? "", statut: t.statut });
     setFormOuvert(true);
-    setError(null);
   }
 
   function fermerForm() {
     setFormOuvert(false);
     setEditionId(null);
-    setForm({ ...TACHE_VIDE });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -111,18 +105,12 @@ export default function TachesPage() {
     }
   }
 
-  // Changement de statut direct depuis la liste (menu deroulant, plus
-  // le clic-pour-cycler d'avant -- trop facile a declencher par erreur
-  // sur un statut voisin).
   async function handleChangerStatut(tache: Tache, nouveauStatut: StatutTache) {
     if (nouveauStatut === tache.statut) return;
     setError(null);
     try {
       await modifierTache(tache.id, {
-        pilier: tache.pilier,
-        titre: tache.titre,
-        description: tache.description ?? null,
-        statut: nouveauStatut,
+        pilier: tache.pilier, titre: tache.titre, description: tache.description ?? null, statut: nouveauStatut,
       });
       charger();
     } catch (e) {
@@ -140,6 +128,47 @@ export default function TachesPage() {
     }
   }
 
+  // --- Gestion des piliers ---
+  async function handleCreerPilier() {
+    if (!nouveauPilierNom.trim()) return;
+    setErreurPiliers(null);
+    try {
+      await creerPilier(nouveauPilierNom.trim());
+      setNouveauPilierNom("");
+      charger();
+    } catch (e) {
+      setErreurPiliers(e instanceof ApiError ? e.message : "Erreur lors de la création du pilier.");
+    }
+  }
+
+  function commencerEditionPilier(p: Pilier) {
+    setPilierEnEdition(p.id);
+    setPilierEditionNom(p.nom);
+  }
+
+  async function handleRenommerPilier(id: string) {
+    if (!pilierEditionNom.trim()) return;
+    setErreurPiliers(null);
+    try {
+      await modifierPilier(id, pilierEditionNom.trim());
+      setPilierEnEdition(null);
+      charger();
+    } catch (e) {
+      setErreurPiliers(e instanceof ApiError ? e.message : "Erreur lors du renommage.");
+    }
+  }
+
+  async function handleSupprimerPilier(p: Pilier) {
+    if (!confirm(`Supprimer le pilier "${p.nom}" ? Impossible s'il contient encore des tâches.`)) return;
+    setErreurPiliers(null);
+    try {
+      await supprimerPilier(p.id);
+      charger();
+    } catch (e) {
+      setErreurPiliers(e instanceof ApiError ? e.message : "Erreur lors de la suppression.");
+    }
+  }
+
   const tachesFiltrees = safeArr<Tache>(taches).filter((t) => {
     if (pilierFiltre !== null && t.pilier !== pilierFiltre) return false;
     if (recherche) {
@@ -149,7 +178,8 @@ export default function TachesPage() {
     return true;
   });
 
-  const piliersPresents = Array.from(new Set(safeArr<Tache>(taches).map((t) => t.pilier).filter((p): p is number => p != null))).sort((a, b) => a - b);
+  const numerosPresents = Array.from(new Set(safeArr<Tache>(taches).map((t) => t.pilier))).sort((a, b) => a - b);
+  const piliersOrdonnes = [...piliers].sort((a, b) => a.ordre - b.ordre || a.numero - b.numero);
   const total = taches.length;
   const done = safeArr<Tache>(taches).filter((t) => t.statut === "done").length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -166,6 +196,10 @@ export default function TachesPage() {
             )}
           </div>
           <div className="flex gap-2">
+            <button onClick={() => setPanneauPiliersOuvert((v) => !v)}
+              className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary">
+              ⚙ Piliers
+            </button>
             <button onClick={ouvrirCreation}
               className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
               + Nouvelle tâche
@@ -175,19 +209,62 @@ export default function TachesPage() {
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
-        {/* Formulaire (creation ou edition) */}
+        {/* Panneau de gestion des piliers */}
+        {panneauPiliersOuvert && (
+          <div className="mb-6 rounded-xl border border-line bg-surface p-4">
+            <h2 className="mb-3 font-display text-sm text-textPrimary">Gérer les piliers</h2>
+            {erreurPiliers && <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-xs text-amber">{erreurPiliers}</p>}
+            <div className="space-y-1.5">
+              {piliersOrdonnes.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 rounded-lg border border-line px-3 py-2">
+                  {pilierEnEdition === p.id ? (
+                    <>
+                      <input
+                        value={pilierEditionNom}
+                        onChange={(e) => setPilierEditionNom(e.target.value)}
+                        className="flex-1 rounded border border-line bg-surfaceAlt px-2 py-1 text-sm text-textPrimary"
+                        autoFocus
+                      />
+                      <button onClick={() => handleRenommerPilier(p.id)} className="text-xs text-teal">✓</button>
+                      <button onClick={() => setPilierEnEdition(null)} className="text-xs text-textMuted">✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm text-textPrimary">{p.numero}. {p.nom}</span>
+                      <button onClick={() => commencerEditionPilier(p)} className="text-xs text-textMuted hover:text-textPrimary">Renommer</button>
+                      <button onClick={() => handleSupprimerPilier(p)} className="text-xs text-textMuted hover:text-amber">Supprimer</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={nouveauPilierNom}
+                onChange={(e) => setNouveauPilierNom(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreerPilier()}
+                placeholder="Nom du nouveau pilier"
+                className="flex-1 rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/60"
+              />
+              <button onClick={handleCreerPilier}
+                className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90">
+                + Ajouter
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Formulaire tâche */}
         {formOuvert && (
           <form onSubmit={handleSubmit} className="mb-6 space-y-3 rounded-xl border border-line bg-surface p-4">
-            <h2 className="font-display text-base text-textPrimary">
-              {editionId ? "Modifier la tâche" : "Nouvelle tâche"}
-            </h2>
+            <h2 className="font-display text-base text-textPrimary">{editionId ? "Modifier la tâche" : "Nouvelle tâche"}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Pilier</span>
-                <select value={form.pilier ?? 9} onChange={(e) => setForm({ ...form, pilier: parseInt(e.target.value) })}
+                <select value={form.pilier} onChange={(e) => setForm({ ...form, pilier: parseInt(e.target.value) })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
-                  {Object.entries(PILIERS).map(([k, v]) => (
-                    <option key={k} value={k}>{k}. {v}</option>
+                  {piliersOrdonnes.map((p) => (
+                    <option key={p.id} value={p.numero}>{p.numero}. {p.nom}</option>
                   ))}
                 </select>
               </label>
@@ -218,8 +295,7 @@ export default function TachesPage() {
                 className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white disabled:opacity-50">
                 {enregistrement ? "…" : editionId ? "Enregistrer" : "Créer"}
               </button>
-              <button type="button" onClick={fermerForm}
-                className="text-sm text-textMuted hover:text-textPrimary">Annuler</button>
+              <button type="button" onClick={fermerForm} className="text-sm text-textMuted hover:text-textPrimary">Annuler</button>
             </div>
           </form>
         )}
@@ -233,10 +309,10 @@ export default function TachesPage() {
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${pilierFiltre === null ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted"}`}>
             Tous
           </button>
-          {piliersPresents.map((p) => (
-            <button key={p} onClick={() => setPilierFiltre(pilierFiltre === p ? null : p)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${pilierFiltre === p ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted"}`}>
-              P{p}
+          {numerosPresents.map((n) => (
+            <button key={n} onClick={() => setPilierFiltre(pilierFiltre === n ? null : n)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${pilierFiltre === n ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted"}`}>
+              {nomPilier(n)}
             </button>
           ))}
         </div>
@@ -250,16 +326,14 @@ export default function TachesPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {(pilierFiltre !== null ? [pilierFiltre] : piliersPresents).map((pilier) => {
-              const items = tachesFiltrees.filter((t) => t.pilier === pilier);
+            {(pilierFiltre !== null ? [pilierFiltre] : numerosPresents).map((numero) => {
+              const items = tachesFiltrees.filter((t) => t.pilier === numero);
               if (items.length === 0) return null;
               const doneP = items.filter((t) => t.statut === "done").length;
               return (
-                <div key={pilier}>
+                <div key={numero}>
                   <div className="mb-2 flex items-center gap-3">
-                    <h2 className="font-display text-sm font-bold text-textPrimary">
-                      {pilier}. {PILIERS[pilier] ?? `Pilier ${pilier}`}
-                    </h2>
+                    <h2 className="font-display text-sm font-bold text-textPrimary">{nomPilier(numero)}</h2>
                     <span className="text-[11px] text-textMuted">{doneP}/{items.length}</span>
                     <div className="flex-1 h-1 rounded-full bg-surfaceAlt overflow-hidden">
                       <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${items.length > 0 ? (doneP/items.length)*100 : 0}%` }} />
