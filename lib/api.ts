@@ -271,7 +271,7 @@ export const urlConnexionGoogle = () => `${API_URL}/api/auth/google/login`;
 export interface EntreeJournal {
   id: string;
   auteur: string;
-  type_action: "creation" | "modification" | "suppression";
+  type_action: "creation" | "modification" | "suppression" | "restauration";
   description: string;
   cree_le: string;
 }
@@ -292,6 +292,19 @@ export const modifierPilier = (id: string, nom: string) =>
   requete<Pilier>(`/api/piliers/${id}`, { method: "PUT", body: JSON.stringify({ nom }) });
 export const supprimerPilier = (id: string) =>
   requete<{ statut: string }>(`/api/piliers/${id}`, { method: "DELETE" });
+
+// --- Corbeille (clients/devis/factures supprimes, restaurables 30 jours) ---
+export interface ElementCorbeille {
+  type: "client" | "devis" | "facture";
+  id: string;
+  libelle: string;
+  supprime_le: string;
+}
+export const getCorbeille = () => requete<ElementCorbeille[]>("/api/corbeille");
+export const restaurerElementCorbeille = (type: string, id: string) =>
+  requete<{ statut: string }>(`/api/corbeille/${type}/${id}/restaurer`, { method: "POST" });
+export const supprimerDefinitivement = (type: string, id: string) =>
+  requete<{ statut: string }>(`/api/corbeille/${type}/${id}`, { method: "DELETE" });
 
 // --- Tâches ---
 export const getTaches = () => requete<Tache[]>("/api/taches");
