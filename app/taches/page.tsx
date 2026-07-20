@@ -178,7 +178,20 @@ export default function TachesPage() {
     return true;
   });
 
-  const numerosPresents = Array.from(new Set(safeArr<Tache>(taches).map((t) => t.pilier))).sort((a, b) => a - b);
+  // Fix build Netlify : le typage de Tache.pilier autorise possiblement
+  // null/undefined (selon lib/types.ts) -- Array.from(new Set(...)) sans
+  // filtrage prealable laisse alors passer ces valeurs dans le tableau,
+  // et TypeScript strict refuse ensuite `(a, b) => a - b` sur un type
+  // potentiellement non-number. Le filter avec garde de type (p): p is
+  // number resout le probleme a la racine, quel que soit le typage exact
+  // de Tache.pilier.
+  const numerosPresents = Array.from(
+    new Set(
+      safeArr<Tache>(taches)
+        .map((t) => t.pilier)
+        .filter((p): p is number => typeof p === "number")
+    )
+  ).sort((a, b) => a - b);
   const piliersOrdonnes = [...piliers].sort((a, b) => a.ordre - b.ordre || a.numero - b.numero);
   const total = taches.length;
   const done = safeArr<Tache>(taches).filter((t) => t.statut === "done").length;
