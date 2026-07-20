@@ -274,7 +274,7 @@ export default function TachesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-sm text-textMuted">Pilier</span>
-                <select value={form.pilier} onChange={(e) => setForm({ ...form, pilier: parseInt(e.target.value) })}
+                <select value={form.pilier ?? ""} onChange={(e) => setForm({ ...form, pilier: parseInt(e.target.value) })}
                   className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
                   {piliersOrdonnes.map((p) => (
                     <option key={p.id} value={p.numero}>{p.numero}. {p.nom}</option>
