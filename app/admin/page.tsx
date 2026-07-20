@@ -31,6 +31,15 @@ const PRODUIT_COULEUR: Record<string, string> = {
   "crm+idel": "bg-amber/10 text-amber",
 };
 
+const FORM_VIDE = {
+  nom_entreprise: "",
+  email: "",
+  nom_contact: "",
+  produit: "crm",
+  couleur_primaire: "#6C63FF",
+  couleur_secondaire: "#00D4AA",
+};
+
 async function requeteAdmin<T>(chemin: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem("mutatech_crm_token");
   const res = await fetch(`${API_URL}${chemin}`, {
@@ -55,17 +64,13 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
-  const [creation, setCreation] = useState(false);
+  const [enregistrement, setEnregistrement] = useState(false);
   const [actionEnCours, setActionEnCours] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    nom_entreprise: "",
-    email: "",
-    nom_contact: "",
-    produit: "crm",
-    couleur_primaire: "#6C63FF",
-    couleur_secondaire: "#00D4AA",
-  });
+  // null = mode creation ; sinon tenant_id du client en cours d'edition
+  const [editionTenantId, setEditionTenantId] = useState<string | null>(null);
+
+  const [form, setForm] = useState(FORM_VIDE);
 
   // Rediriger si pas admin
   useEffect(() => {
@@ -86,42 +91,78 @@ export default function AdminPage() {
     charger();
   }, []);
 
-  async function handleCreer(e: React.FormEvent) {
+  function ouvrirCreation() {
+    setEditionTenantId(null);
+    setForm(FORM_VIDE);
+    setFormOuvert(true);
+    setSucces(null);
+    setError(null);
+  }
+
+  function ouvrirEdition(client: ClientSaas) {
+    setEditionTenantId(client.tenant_id);
+    setForm({
+      nom_entreprise: client.nom_entreprise,
+      email: client.email,
+      nom_contact: client.nom_contact || "",
+      produit: client.produit,
+      couleur_primaire: "#6C63FF",
+      couleur_secondaire: "#00D4AA",
+    });
+    setFormOuvert(true);
+    setSucces(null);
+    setError(null);
+  }
+
+  function fermerForm() {
+    setFormOuvert(false);
+    setEditionTenantId(null);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setCreation(true);
+    setEnregistrement(true);
     setError(null);
     setSucces(null);
     try {
-      const res = await requeteAdmin<{ message: string }>("/api/admin/clients", {
-        method: "POST",
-        body: JSON.stringify({
-          nom_entreprise: form.nom_entreprise,
-          email: form.email,
-          nom_contact: form.nom_contact || undefined,
-          produit: form.produit,
-          couleur_primaire: form.couleur_primaire,
-          couleur_secondaire: form.couleur_secondaire,
-        }),
-      });
-      setSucces(res.message);
-      setFormOuvert(false);
-      setForm({
-        nom_entreprise: "",
-        email: "",
-        nom_contact: "",
-        produit: "crm",
-        couleur_primaire: "#6C63FF",
-        couleur_secondaire: "#00D4AA",
-      });
+      if (editionTenantId) {
+        await requeteAdmin<{ statut: string }>(`/api/admin/clients/${editionTenantId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            nom_entreprise: form.nom_entreprise,
+            email: form.email,
+            nom_contact: form.nom_contact || undefined,
+            produit: form.produit,
+            couleur_primaire: form.couleur_primaire,
+            couleur_secondaire: form.couleur_secondaire,
+          }),
+        });
+        setSucces("Client modifié.");
+      } else {
+        const res = await requeteAdmin<{ message: string }>("/api/admin/clients", {
+          method: "POST",
+          body: JSON.stringify({
+            nom_entreprise: form.nom_entreprise,
+            email: form.email,
+            nom_contact: form.nom_contact || undefined,
+            produit: form.produit,
+            couleur_primaire: form.couleur_primaire,
+            couleur_secondaire: form.couleur_secondaire,
+          }),
+        });
+        setSucces(res.message);
+      }
+      fermerForm();
+      setForm(FORM_VIDE);
       charger();
     } catch (e) {
-      let msg = "Erreur de création.";
+      let msg = editionTenantId ? "Erreur de modification." : "Erreur de création.";
       if (e instanceof ApiError) {
         try { msg = JSON.parse(e.message)?.detail || e.message; } catch { msg = e.message; }
       }
       setError(msg);
     } finally {
-      setCreation(false);
+      setEnregistrement(false);
     }
   }
 
@@ -163,11 +204,11 @@ export default function AdminPage() {
             </h1>
             <p className="mt-1 text-sm text-textMuted">
               Crée et gère les comptes clients Mutatech. Le mot de passe est généré
-              automatiquement et envoyé par email.
+              automatiquement et envoyé par email à la création.
             </p>
           </div>
           <button
-            onClick={() => { setFormOuvert(true); setSucces(null); setError(null); }}
+            onClick={ouvrirCreation}
             className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90"
           >
             + Créer un compte client
@@ -185,14 +226,14 @@ export default function AdminPage() {
           </p>
         )}
 
-        {/* Formulaire de création */}
+        {/* Formulaire de création / édition */}
         {formOuvert && (
           <form
-            onSubmit={handleCreer}
+            onSubmit={handleSubmit}
             className="mb-8 space-y-4 rounded-xl border border-line bg-surface p-5"
           >
             <h2 className="font-display text-lg text-textPrimary">
-              Nouveau compte client
+              {editionTenantId ? "Modifier le compte client" : "Nouveau compte client"}
             </h2>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -269,21 +310,32 @@ export default function AdminPage() {
               </label>
             </div>
 
-            <div className="rounded-lg border border-teal/20 bg-teal/5 px-4 py-3 text-xs text-teal">
-              ✓ Un mot de passe sécurisé sera généré automatiquement et envoyé par email au client avec ses identifiants de connexion.
-            </div>
+            {!editionTenantId && (
+              <div className="rounded-lg border border-teal/20 bg-teal/5 px-4 py-3 text-xs text-teal">
+                ✓ Un mot de passe sécurisé sera généré automatiquement et envoyé par email au client avec ses identifiants de connexion.
+              </div>
+            )}
+            {editionTenantId && (
+              <div className="rounded-lg border border-line bg-surfaceAlt px-4 py-3 text-xs text-textMuted">
+                ℹ Le mot de passe du client n'est pas modifié ici. Changer l'email met à jour son identifiant de connexion.
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button
                 type="submit"
-                disabled={creation}
+                disabled={enregistrement}
                 className="rounded-lg bg-violet px-5 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
               >
-                {creation ? "Création en cours…" : "Créer le compte et envoyer l'invitation"}
+                {enregistrement
+                  ? "Enregistrement…"
+                  : editionTenantId
+                  ? "Enregistrer les modifications"
+                  : "Créer le compte et envoyer l'invitation"}
               </button>
               <button
                 type="button"
-                onClick={() => setFormOuvert(false)}
+                onClick={fermerForm}
                 className="text-sm text-textMuted hover:text-textPrimary"
               >
                 Annuler
@@ -331,6 +383,12 @@ export default function AdminPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => ouvrirEdition(client)}
+                    className="rounded border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary hover:border-violet/40"
+                  >
+                    Modifier
+                  </button>
                   {client.actif ? (
                     <button
                       onClick={() => handleSuspendre(client.tenant_id)}
