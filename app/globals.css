@@ -87,7 +87,16 @@ body[data-mode="crm"][data-theme="sakura"] {
     radial-gradient(circle at 90% 105%, rgba(123, 201, 166, 0.14), transparent 45%);
 }
 
-/* Theme 3 : Atelier Bois -- brun industriel chaud, accents terracotta */
+/* ══════════════════════════════════════════════════════════════════════
+   Theme 3 : Atelier Bois -- veritable texture de bois en fond (fibres,
+   noeuds, jointures de planches) + accents metal (rivets, acier brosse
+   sur la nav, boutons en plaque embossee) -- style rustique industriel.
+   Tout est fait en degrades CSS purs, sans image externe : la texture
+   est composee de plusieurs couches de repeating-linear-gradient legerement
+   desaxees (89deg/91deg plutot que 90deg pile) pour eviter un rendu trop
+   "imprime" et se rapprocher du grain naturel du bois, plus quelques
+   radial-gradient elliptiques pour simuler des noeuds organiques.
+   ══════════════════════════════════════════════════════════════════════ */
 body[data-mode="crm"][data-theme="bois"] {
   --color-ink: #1D1610;
   --color-surface: #2B2118;
@@ -101,9 +110,78 @@ body[data-mode="crm"][data-theme="bois"] {
   --accent: #C97C3D;
   --accent-soft: rgba(201, 124, 61, 0.16);
   color-scheme: dark;
+  background-color: #241C14;
   background-image:
-    radial-gradient(circle at 10% -8%, rgba(201, 124, 61, 0.22), transparent 45%),
-    radial-gradient(circle at 90% 105%, rgba(139, 154, 91, 0.10), transparent 48%);
+    /* fibres fines du bois, deux couches a angle legerement different */
+    repeating-linear-gradient(89deg,
+      rgba(0,0,0,0.10) 0px, rgba(0,0,0,0.10) 1px,
+      transparent 1px, transparent 3px,
+      rgba(255,205,150,0.035) 3px, transparent 5px,
+      transparent 9px),
+    repeating-linear-gradient(91deg,
+      rgba(0,0,0,0.06) 0px, transparent 2px,
+      transparent 14px, rgba(255,205,150,0.02) 16px, transparent 19px),
+    /* noeuds de bois */
+    radial-gradient(ellipse 60px 90px at 18% 22%, rgba(0,0,0,0.20), transparent 70%),
+    radial-gradient(ellipse 40px 70px at 78% 68%, rgba(0,0,0,0.16), transparent 70%),
+    radial-gradient(ellipse 50px 80px at 60% 12%, rgba(0,0,0,0.12), transparent 70%),
+    /* jointures de planches verticales */
+    repeating-linear-gradient(90deg,
+      transparent 0, transparent 218px,
+      rgba(0,0,0,0.35) 218px, rgba(0,0,0,0.35) 220px,
+      rgba(255,205,150,0.05) 220px, rgba(255,205,150,0.05) 221px,
+      transparent 221px),
+    /* lumiere ambiante existante, attenuee pour laisser respirer la texture */
+    radial-gradient(circle at 10% -8%, rgba(201, 124, 61, 0.16), transparent 45%),
+    radial-gradient(circle at 90% 105%, rgba(139, 154, 91, 0.08), transparent 48%),
+    /* degrade de fond, planche eclairee en haut, plus sombre en bas */
+    linear-gradient(180deg, #2E2317 0%, #24190F 55%, #1D140B 100%);
+}
+
+/* -- Accents metal, actifs uniquement sur le theme "bois" -- */
+
+/* Barre de navigation : panneau d'acier brosse + rangee de rivets */
+body[data-mode="crm"][data-theme="bois"] header {
+  position: relative;
+  background-image:
+    repeating-linear-gradient(100deg, rgba(255,255,255,0.05) 0px, transparent 1px, transparent 3px),
+    linear-gradient(180deg, #6B6862 0%, #4A4844 45%, #38362F 100%);
+  border-bottom: 1px solid #201A12 !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+body[data-mode="crm"][data-theme="bois"] header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 2px;
+  height: 6px;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 3px 3px, rgba(20,16,10,0.55) 0 1.4px, rgba(255,255,255,0.20) 1.4px 1.8px, transparent 1.8px);
+  background-size: 32px 6px;
+  background-repeat: repeat-x;
+  opacity: 0.85;
+}
+
+/* Boutons d'accent (Pixel) : plaque metal embossee, biseau + rivets d'angle */
+body[data-mode="crm"][data-theme="bois"] .bg-violet {
+  background-image:
+    linear-gradient(155deg, rgba(255,255,255,0.30) 0%, transparent 35%),
+    linear-gradient(180deg, #D68A47 0%, #B96E32 55%, #9C5B27 100%);
+  border: 1px solid #6E3F18;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -2px 3px rgba(0,0,0,0.35),
+    0 2px 5px rgba(0,0,0,0.45);
+}
+body[data-mode="crm"][data-theme="bois"] .bg-violet:hover {
+  filter: brightness(1.07);
+}
+
+/* Cartes et panneaux : bordure metal fine + liseré clair superieur (bord tole) */
+body[data-mode="crm"][data-theme="bois"] .border-line {
+  border-color: #5A4632;
+}
+body[data-mode="crm"][data-theme="bois"] .bg-surface {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 /* Theme 4 : Neon Nuit -- cyberpunk, noir profond, cyan/magenta electriques */

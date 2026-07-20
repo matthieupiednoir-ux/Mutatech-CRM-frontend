@@ -23,9 +23,7 @@ export default function EquipePage() {
   const [role, setRole] = useState<"admin" | "support">("support");
   const [ajout, setAjout] = useState(false);
 
-  // Edition du nom d'un membre existant -- absent jusqu'ici : le role et
-  // le statut actif etaient deja modifiables inline, mais pas le nom une
-  // fois le membre cree.
+  // Edition du nom d'un membre existant.
   const [editionNomId, setEditionNomId] = useState<string | null>(null);
   const [editionNomValeur, setEditionNomValeur] = useState("");
   const [enregistrementNom, setEnregistrementNom] = useState(false);
@@ -185,36 +183,43 @@ export default function EquipePage() {
                 <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
                   <div className="min-w-0 flex-1">
                     {enEdition ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <input
                           autoFocus
                           value={editionNomValeur}
                           onChange={(e) => setEditionNomValeur(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && handleEnregistrerNom(m)}
                           placeholder="Nom"
-                          className="rounded border border-line bg-surfaceAlt px-2 py-1 text-sm text-textPrimary"
+                          className="rounded-lg border border-line bg-surfaceAlt px-2.5 py-1.5 text-sm text-textPrimary"
                         />
                         <button
                           onClick={() => handleEnregistrerNom(m)}
                           disabled={enregistrementNom}
-                          className="text-xs text-teal disabled:opacity-50"
+                          className="rounded-lg border border-teal/40 px-2.5 py-1.5 text-xs text-teal hover:bg-teal/10 disabled:opacity-50"
                         >
-                          ✓
+                          {enregistrementNom ? "…" : "Enregistrer"}
                         </button>
-                        <button onClick={annulerEditionNom} className="text-xs text-textMuted">✕</button>
+                        <button
+                          onClick={annulerEditionNom}
+                          className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-textMuted hover:text-textPrimary"
+                        >
+                          Annuler
+                        </button>
                       </div>
                     ) : (
-                      <p className="text-sm text-textPrimary">
-                        {m.nom || m.email} {estMoi && <span className="text-xs text-textMuted">(toi)</span>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm text-textPrimary">
+                          {m.nom || m.email} {estMoi && <span className="text-xs text-textMuted">(toi)</span>}
+                        </p>
                         <button
                           onClick={() => commencerEditionNom(m)}
-                          className="ml-2 text-xs text-textMuted hover:text-textPrimary"
+                          className="rounded-lg border border-line px-2.5 py-1 text-[11px] font-medium text-textMuted hover:border-violet/40 hover:text-textPrimary"
                         >
-                          Renommer
+                          ✎ Renommer
                         </button>
-                      </p>
+                      </div>
                     )}
-                    <p className="text-xs text-textMuted">{m.email}{!m.actif && " · inactif"}</p>
+                    <p className="mt-1 text-xs text-textMuted">{m.email}{!m.actif && " · inactif"}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <select
