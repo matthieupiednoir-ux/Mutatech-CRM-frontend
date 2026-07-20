@@ -293,6 +293,16 @@ export const modifierPilier = (id: string, nom: string) =>
 export const supprimerPilier = (id: string) =>
   requete<{ statut: string }>(`/api/piliers/${id}`, { method: "DELETE" });
 
+// --- Liaison WhatsApp (Pixel accessible depuis WhatsApp) ---
+export const whatsappDemanderLiaison = (numero: string) =>
+  requete<{ statut: string }>("/api/whatsapp/liaison/demander", { method: "POST", body: JSON.stringify({ numero }) });
+export const whatsappVerifierLiaison = (code: string) =>
+  requete<{ statut: string; numero: string }>("/api/whatsapp/liaison/verifier", { method: "POST", body: JSON.stringify({ code }) });
+export const whatsappStatutLiaison = () =>
+  requete<{ lie: boolean; numero: string | null }>("/api/whatsapp/liaison/statut");
+export const whatsappDelierLiaison = () =>
+  requete<{ statut: string }>("/api/whatsapp/liaison", { method: "DELETE" });
+
 // --- Corbeille (clients/devis/factures supprimes, restaurables 30 jours) ---
 export interface ElementCorbeille {
   type: "client" | "devis" | "facture";

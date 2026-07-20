@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { ApiError } from "@/lib/api";
-import { getTenantConfig, updateTenantConfig } from "@/lib/api";
+import {
+  getTenantConfig, updateTenantConfig,
+  whatsappDemanderLiaison, whatsappVerifierLiaison, whatsappStatutLiaison, whatsappDelierLiaison,
+} from "@/lib/api";
 
 // Doit rester coherent avec ONGLETS_CRM dans NavBar.tsx -- volontairement
 // duplique plutot qu'importe, car cette liste decrit des libelles humains
@@ -74,6 +77,17 @@ export default function ParametresPage() {
   const [succesLegal, setSuccesLegal] = useState<string | null>(null);
   const [errorLegal, setErrorLegal] = useState<string | null>(null);
 
+  // WhatsApp -- liaison du numero pour parler a Pixel depuis WhatsApp
+  const [whatsappLie, setWhatsappLie] = useState(false);
+  const [whatsappNumero, setWhatsappNumero] = useState<string | null>(null);
+  const [whatsappLoading, setWhatsappLoading] = useState(true);
+  const [nouveauNumero, setNouveauNumero] = useState("");
+  const [codeVerification, setCodeVerification] = useState("");
+  const [etapeWhatsapp, setEtapeWhatsapp] = useState<"saisie" | "verification">("saisie");
+  const [whatsappEnCours, setWhatsappEnCours] = useState(false);
+  const [erreurWhatsapp, setErreurWhatsapp] = useState<string | null>(null);
+  const [succesWhatsapp, setSuccesWhatsapp] = useState<string | null>(null);
+
   useEffect(() => {
     getTenantConfig()
       .then((config) => {
@@ -86,6 +100,14 @@ export default function ParametresPage() {
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
+
+    whatsappStatutLiaison()
+      .then((s) => {
+        setWhatsappLie(s.lie);
+        setWhatsappNumero(s.numero);
+      })
+      .catch(() => {})
+      .finally(() => setWhatsappLoading(false));
   }, []);
 
   function toggle(id: string) {
@@ -101,10 +123,6 @@ export default function ParametresPage() {
     setTheme(id);
     setSucces(null);
     setError(null);
-    // Applique immediatement a l'ecran (retour visuel instantane), la
-    // sauvegarde serveur suit juste derriere -- si elle echoue, le theme
-    // reste applique localement jusqu'au prochain chargement de page,
-    // sans bloquer l'utilisateur sur un aller-retour reseau.
     document.body.dataset.theme = id;
     try {
       await updateTenantConfig({ theme: id });
@@ -143,6 +161,59 @@ export default function ParametresPage() {
       setErrorLegal(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.");
     } finally {
       setEnregistrementLegal(false);
+    }
+  }
+
+  async function handleDemanderCode() {
+    if (!nouveauNumero.trim().startsWith("+")) {
+      setErreurWhatsapp("Le numéro doit être au format international (ex: +33612345678).");
+      return;
+    }
+    setWhatsappEnCours(true);
+    setErreurWhatsapp(null);
+    setSuccesWhatsapp(null);
+    try {
+      await whatsappDemanderLiaison(nouveauNumero.trim());
+      setEtapeWhatsapp("verification");
+      setSuccesWhatsapp("Code envoyé sur WhatsApp — saisis-le ci-dessous.");
+    } catch (e) {
+      setErreurWhatsapp(e instanceof ApiError ? e.message : "Erreur lors de l'envoi du code.");
+    } finally {
+      setWhatsappEnCours(false);
+    }
+  }
+
+  async function handleVerifierCode() {
+    setWhatsappEnCours(true);
+    setErreurWhatsapp(null);
+    try {
+      const res = await whatsappVerifierLiaison(codeVerification.trim());
+      setWhatsappLie(true);
+      setWhatsappNumero(res.numero.replace("whatsapp:", ""));
+      setEtapeWhatsapp("saisie");
+      setNouveauNumero("");
+      setCodeVerification("");
+      setSuccesWhatsapp("Numéro lié avec succès — tu peux maintenant discuter avec Pixel sur WhatsApp.");
+    } catch (e) {
+      setErreurWhatsapp(e instanceof ApiError ? e.message : "Code incorrect ou expiré.");
+    } finally {
+      setWhatsappEnCours(false);
+    }
+  }
+
+  async function handleDelier() {
+    if (!confirm("Délier ce numéro WhatsApp ? Tu ne pourras plus discuter avec Pixel depuis ce canal.")) return;
+    setWhatsappEnCours(true);
+    setErreurWhatsapp(null);
+    try {
+      await whatsappDelierLiaison();
+      setWhatsappLie(false);
+      setWhatsappNumero(null);
+      setSuccesWhatsapp("Numéro délié.");
+    } catch (e) {
+      setErreurWhatsapp(e instanceof ApiError ? e.message : "Erreur lors de la suppression.");
+    } finally {
+      setWhatsappEnCours(false);
     }
   }
 
@@ -185,6 +256,75 @@ export default function ParametresPage() {
                   <p className="text-xs text-textMuted">{t.description}</p>
                 </button>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* WhatsApp */}
+        <section className="mt-10">
+          <h2 className="font-display text-lg text-textPrimary">💬 Pixel sur WhatsApp</h2>
+          <p className="mt-1 text-sm text-textMuted">
+            Lie ton numéro pour discuter avec Pixel directement depuis WhatsApp — mêmes capacités que sur le web,
+            avec une double confirmation par message avant toute suppression.
+          </p>
+
+          {erreurWhatsapp && <p className="mt-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{erreurWhatsapp}</p>}
+          {succesWhatsapp && <p className="mt-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{succesWhatsapp}</p>}
+
+          {whatsappLoading ? (
+            <p className="mt-4 text-sm text-textMuted">Chargement...</p>
+          ) : whatsappLie ? (
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3">
+              <div>
+                <p className="text-sm text-textPrimary">✓ Numéro lié</p>
+                <p className="text-xs text-textMuted font-mono">{whatsappNumero}</p>
+              </div>
+              <button
+                onClick={handleDelier}
+                disabled={whatsappEnCours}
+                className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-amber disabled:opacity-50"
+              >
+                Délier
+              </button>
+            </div>
+          ) : etapeWhatsapp === "saisie" ? (
+            <div className="mt-4 flex gap-2">
+              <input
+                value={nouveauNumero}
+                onChange={(e) => setNouveauNumero(e.target.value)}
+                placeholder="+33612345678"
+                className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary font-mono placeholder:text-textMuted/60"
+              />
+              <button
+                onClick={handleDemanderCode}
+                disabled={whatsappEnCours}
+                className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {whatsappEnCours ? "…" : "Envoyer le code"}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 flex gap-2">
+              <input
+                value={codeVerification}
+                onChange={(e) => setCodeVerification(e.target.value)}
+                placeholder="123456"
+                maxLength={6}
+                className="w-32 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary font-mono placeholder:text-textMuted/60"
+              />
+              <button
+                onClick={handleVerifierCode}
+                disabled={whatsappEnCours}
+                className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {whatsappEnCours ? "…" : "Valider"}
+              </button>
+              <button
+                onClick={() => { setEtapeWhatsapp("saisie"); setErreurWhatsapp(null); }}
+                className="text-sm text-textMuted hover:text-textPrimary"
+              >
+                Annuler
+              </button>
             </div>
           )}
         </section>
