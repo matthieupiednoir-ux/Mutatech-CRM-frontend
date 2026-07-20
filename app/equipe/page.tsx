@@ -23,6 +23,12 @@ export default function EquipeClientPage() {
   const [invitation, setInvitation] = useState(false);
   const [dernierMotDePasse, setDernierMotDePasse] = useState<{ email: string; mdp: string } | null>(null);
 
+  // Edition du nom d'un membre existant -- absent jusqu'ici : seul le
+  // statut actif etait modifiable inline, pas le nom une fois invite.
+  const [editionNomId, setEditionNomId] = useState<string | null>(null);
+  const [editionNomValeur, setEditionNomValeur] = useState("");
+  const [enregistrementNom, setEnregistrementNom] = useState(false);
+
   const utilisateurConnecte = getUser();
 
   function charger() {
@@ -61,6 +67,31 @@ export default function EquipeClientPage() {
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur.");
+    }
+  }
+
+  function commencerEditionNom(m: MembreEquipeClient) {
+    setEditionNomId(m.id);
+    setEditionNomValeur(m.nom || "");
+    setError(null);
+  }
+
+  function annulerEditionNom() {
+    setEditionNomId(null);
+    setEditionNomValeur("");
+  }
+
+  async function handleEnregistrerNom(m: MembreEquipeClient) {
+    setEnregistrementNom(true);
+    setError(null);
+    try {
+      await membresModifier(m.id, { nom: editionNomValeur.trim() || undefined });
+      setEditionNomId(null);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Erreur lors du renommage.");
+    } finally {
+      setEnregistrementNom(false);
     }
   }
 
@@ -140,12 +171,40 @@ export default function EquipeClientPage() {
             {membres.map((m) => {
               const estMoi = m.email === utilisateurConnecte?.email;
               const estProprietaire = m.role === "owner" || m.role === "admin";
+              const enEdition = editionNomId === m.id;
               return (
                 <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-                  <div>
-                    <p className="text-sm text-textPrimary">
-                      {m.nom || m.email} {estMoi && <span className="text-xs text-textMuted">(toi)</span>}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    {enEdition ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={editionNomValeur}
+                          onChange={(e) => setEditionNomValeur(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleEnregistrerNom(m)}
+                          placeholder="Nom"
+                          className="rounded border border-line bg-surfaceAlt px-2 py-1 text-sm text-textPrimary"
+                        />
+                        <button
+                          onClick={() => handleEnregistrerNom(m)}
+                          disabled={enregistrementNom}
+                          className="text-xs text-teal disabled:opacity-50"
+                        >
+                          ✓
+                        </button>
+                        <button onClick={annulerEditionNom} className="text-xs text-textMuted">✕</button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-textPrimary">
+                        {m.nom || m.email} {estMoi && <span className="text-xs text-textMuted">(toi)</span>}
+                        <button
+                          onClick={() => commencerEditionNom(m)}
+                          className="ml-2 text-xs text-textMuted hover:text-textPrimary"
+                        >
+                          Renommer
+                        </button>
+                      </p>
+                    )}
                     <p className="text-xs text-textMuted">
                       {m.email} · {ROLE_LABEL[m.role] || m.role}{!m.actif && " · inactif"}
                     </p>
