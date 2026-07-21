@@ -465,8 +465,11 @@ export interface MonOrganisation {
   role: string;
   nom_utilisateur: string;
   prenom_utilisateur: string;
+  theme: string;
 }
 export const monOrganisation = () => requeteIdel<MonOrganisation>("/auth-org/me/organization");
+export const idelChangerTheme = (theme: string) =>
+  requeteIdel<MonOrganisation>("/auth-org/me/organization/theme", { method: "PUT", body: JSON.stringify({ theme }) });
 
 // --- Module Tournees ---
 export interface VisitItem {

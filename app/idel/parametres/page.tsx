@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { idelGetMe, idelUpdateMe, ApiError } from "@/lib/api";
+import { idelGetMe, idelUpdateMe, monOrganisation, idelChangerTheme, ApiError } from "@/lib/api";
 import { IdelMe, LpsChoisi } from "@/lib/types";
 
 const LPS_OPTIONS: { value: LpsChoisi; label: string }[] = [
@@ -17,6 +17,30 @@ const LPS_OPTIONS: { value: LpsChoisi; label: string }[] = [
   { value: "autre", label: "Autre / non listé" },
 ];
 
+// 3 themes IDEL/PSDM -- "defaut" reste l'identite Nova historique (rose
+// neon hi-tech), les deux autres offrent une image plus sobre/medicale
+// ou plus humaine/apaisante selon la personnalite de la structure.
+const THEMES_IDEL: { id: string; nom: string; description: string; couleurs: string[] }[] = [
+  {
+    id: "defaut",
+    nom: "Nova (Défaut)",
+    description: "Rose néon hi-tech, glassmorphism — l'identité Nova actuelle.",
+    couleurs: ["#05050B", "#12122A", "#FF2E9A", "#6C63FF"],
+  },
+  {
+    id: "clinique",
+    nom: "Clinique",
+    description: "Blanc et bleu clinique, épuré et rassurant.",
+    couleurs: ["#F4F8FC", "#FFFFFF", "#2E7CD6", "#1FB6A6"],
+  },
+  {
+    id: "serenite",
+    nom: "Sérénité",
+    description: "Vert sauge doux et crème, chaleureux et apaisant.",
+    couleurs: ["#F7F5EE", "#FFFEF9", "#7C9473", "#D9A25C"],
+  },
+];
+
 export default function ParametresPage() {
   const [moi, setMoi] = useState<IdelMe | null>(null);
   const [lps, setLps] = useState<LpsChoisi>("autre");
@@ -27,6 +51,12 @@ export default function ParametresPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [succes, setSucces] = useState(false);
+
+  // Theme visuel de l'organisation
+  const [theme, setTheme] = useState<string>("defaut");
+  const [themeLoading, setThemeLoading] = useState(true);
+  const [themeError, setThemeError] = useState<string | null>(null);
+  const [themeSucces, setThemeSucces] = useState<string | null>(null);
 
   useEffect(() => {
     idelGetMe()
@@ -39,6 +69,11 @@ export default function ParametresPage() {
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
+
+    monOrganisation()
+      .then((org) => setTheme(org.theme || "defaut"))
+      .catch(() => {})
+      .finally(() => setThemeLoading(false));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -61,6 +96,23 @@ export default function ParametresPage() {
     }
   }
 
+  async function handleChoisirTheme(id: string) {
+    const precedent = theme;
+    setTheme(id);
+    setThemeError(null);
+    setThemeSucces(null);
+    document.body.dataset.theme = id;
+    try {
+      await idelChangerTheme(id);
+      setThemeSucces("Thème appliqué pour toute l'organisation.");
+      setTimeout(() => setThemeSucces(null), 3000);
+    } catch (e) {
+      setTheme(precedent);
+      document.body.dataset.theme = precedent;
+      setThemeError(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement du thème.");
+    }
+  }
+
   return (
     <>
       <NavBar />
@@ -72,6 +124,44 @@ export default function ParametresPage() {
           Aujourd'hui, aucun n'en documente publiquement — l'export CSV et la fiche de
           reprise sont la solution de démarrage en attendant.
         </p>
+
+        {/* Thème visuel de l'organisation */}
+        <section className="mb-8">
+          <h2 className="font-display text-lg text-textPrimary mb-1">Thème</h2>
+          <p className="mb-4 text-sm text-textMuted">
+            S'applique à toute l'organisation (tous les membres voient le même thème) — réversible à tout moment.
+          </p>
+
+          {themeError && <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{themeError}</p>}
+          {themeSucces && <p className="mb-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{themeSucces}</p>}
+
+          {themeLoading ? (
+            <p className="text-sm text-textMuted">Chargement…</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {THEMES_IDEL.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleChoisirTheme(t.id)}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    theme === t.id ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "border-line hover:border-[var(--accent)]/50"
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-display text-sm font-bold text-textPrimary">{t.nom}</span>
+                    {theme === t.id && <span className="text-xs" style={{ color: "var(--accent)" }}>✓</span>}
+                  </div>
+                  <div className="mb-2 flex gap-1.5">
+                    {t.couleurs.map((c, i) => (
+                      <span key={i} className="h-5 w-5 rounded-full border border-line" style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                  <p className="text-xs text-textMuted">{t.description}</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
 
         {loading ? (
           <p className="text-sm text-textMuted">Chargement…</p>

@@ -144,7 +144,13 @@ function NavBarInterieur() {
   useEffect(() => {
     if (estIdel) {
       monOrganisation()
-        .then((org) => setModulesActifs(org.modules_actifs))
+        .then((org) => {
+          setModulesActifs(org.modules_actifs);
+          // Theme IDEL propre a l'organisation (Nova/Clinique/Serenite) --
+          // meme mecanisme que le theme CRM, juste une source differente
+          // (Organization.theme plutot que TenantConfig.theme).
+          setTheme(org.theme || "defaut");
+        })
         .catch(() => setModulesActifs([]));
     }
   }, [estIdel]);

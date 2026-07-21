@@ -61,6 +61,56 @@ body[data-mode="admin"] {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   THEMES IDEL/PSDM (3 au total, "Defaut" = identite Nova historique,
+   rose neon hi-tech, deja definie ci-dessus via body[data-mode="idel"]).
+   Selectionnables depuis /idel/parametres, stockes sur Organization.theme
+   (backend IDEL), appliques via body[data-theme] -- jamais actifs en
+   mode CRM ni Admin, qui gardent leurs propres identites.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Theme IDEL 2 : Clinique -- blanc/bleu clinique, epure et rassurant.
+   Pense pour les structures qui veulent une image sobre et medicale
+   plutot que l'identite hi-tech de Nova par defaut. */
+body[data-mode="idel"][data-theme="clinique"] {
+  --color-ink: #F4F8FC;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #EAF2FA;
+  --color-line: #D3E3F0;
+  --color-violet: #2E7CD6;
+  --color-teal: #1FB6A6;
+  --color-amber: #F0A93B;
+  --color-text-primary: #16232E;
+  --color-text-muted: #6C8299;
+  --accent: #2E7CD6;
+  --accent-soft: rgba(46, 124, 214, 0.10);
+  color-scheme: light;
+  background-image:
+    radial-gradient(circle at 88% -8%, rgba(46, 124, 214, 0.14), transparent 42%),
+    radial-gradient(circle at 10% 105%, rgba(31, 182, 166, 0.08), transparent 45%);
+}
+
+/* Theme IDEL 3 : Serenite -- vert sauge doux + creme, chaleureux et
+   apaisant. Pense pour une image plus humaine/bienveillante, a
+   l'oppose du cote hi-tech de Nova. */
+body[data-mode="idel"][data-theme="serenite"] {
+  --color-ink: #F7F5EE;
+  --color-surface: #FFFEF9;
+  --color-surface-alt: #EFEBDD;
+  --color-line: #DCD4BC;
+  --color-violet: #7C9473;
+  --color-teal: #B98A5E;
+  --color-amber: #D9A25C;
+  --color-text-primary: #33362B;
+  --color-text-muted: #857F68;
+  --accent: #7C9473;
+  --accent-soft: rgba(124, 148, 115, 0.14);
+  color-scheme: light;
+  background-image:
+    radial-gradient(circle at 88% -8%, rgba(124, 148, 115, 0.18), transparent 42%),
+    radial-gradient(circle at 10% 105%, rgba(217, 162, 92, 0.10), transparent 45%);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    THEMES CRM (5 au total, "Defaut" = palette :root ci-dessus)
    Selectionnables depuis /parametres, stockes dans TenantConfig.theme,
    appliques via body[data-theme] -- jamais actifs hors du mode CRM
