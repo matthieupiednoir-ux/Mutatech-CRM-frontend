@@ -198,21 +198,6 @@ function NavBarInterieur() {
               {menuMobileOuvert ? "✕" : "☰"}
             </button>
 
-            {/* Navigation desktop -- masquee sur petit ecran, la liste
-                complete apparait sinon en un seul bloc replie tres haut. */}
-            <nav className="hidden flex-wrap gap-4 sm:flex">
-              {onglets.map((onglet) => (
-                <Link
-                  key={onglet.href}
-                  href={onglet.href}
-                  className="text-sm font-medium transition text-textMuted hover:text-textPrimary"
-                  style={isActive(onglet.href) ? { color: "var(--accent)" } : undefined}
-                >
-                  {onglet.label}
-                </Link>
-              ))}
-            </nav>
-
             {estAdmin && (
               <Link href="/dashboard" className="hidden text-sm text-textMuted hover:text-textPrimary sm:block">
                 ← Retour au CRM
@@ -274,21 +259,61 @@ function NavBarInterieur() {
           </div>
         </div>
 
+        {/* Rangee d'onglets pleine largeur -- volontairement HORS du
+            conteneur mx-auto max-w-6xl ci-dessus (le <header> lui, n'a
+            aucune contrainte de largeur), pour occuper tout l'ecran plutot
+            que de rester cantonnee au bloc centre. Chaque onglet est un
+            vrai bouton (fond + surbrillance active) plutot qu'un simple
+            lien texte, et flex-1 fait que la rangee se repartit sur toute
+            la largeur quel que soit le nombre d'onglets. flex-wrap laisse
+            les onglets en trop passer a la ligne suivante (toujours pleine
+            largeur) plutot que de se retasser illisiblement. Meme code
+            pour CRM, IDEL et Admin -- un seul composant partage, seule la
+            liste `onglets` change selon le mode. */}
+        <nav className="hidden w-full flex-wrap border-t border-line sm:flex" style={{ borderTopColor: "var(--accent-soft, #2A2A4A)" }}>
+          {onglets.map((onglet) => {
+            const actif = isActive(onglet.href);
+            return (
+              <Link
+                key={onglet.href}
+                href={onglet.href}
+                className="flex-1 whitespace-nowrap px-4 py-2.5 text-center text-sm font-medium transition"
+                style={
+                  actif
+                    ? { color: "var(--accent)", backgroundColor: "var(--accent-soft, transparent)", boxShadow: "inset 0 -2px 0 var(--accent)" }
+                    : { color: "var(--color-text-muted)" }
+                }
+                onMouseEnter={(e) => { if (!actif) e.currentTarget.style.color = "var(--color-text-primary)"; }}
+                onMouseLeave={(e) => { if (!actif) e.currentTarget.style.color = "var(--color-text-muted)"; }}
+              >
+                {onglet.label}
+              </Link>
+            );
+          })}
+        </nav>
+
         {/* Panneau mobile -- liste complete des onglets empilee, affichee
             uniquement quand le hamburger est ouvert (sm:hidden au niveau
             du bouton garantit que ce panneau n'existe que sur mobile). */}
         {menuMobileOuvert && (
           <nav className="flex flex-col gap-1 border-t border-line px-4 py-3 sm:hidden">
-            {onglets.map((onglet) => (
-              <Link
-                key={onglet.href}
-                href={onglet.href}
-                className="rounded-lg px-2 py-2 text-sm font-medium transition text-textMuted hover:bg-surface hover:text-textPrimary"
-                style={isActive(onglet.href) ? { color: "var(--accent)" } : undefined}
-              >
-                {onglet.label}
-              </Link>
-            ))}
+            {onglets.map((onglet) => {
+              const actif = isActive(onglet.href);
+              return (
+                <Link
+                  key={onglet.href}
+                  href={onglet.href}
+                  className="rounded-lg px-3 py-2 text-sm font-medium transition hover:bg-surface"
+                  style={
+                    actif
+                      ? { color: "var(--accent)", backgroundColor: "var(--accent-soft, transparent)" }
+                      : { color: "var(--color-text-muted)" }
+                  }
+                >
+                  {onglet.label}
+                </Link>
+              );
+            })}
             {estAdmin && (
               <Link href="/dashboard" className="rounded-lg px-2 py-2 text-sm text-textMuted hover:bg-surface hover:text-textPrimary">
                 ← Retour au CRM
