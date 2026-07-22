@@ -27,6 +27,7 @@ export default function NovaChatPanel({ compact = false }: { compact?: boolean }
       historyFn={novaHistorique}
       clearFn={novaEffacerHistorique}
       confirmerFn={novaConfirmerAction}
+      voiceGenre="femme"
       messageAccueil={ACCUEIL_NOVA}
       suggestions={SUGGESTIONS_NOVA}
       accentClass="bg-[#FF2E9A] hover:opacity-90"

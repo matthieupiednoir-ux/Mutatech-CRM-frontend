@@ -27,6 +27,10 @@ interface ChatAgentPanelProps {
   // Execute reellement une action apres confirmation cliquee -- jamais
   // appelee depuis une reponse vocale. Nova passe novaConfirmerAction.
   confirmerFn?: (outil: string, args: Record<string, unknown>) => Promise<{ libelle: string }>;
+  // Genre de la voix de synthese vocale -- Pixel (CRM) reste "homme" par
+  // defaut, Nova (IDEL) passe "femme". Determine la selection parmi les
+  // voix francaises disponibles dans le navigateur (voir choisirVoix).
+  voiceGenre?: "homme" | "femme";
   messageAccueil?: string;
   suggestions?: string[];
   accentClass?: string; // classe Tailwind pour la bulle utilisateur/bouton, ex. "bg-violet hover:bg-violet/90"
@@ -76,12 +80,51 @@ function synthesesDisponibles(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+// Note colle a une realite : le rendu "robotique" vient surtout du moteur
+// TTS fourni par l'OS/navigateur, pas du code -- on ne peut pas le rendre
+// plus naturel que la voix elle-meme. Ce qu'on peut faire : choisir la
+// MEILLEURE voix francaise disponible (les voix "Online/Natural/Neural",
+// quand presentes -- typiquement Edge -- sonnent nettement moins robotique
+// que les voix locales par defaut), et distinguer homme/femme entre Pixel
+// et Nova via des heuristiques de nom (aucune API standard n'expose le
+// genre d'une SpeechSynthesisVoice).
+const NOMS_VOIX_HOMME = ["paul", "henri", "thomas", "nicolas", "daniel", "guillaume", "male", "homme"];
+const NOMS_VOIX_FEMME = [
+  "hortense", "denise", "julie", "amelie", "amélie", "audrey", "marie",
+  "virginie", "chantal", "celine", "céline", "aurelie", "aurélie",
+  "google français", "google francais", "female", "femme",
+];
+
+function scoreVoix(v: SpeechSynthesisVoice, genre: "homme" | "femme"): number {
+  const langOk = (v.lang || "").toLowerCase().startsWith("fr");
+  if (!langOk) return -1;
+  const nom = v.name.toLowerCase();
+  let score = 1;
+  const estQualiteSuperieure = nom.includes("online") || nom.includes("natural") || nom.includes("neural") || nom.includes("google");
+  if (estQualiteSuperieure) score += 5;
+  const listeCible = genre === "homme" ? NOMS_VOIX_HOMME : NOMS_VOIX_FEMME;
+  const listeOpposee = genre === "homme" ? NOMS_VOIX_FEMME : NOMS_VOIX_HOMME;
+  if (listeCible.some((n) => nom.includes(n))) score += 10;
+  if (listeOpposee.some((n) => nom.includes(n))) score -= 8;
+  return score;
+}
+
+function choisirVoix(genre: "homme" | "femme", voixDisponibles: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (!voixDisponibles.length) return null;
+  const notees = voixDisponibles
+    .map((v) => ({ v, s: scoreVoix(v, genre) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => b.s - a.s);
+  return notees.length ? notees[0].v : null;
+}
+
 export default function ChatAgentPanel({
   compact = false,
   chatFn = chatAgent,
   historyFn = getAgentHistorique,
   clearFn = effacerAgentHistorique,
   confirmerFn = agentConfirmerAction,
+  voiceGenre = "homme",
   messageAccueil = MESSAGE_ACCUEIL_DEFAUT,
   suggestions = SUGGESTIONS_DEFAUT,
   accentClass = "bg-violet hover:bg-violet/90",
@@ -103,6 +146,7 @@ export default function ChatAgentPanel({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const modeVocalRef = useRef(false); // reflete modeVocal sans latence de re-render, lu dans les callbacks
   const confirmationRef = useRef<ConfirmationRequise | null>(null);
+  const voixDisponiblesRef = useRef<SpeechSynthesisVoice[]>([]); // rempli de facon asynchrone par le navigateur
   const supportVocalOk = getSpeechRecognitionCtor() !== null && synthesesDisponibles();
 
   useEffect(() => {
@@ -141,6 +185,16 @@ export default function ChatAgentPanel({
     };
   }, []);
 
+  // Charge la liste des voix disponibles -- souvent vide au tout premier
+  // rendu (chargement asynchrone du moteur TTS par le navigateur), d'ou
+  // l'ecoute de onvoiceschanged en plus de l'appel immediat.
+  useEffect(() => {
+    if (!synthesesDisponibles()) return;
+    const charger = () => { voixDisponiblesRef.current = window.speechSynthesis.getVoices(); };
+    charger();
+    window.speechSynthesis.onvoiceschanged = charger;
+  }, []);
+
   function parlerTexte(texte: string, onFin?: () => void) {
     if (!synthesesDisponibles() || !texte) {
       onFin?.();
@@ -149,6 +203,10 @@ export default function ChatAgentPanel({
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(texte);
     utterance.lang = "fr-FR";
+    const voix = choisirVoix(voiceGenre, voixDisponiblesRef.current.length ? voixDisponiblesRef.current : window.speechSynthesis.getVoices());
+    if (voix) utterance.voice = voix;
+    utterance.pitch = voiceGenre === "homme" ? 0.95 : 1.05;
+    utterance.rate = 1.02;
     utterance.onend = () => {
       setParle(false);
       onFin?.();
