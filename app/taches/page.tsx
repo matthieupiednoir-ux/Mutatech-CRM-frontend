@@ -35,6 +35,7 @@ export default function TachesPage() {
 
   const [recherche, setRecherche] = useState("");
   const [pilierFiltre, setPilierFiltre] = useState<number | null>(null);
+  const [statutFiltre, setStatutFiltre] = useState<StatutTache | null>(null);
 
   // Gestion des piliers
   const [panneauPiliersOuvert, setPanneauPiliersOuvert] = useState(false);
@@ -171,6 +172,7 @@ export default function TachesPage() {
 
   const tachesFiltrees = safeArr<Tache>(taches).filter((t) => {
     if (pilierFiltre !== null && t.pilier !== pilierFiltre) return false;
+    if (statutFiltre !== null && t.statut !== statutFiltre) return false;
     if (recherche) {
       const q = recherche.toLowerCase();
       return t.titre?.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q);
@@ -314,10 +316,28 @@ export default function TachesPage() {
         )}
 
         {/* Filtres */}
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-2">
           <input value={recherche} onChange={(e) => setRecherche(e.target.value)}
             placeholder="Rechercher…"
             className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-textPrimary placeholder:text-textMuted/60 flex-1 min-w-40" />
+        </div>
+
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-textMuted mr-1">Statut</span>
+          <button onClick={() => setStatutFiltre(null)}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${statutFiltre === null ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted"}`}>
+            Tous
+          </button>
+          {(["todo", "prog", "done"] as StatutTache[]).map((s) => (
+            <button key={s} onClick={() => setStatutFiltre(statutFiltre === s ? null : s)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${statutFiltre === s ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted"}`}>
+              {STATUT_LABEL[s]}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-textMuted mr-1">Pilier</span>
           <button onClick={() => setPilierFiltre(null)}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${pilierFiltre === null ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted"}`}>
             Tous

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { idelGetMe, idelUpdateMe, monOrganisation, idelChangerTheme, ApiError } from "@/lib/api";
+import { idelGetMe, idelUpdateMe, monOrganisation, idelChangerTheme, idelChangerOnglets, ApiError } from "@/lib/api";
 import { IdelMe, LpsChoisi } from "@/lib/types";
 
 const LPS_OPTIONS: { value: LpsChoisi; label: string }[] = [
@@ -20,6 +20,16 @@ const LPS_OPTIONS: { value: LpsChoisi; label: string }[] = [
 // 3 themes IDEL/PSDM -- "defaut" reste l'identite Nova historique (rose
 // neon hi-tech), les deux autres offrent une image plus sobre/medicale
 // ou plus humaine/apaisante selon la personnalite de la structure.
+const ONGLETS_CONFIGURABLES_IDEL = [
+  { id: "patients", label: "Patients" },
+  { id: "comptabilite", label: "Trésorerie" },
+  { id: "catalogue", label: "Catalogue" },
+  { id: "planning", label: "Planning" },
+  { id: "journal", label: "Journal" },
+];
+// "pipeline" et "nova" restent volontairement absents : toujours
+// visibles, comme "Dashboard"/"Agent IA" cote CRM.
+
 const THEMES_IDEL: { id: string; nom: string; description: string; couleurs: string[] }[] = [
   {
     id: "defaut",
@@ -58,6 +68,12 @@ export default function ParametresPage() {
   const [themeError, setThemeError] = useState<string | null>(null);
   const [themeSucces, setThemeSucces] = useState<string | null>(null);
 
+  // Onglets visibles de l'organisation
+  const [ongletsMasques, setOngletsMasques] = useState<Set<string>>(new Set());
+  const [ongletsEnregistrement, setOngletsEnregistrement] = useState(false);
+  const [ongletsError, setOngletsError] = useState<string | null>(null);
+  const [ongletsSucces, setOngletsSucces] = useState<string | null>(null);
+
   useEffect(() => {
     idelGetMe()
       .then((data) => {
@@ -71,7 +87,11 @@ export default function ParametresPage() {
       .finally(() => setLoading(false));
 
     monOrganisation()
-      .then((org) => setTheme(org.theme || "defaut"))
+      .then((org) => {
+        setTheme(org.theme || "defaut");
+        const liste = (org.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
+        setOngletsMasques(new Set(liste));
+      })
       .catch(() => {})
       .finally(() => setThemeLoading(false));
   }, []);
@@ -110,6 +130,29 @@ export default function ParametresPage() {
       setTheme(precedent);
       document.body.dataset.theme = precedent;
       setThemeError(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement du thème.");
+    }
+  }
+
+  function toggleOnglet(id: string) {
+    setOngletsMasques((prev) => {
+      const copie = new Set(prev);
+      if (copie.has(id)) copie.delete(id); else copie.add(id);
+      return copie;
+    });
+    setOngletsSucces(null);
+  }
+
+  async function handleEnregistrerOnglets() {
+    setOngletsEnregistrement(true);
+    setOngletsError(null);
+    setOngletsSucces(null);
+    try {
+      await idelChangerOnglets(Array.from(ongletsMasques).join(","));
+      setOngletsSucces("Préférences enregistrées — rafraîchis la page pour voir le menu mis à jour.");
+    } catch (e) {
+      setOngletsError(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.");
+    } finally {
+      setOngletsEnregistrement(false);
     }
   }
 
@@ -161,6 +204,46 @@ export default function ParametresPage() {
               ))}
             </div>
           )}
+        </section>
+
+        {/* Onglets visibles de l'organisation */}
+        <section className="mb-8">
+          <h2 className="font-display text-lg text-textPrimary mb-1">Onglets visibles</h2>
+          <p className="mb-4 text-sm text-textMuted">
+            Choisis les onglets utiles à ton activité — masque ceux dont tu ne te sers pas. S'applique à toute
+            l'organisation, réversible à tout moment.
+          </p>
+
+          {ongletsError && <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{ongletsError}</p>}
+          {ongletsSucces && <p className="mb-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{ongletsSucces}</p>}
+
+          {themeLoading ? (
+            <p className="text-sm text-textMuted">Chargement…</p>
+          ) : (
+            <div className="space-y-2">
+              {ONGLETS_CONFIGURABLES_IDEL.map((o) => (
+                <label key={o.id} className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 cursor-pointer">
+                  <span className="text-sm text-textPrimary">{o.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={!ongletsMasques.has(o.id)}
+                    onChange={() => toggleOnglet(o.id)}
+                    className="h-4 w-4"
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={handleEnregistrerOnglets}
+            disabled={ongletsEnregistrement || themeLoading}
+            className="mt-4 rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
+            style={{ backgroundColor: "var(--accent)" }}
+          >
+            {ongletsEnregistrement ? "Enregistrement..." : "Enregistrer"}
+          </button>
         </section>
 
         {loading ? (

@@ -17,24 +17,26 @@ const ONGLETS_CRM = [
   { id: "prospects", href: "/prospects", label: "Prospects" },
   { id: "comptabilite", href: "/comptabilite", label: "Comptabilité" },
   { id: "catalogue", href: "/catalogue", label: "Catalogue" },
+  { id: "planning", href: "/planning", label: "Planning" },
+  { id: "journal", href: "/journal", label: "Journal" },
+  { id: "corbeille", href: "/corbeille", label: "🗑 Corbeille" },
   { id: "agent", href: "/agent", label: "Agent IA" },
 ];
-// Onglets a part (pas dans ONGLETS_CRM) : visibles pour tous ou selon
-// permission, mais jamais masquables via /parametres (ce ne sont pas des
-// preferences d'affichage comme les autres).
+// Onglet a part (pas dans ONGLETS_CRM) : visible selon permission, mais
+// jamais masquable via /parametres -- ce n'est pas une preference
+// d'affichage personnelle, c'est une question de droit d'acces (gerer
+// l'equipe), donc elle ne doit pas dependre du choix d'affichage d'un
+// utilisateur non-owner.
 const ONGLET_EQUIPE_CLIENT = { id: "equipe", href: "/equipe", label: "Mon équipe" };
-const ONGLET_PLANNING_CRM = { id: "planning", href: "/planning", label: "Planning" };
-const ONGLET_JOURNAL_CRM = { id: "journal", href: "/journal", label: "Journal" };
-const ONGLET_CORBEILLE_CRM = { id: "corbeille", href: "/corbeille", label: "🗑 Corbeille" };
 
 const ONGLETS_IDEL_BASE = [
-  { href: "/idel", label: "Pipeline" },
-  { href: "/idel/patients", label: "Patients" },
-  { href: "/idel/comptabilite", label: "Trésorerie" },
-  { href: "/idel/catalogue", label: "Catalogue" },
-  { href: "/idel/planning", label: "Planning" },
-  { href: "/idel/journal", label: "Journal" },
-  { href: "/idel/nova", label: "✨ Nova" },
+  { id: "pipeline", href: "/idel", label: "Pipeline" },
+  { id: "patients", href: "/idel/patients", label: "Patients" },
+  { id: "comptabilite", href: "/idel/comptabilite", label: "Trésorerie" },
+  { id: "catalogue", href: "/idel/catalogue", label: "Catalogue" },
+  { id: "planning", href: "/idel/planning", label: "Planning" },
+  { id: "journal", href: "/idel/journal", label: "Journal" },
+  { id: "nova", href: "/idel/nova", label: "✨ Nova" },
 ];
 const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {
   tournees: { href: "/idel/tournees", label: "Tournées" },
@@ -48,6 +50,7 @@ const ONGLETS_ADMIN = [
   { href: "/admin", label: "Clients SaaS" },
   { href: "/admin/organisations", label: "Organisations & Modules" },
   { href: "/admin/equipe", label: "Équipe Mutatech" },
+  { href: "/admin/outils", label: "🗂 Outils" },
 ];
 
 export default function NavBar() {
@@ -98,8 +101,11 @@ function NavBarInterieur() {
     setMenuMobileOuvert(false);
   }, [pathname]);
 
+  const ongletsIdelBaseFiltres = ONGLETS_IDEL_BASE.filter(
+    (o) => o.id === "pipeline" || o.id === "nova" || !ongletsMasques.has(o.id)
+  );
   const ongletsIdel = [
-    ...ONGLETS_IDEL_BASE,
+    ...ongletsIdelBaseFiltres,
     ...modulesActifs.filter((m) => ONGLETS_MODULES[m]).map((m) => ONGLETS_MODULES[m]),
     ONGLET_PARAMETRES,
   ];
@@ -113,9 +119,6 @@ function NavBarInterieur() {
     ? ongletsIdel
     : [
         ...ongletsCrmFiltres,
-        ONGLET_PLANNING_CRM,
-        ONGLET_JOURNAL_CRM,
-        ONGLET_CORBEILLE_CRM,
         ...(peutGererEquipe ? [ONGLET_EQUIPE_CLIENT] : []),
         { id: "parametres", href: "/parametres", label: "⚙" },
       ];
@@ -150,6 +153,8 @@ function NavBarInterieur() {
           // meme mecanisme que le theme CRM, juste une source differente
           // (Organization.theme plutot que TenantConfig.theme).
           setTheme(org.theme || "defaut");
+          const liste = (org.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
+          setOngletsMasques(new Set(liste));
         })
         .catch(() => setModulesActifs([]));
     }
@@ -267,9 +272,7 @@ function NavBarInterieur() {
             lien texte, et flex-1 fait que la rangee se repartit sur toute
             la largeur quel que soit le nombre d'onglets. flex-wrap laisse
             les onglets en trop passer a la ligne suivante (toujours pleine
-            largeur) plutot que de se retasser illisiblement. Meme code
-            pour CRM, IDEL et Admin -- un seul composant partage, seule la
-            liste `onglets` change selon le mode. */}
+            largeur) plutot que de se retasser illisiblement. */}
         <nav className="hidden w-full flex-wrap border-t border-line sm:flex" style={{ borderTopColor: "var(--accent-soft, #2A2A4A)" }}>
           {onglets.map((onglet) => {
             const actif = isActive(onglet.href);

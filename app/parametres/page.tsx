@@ -20,8 +20,12 @@ const ONGLETS_CONFIGURABLES = [
   { id: "prospects", label: "Prospects" },
   { id: "comptabilite", label: "Comptabilité" },
   { id: "catalogue", label: "Catalogue" },
-  { id: "agent", label: "Agent IA" },
+  { id: "planning", label: "Planning" },
+  { id: "journal", label: "Journal" },
+  { id: "corbeille", label: "🗑 Corbeille" },
 ];
+// "agent" (Agent IA) et "dashboard" restent volontairement absents de
+// cette liste : ils sont toujours visibles, comme cote NavBar.tsx.
 
 // Apercu statique des 5 palettes -- copie a la main depuis globals.css
 // (pas de lecture dynamique des variables CSS ici, plus simple et fiable

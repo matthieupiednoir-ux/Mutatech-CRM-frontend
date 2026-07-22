@@ -466,10 +466,13 @@ export interface MonOrganisation {
   nom_utilisateur: string;
   prenom_utilisateur: string;
   theme: string;
+  onglets_masques: string;
 }
 export const monOrganisation = () => requeteIdel<MonOrganisation>("/auth-org/me/organization");
 export const idelChangerTheme = (theme: string) =>
   requeteIdel<MonOrganisation>("/auth-org/me/organization/theme", { method: "PUT", body: JSON.stringify({ theme }) });
+export const idelChangerOnglets = (onglets_masques: string) =>
+  requeteIdel<MonOrganisation>("/auth-org/me/organization/onglets", { method: "PUT", body: JSON.stringify({ onglets_masques }) });
 
 // --- Module Tournees ---
 export interface VisitItem {
