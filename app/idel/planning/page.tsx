@@ -4,6 +4,7 @@ import NavBar from "@/components/NavBar";
 import PlanningView from "@/components/PlanningView";
 import {
   idelPlanningMembres, idelPlanningEvenements, idelPlanningCreerEvenement,
+  idelPlanningModifierEvenement, idelPlanningSupprimerEvenement,
   idelPlanningLoginPersonnelUrl, idelPlanningStatutPersonnel, idelPlanningDeconnexionPersonnelle,
 } from "@/lib/api";
 
@@ -22,6 +23,8 @@ export default function PlanningIdelPage() {
           fetchMembres={idelPlanningMembres}
           fetchEvenements={idelPlanningEvenements}
           creerEvenement={idelPlanningCreerEvenement}
+          modifierEvenement={idelPlanningModifierEvenement}
+          supprimerEvenement={idelPlanningSupprimerEvenement}
           fetchLoginUrl={idelPlanningLoginPersonnelUrl}
           fetchStatutPersonnel={idelPlanningStatutPersonnel}
           deconnexionPersonnelle={idelPlanningDeconnexionPersonnelle}

@@ -715,3 +715,10 @@ export const idelPlanningEvenements = (debut: string, fin: string) =>
   requeteIdel<EvenementPlanning[]>(`/api/planning/evenements?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
 export const idelPlanningCreerEvenement = (data: EvenementPlanningInput) =>
   requeteIdel<EvenementPlanning>("/api/planning/evenements", { method: "POST", body: JSON.stringify(data) });
+export const idelPlanningModifierEvenement = (data: EvenementPlanningModifierInput) =>
+  requeteIdel<EvenementPlanning>("/api/planning/evenements", { method: "PUT", body: JSON.stringify(data) });
+export const idelPlanningSupprimerEvenement = (eventId: string, assigneAContexte: string) =>
+  requeteIdel<{ statut: string }>("/api/planning/evenements", {
+    method: "DELETE",
+    body: JSON.stringify({ event_id: eventId, assigne_a_contexte: assigneAContexte }),
+  });
