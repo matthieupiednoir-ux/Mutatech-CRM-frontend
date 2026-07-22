@@ -346,9 +346,16 @@ export interface AgentMessage {
   actions_effectuees?: string[];
 }
 
+export interface ConfirmationRequise {
+  outil: string;
+  args: Record<string, unknown>;
+  libelle: string;
+}
+
 export interface AgentResponse {
   reply: string;
   actions_effectuees?: string[];
+  confirmation_requise?: ConfirmationRequise | null;
 }
 
 // --- IDEL ---
