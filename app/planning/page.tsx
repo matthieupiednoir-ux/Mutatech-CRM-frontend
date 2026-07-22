@@ -4,6 +4,7 @@ import NavBar from "@/components/NavBar";
 import PlanningView from "@/components/PlanningView";
 import {
   planningMembres, planningEvenements, planningCreerEvenement,
+  planningModifierEvenement, planningSupprimerEvenement,
   planningLoginPersonnelUrl, planningStatutPersonnel, planningDeconnexionPersonnelle,
 } from "@/lib/api";
 
@@ -22,6 +23,8 @@ export default function PlanningPage() {
           fetchMembres={planningMembres}
           fetchEvenements={planningEvenements}
           creerEvenement={planningCreerEvenement}
+          modifierEvenement={planningModifierEvenement}
+          supprimerEvenement={planningSupprimerEvenement}
           fetchLoginUrl={planningLoginPersonnelUrl}
           fetchStatutPersonnel={planningStatutPersonnel}
           deconnexionPersonnelle={planningDeconnexionPersonnelle}

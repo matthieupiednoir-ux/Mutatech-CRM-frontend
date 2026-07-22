@@ -26,6 +26,9 @@ export interface EvenementPlanningInput {
   lieu?: string;
   assigne_a_contexte: string;
 }
+export interface EvenementPlanningModifierInput extends EvenementPlanningInput {
+  event_id: string;
+}
 
 interface PlanningViewProps {
   fetchMembres: () => Promise<MembrePlanning[]>;
@@ -34,19 +37,22 @@ interface PlanningViewProps {
   fetchLoginUrl: () => Promise<{ url: string }>;
   fetchStatutPersonnel: () => Promise<{ connecte: boolean; email_google?: string | null }>;
   deconnexionPersonnelle: () => Promise<unknown>;
+  // Optionnels : sans eux, les evenements existants restent en lecture
+  // seule (pas de risque de casser un appelant qui ne les fournit pas
+  // encore, ex: la page IDEL qui n'a pas encore ete mise a jour).
+  modifierEvenement?: (data: EvenementPlanningModifierInput) => Promise<EvenementPlanning>;
+  supprimerEvenement?: (eventId: string, assigneAContexte: string) => Promise<unknown>;
   accentColor?: string; // ex "#6C63FF" (CRM) ou "#FF2E9A" (IDEL)
 }
 
 const PALETTE = ["#6C63FF", "#00D4AA", "#F5A623", "#a89eff", "#EF4444", "#FF2E9A", "#5fe0c0"];
+const NOMS_JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 // Formate une date en "YYYY-MM-DD" a partir de SES COMPOSANTES LOCALES
 // (annee/mois/jour tels qu'affiches a l'ecran) -- jamais via
 // toISOString(), qui convertit d'abord en UTC et decale donc la date
 // d'un jour des que l'heure locale est proche de minuit (systematique
-// en France, UTC+1/+2 : minuit local = la veille en UTC). C'est cette
-// conversion involontaire qui causait le decalage J+1 avec Google
-// Calendar -- toutes les comparaisons de "quel jour est cet evenement"
-// doivent passer par cette fonction, jamais par toISOString().
+// en France, UTC+1/+2 : minuit local = la veille en UTC).
 function dateLocaleISO(d: Date): string {
   const annee = d.getFullYear();
   const mois = String(d.getMonth() + 1).padStart(2, "0");
@@ -68,16 +74,45 @@ function joursDeLaSemaine(lundi: Date): Date[] {
     return d;
   });
 }
+
+// Premier jour visible dans la grille du mois (le lundi de la semaine
+// contenant le 1er du mois) -- la grille remonte parfois dans le mois
+// precedent pour completer la premiere ligne.
+function premierJourGrilleMois(moisRef: Date): Date {
+  const premier = new Date(moisRef.getFullYear(), moisRef.getMonth(), 1);
+  const jour = (premier.getDay() + 6) % 7;
+  premier.setDate(premier.getDate() - jour);
+  premier.setHours(0, 0, 0, 0);
+  return premier;
+}
+// 6 lignes x 7 colonnes = 42 jours, largeur fixe qui couvre tous les cas
+// (un mois peut chevaucher jusqu'a 6 semaines civiles).
+function joursDeLaGrilleMois(premierJour: Date): Date[] {
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(premierJour);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
 function toISODateTime(jour: Date, heure: string): string {
   return `${dateLocaleISO(jour)}T${heure}:00`;
 }
 
+const NOMS_MOIS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
 export default function PlanningView({
   fetchMembres, fetchEvenements, creerEvenement,
   fetchLoginUrl, fetchStatutPersonnel, deconnexionPersonnelle,
+  modifierEvenement, supprimerEvenement,
   accentColor = "#6C63FF",
 }: PlanningViewProps) {
+  const [vue, setVue] = useState<"mois" | "semaine">("mois");
   const [offsetSemaine, setOffsetSemaine] = useState(0);
+  const [offsetMois, setOffsetMois] = useState(0);
   const [membres, setMembres] = useState<MembrePlanning[]>([]);
   const [evenements, setEvenements] = useState<EvenementPlanning[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +121,8 @@ export default function PlanningView({
   const [connexionEnCours, setConnexionEnCours] = useState(false);
 
   const [formOuvert, setFormOuvert] = useState(false);
+  const [modeForm, setModeForm] = useState<"creation" | "edition">("creation");
+  const [eventIdEdition, setEventIdEdition] = useState<string | null>(null);
   const [titre, setTitre] = useState("");
   const [assigneA, setAssigneA] = useState("");
   const [jourForm, setJourForm] = useState("");
@@ -93,9 +130,29 @@ export default function PlanningView({
   const [heureFin, setHeureFin] = useState("10:00");
   const [lieu, setLieu] = useState("");
   const [enregistrement, setEnregistrement] = useState(false);
+  const [suppression, setSuppression] = useState(false);
+
+  const peutEditer = Boolean(modifierEvenement && supprimerEvenement);
 
   const lundi = useMemo(() => lundiDeSemaine(offsetSemaine), [offsetSemaine]);
-  const jours = useMemo(() => joursDeLaSemaine(lundi), [lundi]);
+  const joursSemaine = useMemo(() => joursDeLaSemaine(lundi), [lundi]);
+
+  const moisRef = useMemo(() => {
+    const base = new Date();
+    return new Date(base.getFullYear(), base.getMonth() + offsetMois, 1);
+  }, [offsetMois]);
+  const premierJourGrille = useMemo(() => premierJourGrilleMois(moisRef), [moisRef]);
+  const joursGrilleMois = useMemo(() => joursDeLaGrilleMois(premierJourGrille), [premierJourGrille]);
+
+  // Plage a charger depuis l'API selon la vue active -- le mois demande
+  // 42 jours (grille complete), la semaine seulement 7.
+  const { plageDebut, plageFin } = useMemo(() => {
+    if (vue === "mois") {
+      const dernier = joursGrilleMois[joursGrilleMois.length - 1];
+      return { plageDebut: premierJourGrille, plageFin: dernier };
+    }
+    return { plageDebut: joursSemaine[0], plageFin: joursSemaine[6] };
+  }, [vue, joursGrilleMois, premierJourGrille, joursSemaine]);
 
   const couleurParContexte = useMemo(() => {
     const map: Record<string, string> = {};
@@ -106,23 +163,23 @@ export default function PlanningView({
   function charger() {
     setLoading(true);
     setError(null);
-    // Bornes de la semaine en heure LOCALE (pas UTC) -- decalage de
-    // l'offset local ajoute manuellement pour que "00:00 lundi France"
-    // et "23:59 dimanche France" restent les vraies bornes demandees a
-    // Google Calendar, quelle que soit la saison (UTC+1 ou UTC+2).
-    const offsetMin = new Date().getTimezoneOffset(); // minutes, positif si en retard sur UTC
+    // Bornes en heure LOCALE (pas UTC) -- decalage de l'offset local
+    // ajoute manuellement pour que "00:00 France" et "23:59 France"
+    // restent les vraies bornes demandees a Google Calendar, quelle que
+    // soit la saison (UTC+1 ou UTC+2).
+    const offsetMin = new Date().getTimezoneOffset();
     const signe = offsetMin > 0 ? "-" : "+";
     const abs = Math.abs(offsetMin);
     const decalage = `${signe}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
-    const debut = `${dateLocaleISO(jours[0])}T00:00:00${decalage}`;
-    const fin = `${dateLocaleISO(jours[6])}T23:59:59${decalage}`;
+    const debut = `${dateLocaleISO(plageDebut)}T00:00:00${decalage}`;
+    const fin = `${dateLocaleISO(plageFin)}T23:59:59${decalage}`;
     Promise.all([fetchMembres(), fetchEvenements(debut, fin)])
       .then(([m, e]) => { setMembres(m); setEvenements(e); })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { charger(); }, [offsetSemaine]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { charger(); }, [vue, offsetSemaine, offsetMois]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchStatutPersonnel().then(setStatutMoi).catch(() => setStatutMoi({ connecte: false }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -148,12 +205,39 @@ export default function PlanningView({
     }
   }
 
-  function ouvrirNouveau(jour: Date) {
-    setJourForm(dateLocaleISO(jour));
+  function resetForm() {
     setTitre("");
     setLieu("");
     setAssigneA(membres.find((m) => m.connecte)?.contexte || "");
+    setHeureDebut("09:00");
+    setHeureFin("10:00");
+    setEventIdEdition(null);
+  }
+
+  function ouvrirNouveau(jour: Date) {
+    resetForm();
+    setJourForm(dateLocaleISO(jour));
+    setModeForm("creation");
     setFormOuvert(true);
+    setError(null);
+  }
+
+  function ouvrirEdition(e: EvenementPlanning) {
+    if (!peutEditer) return;
+    setModeForm("edition");
+    setEventIdEdition(e.id);
+    setTitre(e.titre);
+    setLieu(e.lieu || "");
+    setAssigneA(e.proprietaire_contexte);
+    if (e.debut) {
+      setJourForm(e.debut.slice(0, 10));
+      setHeureDebut(e.debut.slice(11, 16));
+    }
+    if (e.fin) {
+      setHeureFin(e.fin.slice(11, 16));
+    }
+    setFormOuvert(true);
+    setError(null);
   }
 
   async function handleCreer(e: React.FormEvent) {
@@ -165,19 +249,48 @@ export default function PlanningView({
     setEnregistrement(true);
     setError(null);
     try {
-      await creerEvenement({
-        titre,
-        debut: toISODateTime(new Date(jourForm), heureDebut),
-        fin: toISODateTime(new Date(jourForm), heureFin),
-        lieu: lieu || undefined,
-        assigne_a_contexte: assigneA,
-      });
+      if (modeForm === "edition" && eventIdEdition && modifierEvenement) {
+        await modifierEvenement({
+          event_id: eventIdEdition,
+          titre,
+          debut: toISODateTime(new Date(jourForm), heureDebut),
+          fin: toISODateTime(new Date(jourForm), heureFin),
+          lieu: lieu || undefined,
+          assigne_a_contexte: assigneA,
+        });
+      } else {
+        await creerEvenement({
+          titre,
+          debut: toISODateTime(new Date(jourForm), heureDebut),
+          fin: toISODateTime(new Date(jourForm), heureFin),
+          lieu: lieu || undefined,
+          assigne_a_contexte: assigneA,
+        });
+      }
       setFormOuvert(false);
+      resetForm();
       charger();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erreur lors de la création.");
+      setError(err instanceof ApiError ? err.message : "Erreur lors de l'enregistrement.");
     } finally {
       setEnregistrement(false);
+    }
+  }
+
+  async function handleSupprimerEvenement() {
+    if (!eventIdEdition || !supprimerEvenement) return;
+    if (!confirm("Supprimer définitivement cet événement du Google Calendar ?")) return;
+    setSuppression(true);
+    setError(null);
+    try {
+      await supprimerEvenement(eventIdEdition, assigneA);
+      setFormOuvert(false);
+      resetForm();
+      charger();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erreur lors de la suppression.");
+    } finally {
+      setSuppression(false);
     }
   }
 
@@ -186,16 +299,76 @@ export default function PlanningView({
     return evenements.filter((e) => e.debut?.slice(0, 10) === iso);
   }
 
+  function ChipEvenement({ e, compact = false }: { e: EvenementPlanning; compact?: boolean }) {
+    const couleur = couleurParContexte[e.proprietaire_contexte] || "#77778A";
+    const contenu = (
+      <>
+        <p className={compact ? "truncate font-medium" : "font-medium"}>{e.titre}</p>
+        {!compact && <p className="opacity-80">{e.debut?.slice(11, 16)} · {e.proprietaire_nom}</p>}
+        {!compact && e.lieu && <p className="opacity-70">📍 {e.lieu}</p>}
+      </>
+    );
+    const style = { backgroundColor: `${couleur}22`, color: couleur };
+    if (peutEditer) {
+      return (
+        <button
+          onClick={() => ouvrirEdition(e)}
+          className={`block w-full rounded-lg px-2 py-1.5 text-left ${compact ? "text-[10px]" : "text-[11px]"} hover:brightness-110 transition`}
+          style={style}
+          title="Cliquer pour modifier"
+        >
+          {compact ? `${e.debut?.slice(11, 16)} ${e.titre}` : contenu}
+        </button>
+      );
+    }
+    return (
+      <div className={`rounded-lg px-2 py-1.5 ${compact ? "text-[10px]" : "text-[11px]"}`} style={style}>
+        {compact ? `${e.debut?.slice(11, 16)} ${e.titre}` : contenu}
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setOffsetSemaine((o) => o - 1)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">←</button>
-          <button onClick={() => setOffsetSemaine(0)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">Aujourd'hui</button>
-          <button onClick={() => setOffsetSemaine((o) => o + 1)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">→</button>
-          <span className="ml-2 text-sm text-textMuted">
-            Semaine du {lundi.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Bascule Mois / Semaine */}
+          <div className="flex rounded-lg border border-line p-0.5">
+            <button
+              onClick={() => setVue("mois")}
+              className="rounded-md px-3 py-1 text-xs font-medium transition"
+              style={vue === "mois" ? { backgroundColor: accentColor, color: "#fff" } : { color: "var(--color-text-muted)" }}
+            >
+              Mois
+            </button>
+            <button
+              onClick={() => setVue("semaine")}
+              className="rounded-md px-3 py-1 text-xs font-medium transition"
+              style={vue === "semaine" ? { backgroundColor: accentColor, color: "#fff" } : { color: "var(--color-text-muted)" }}
+            >
+              Semaine
+            </button>
+          </div>
+
+          {vue === "mois" ? (
+            <>
+              <button onClick={() => setOffsetMois((o) => o - 1)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">←</button>
+              <button onClick={() => setOffsetMois(0)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">Aujourd'hui</button>
+              <button onClick={() => setOffsetMois((o) => o + 1)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">→</button>
+              <span className="ml-2 text-sm text-textMuted capitalize">
+                {NOMS_MOIS[moisRef.getMonth()]} {moisRef.getFullYear()}
+              </span>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setOffsetSemaine((o) => o - 1)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">←</button>
+              <button onClick={() => setOffsetSemaine(0)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">Aujourd'hui</button>
+              <button onClick={() => setOffsetSemaine((o) => o + 1)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-textMuted hover:text-textPrimary">→</button>
+              <span className="ml-2 text-sm text-textMuted">
+                Semaine du {lundi.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
+              </span>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -214,7 +387,7 @@ export default function PlanningView({
         </div>
       </div>
 
-      {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
+      {error && !formOuvert && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
 
       {/* Legende couleur */}
       {membres.length > 0 && (
@@ -230,7 +403,10 @@ export default function PlanningView({
 
       {formOuvert && (
         <form onSubmit={handleCreer} className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-5 sm:grid-cols-2">
-          <p className="text-sm font-medium text-textPrimary sm:col-span-2">Nouvel événement — {new Date(jourForm).toLocaleDateString("fr-FR")}</p>
+          <p className="text-sm font-medium text-textPrimary sm:col-span-2">
+            {modeForm === "edition" ? "Modifier l'événement" : "Nouvel événement"} — {jourForm && new Date(jourForm).toLocaleDateString("fr-FR")}
+          </p>
+          {error && <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-xs text-amber sm:col-span-2">{error}</p>}
           <input required placeholder="Titre" value={titre} onChange={(e) => setTitre(e.target.value)}
             className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50 sm:col-span-2" />
           <select required value={assigneA} onChange={(e) => setAssigneA(e.target.value)}
@@ -249,22 +425,68 @@ export default function PlanningView({
               Personne n'a encore connecté son Google Calendar — connecte le tien ci-dessus pour pouvoir t'assigner un événement.
             </p>
           )}
-          <div className="flex gap-2 sm:col-span-2">
-            <button type="submit" disabled={enregistrement || membres.filter((m) => m.connecte).length === 0}
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+            <button type="submit" disabled={enregistrement || suppression || membres.filter((m) => m.connecte).length === 0}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               style={{ backgroundColor: accentColor }}>
-              {enregistrement ? "..." : "Créer"}
+              {enregistrement ? "..." : modeForm === "edition" ? "Enregistrer" : "Créer"}
             </button>
-            <button type="button" onClick={() => setFormOuvert(false)} className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted">Annuler</button>
+            {modeForm === "edition" && supprimerEvenement && (
+              <button type="button" onClick={handleSupprimerEvenement} disabled={enregistrement || suppression}
+                className="rounded-lg border border-amber/40 px-4 py-2 text-sm text-amber hover:bg-amber/10 disabled:opacity-50">
+                {suppression ? "..." : "Supprimer"}
+              </button>
+            )}
+            <button type="button" onClick={() => { setFormOuvert(false); resetForm(); }}
+              className="text-sm text-textMuted hover:text-textPrimary">Annuler</button>
           </div>
         </form>
       )}
 
       {loading ? (
         <p className="text-sm text-textMuted">Chargement…</p>
+      ) : vue === "mois" ? (
+        <div>
+          <div className="mb-1 grid grid-cols-7 gap-1.5">
+            {NOMS_JOURS_COURTS.map((j) => (
+              <div key={j} className="py-1 text-center text-[11px] font-medium uppercase tracking-wide text-textMuted">{j}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {joursGrilleMois.map((jour, i) => {
+              const dansLeMois = jour.getMonth() === moisRef.getMonth();
+              const estAujourdhui = dateLocaleISO(jour) === dateLocaleISO(new Date());
+              const evts = evenementsDuJour(jour);
+              const evtsAffiches = evts.slice(0, 3);
+              return (
+                <div key={i}
+                  className="min-h-[92px] rounded-lg border p-1.5 transition"
+                  style={{
+                    borderColor: "var(--color-line)",
+                    backgroundColor: dansLeMois ? "var(--color-surface)" : "transparent",
+                    opacity: dansLeMois ? 1 : 0.4,
+                  }}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs font-medium" style={estAujourdhui ? { color: accentColor, fontWeight: 700 } : { color: "var(--color-text-muted)" }}>
+                      {jour.getDate()}
+                    </span>
+                    <button onClick={() => ouvrirNouveau(jour)} className="text-[11px] text-textMuted hover:text-textPrimary">+</button>
+                  </div>
+                  <div className="space-y-1">
+                    {evtsAffiches.map((e) => <ChipEvenement key={e.id} e={e} compact />)}
+                    {evts.length > 3 && (
+                      <p className="text-[10px] text-textMuted">+{evts.length - 3} autre(s)</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {jours.map((jour, i) => {
+          {joursSemaine.map((jour, i) => {
             const estAujourdhui = dateLocaleISO(jour) === dateLocaleISO(new Date());
             const evtsJour = evenementsDuJour(jour);
             return (
@@ -279,14 +501,7 @@ export default function PlanningView({
                   <p className="text-[11px] text-textMuted/60">—</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {evtsJour.map((e) => (
-                      <div key={e.id} className="rounded-lg px-2 py-1.5 text-[11px]"
-                        style={{ backgroundColor: `${couleurParContexte[e.proprietaire_contexte] || "#77778A"}22`, color: couleurParContexte[e.proprietaire_contexte] || "#77778A" }}>
-                        <p className="font-medium">{e.titre}</p>
-                        <p className="opacity-80">{e.debut?.slice(11, 16)} · {e.proprietaire_nom}</p>
-                        {e.lieu && <p className="opacity-70">📍 {e.lieu}</p>}
-                      </div>
-                    ))}
+                    {evtsJour.map((e) => <ChipEvenement key={e.id} e={e} />)}
                   </div>
                 )}
               </div>

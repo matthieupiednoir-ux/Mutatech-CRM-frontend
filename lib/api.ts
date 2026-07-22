@@ -681,6 +681,9 @@ export interface EvenementPlanningInput {
   lieu?: string;
   assigne_a_contexte: string;
 }
+export interface EvenementPlanningModifierInput extends EvenementPlanningInput {
+  event_id: string;
+}
 
 // CRM
 export const planningLoginPersonnelUrl = () => requete<{ url: string }>("/api/auth/google/login-personnel-url");
@@ -691,6 +694,13 @@ export const planningEvenements = (debut: string, fin: string) =>
   requete<EvenementPlanning[]>(`/api/planning/evenements?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
 export const planningCreerEvenement = (data: EvenementPlanningInput) =>
   requete<EvenementPlanning>("/api/planning/evenements", { method: "POST", body: JSON.stringify(data) });
+export const planningModifierEvenement = (data: EvenementPlanningModifierInput) =>
+  requete<EvenementPlanning>("/api/planning/evenements", { method: "PUT", body: JSON.stringify(data) });
+export const planningSupprimerEvenement = (eventId: string, assigneAContexte: string) =>
+  requete<{ statut: string }>("/api/planning/evenements", {
+    method: "DELETE",
+    body: JSON.stringify({ event_id: eventId, assigne_a_contexte: assigneAContexte }),
+  });
 
 // --- Journal d'activite IA (Nova, cote IDEL) ---
 export const idelGetJournal = (limite?: number) =>
