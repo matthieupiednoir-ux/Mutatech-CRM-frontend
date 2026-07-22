@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { getGoogleStatus, urlConnexionGoogle, monOrganisation, getTenantConfig } from "@/lib/api";
 import { deconnecter, getUser } from "@/lib/auth";
 import FallingPetals from "@/components/FallingPetals";
+import { saisonActuelle } from "@/lib/saison";
 
 const ONGLETS_CRM = [
   { id: "dashboard", href: "/dashboard", label: "Dashboard" },
@@ -93,6 +94,13 @@ function NavBarInterieur() {
 
   useEffect(() => {
     document.body.dataset.theme = theme;
+    // Theme "Saison" (CRM uniquement) : la palette reelle depend d'un
+    // second attribut, data-saison, recalcule a chaque chargement --
+    // pas besoin de stocker la saison elle-meme cote backend, elle se
+    // deduit toujours de la date du jour.
+    if (theme === "saison") {
+      document.body.dataset.saison = saisonActuelle();
+    }
   }, [theme]);
 
   // Referme le menu mobile a chaque changement de page -- evite de

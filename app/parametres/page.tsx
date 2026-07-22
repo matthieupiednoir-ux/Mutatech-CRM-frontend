@@ -7,6 +7,7 @@ import {
   getTenantConfig, updateTenantConfig,
   whatsappDemanderLiaison, whatsappVerifierLiaison, whatsappStatutLiaison, whatsappDelierLiaison,
 } from "@/lib/api";
+import { saisonActuelle, NOMS_SAISONS, EMOJIS_SAISONS } from "@/lib/saison";
 
 // Doit rester coherent avec ONGLETS_CRM dans NavBar.tsx -- volontairement
 // duplique plutot qu'importe, car cette liste decrit des libelles humains
@@ -27,9 +28,11 @@ const ONGLETS_CONFIGURABLES = [
 // "agent" (Agent IA) et "dashboard" restent volontairement absents de
 // cette liste : ils sont toujours visibles, comme cote NavBar.tsx.
 
-// Apercu statique des 5 palettes -- copie a la main depuis globals.css
+// Apercu statique des palettes -- copie a la main depuis globals.css
 // (pas de lecture dynamique des variables CSS ici, plus simple et fiable
-// pour un simple aperçu visuel avant application reelle).
+// pour un simple aperçu visuel avant application reelle). Pour "Saison",
+// les 4 couleurs representent les 4 palettes saisonnieres plutot qu'une
+// seule (le theme change reellement de palette au fil de l'annee).
 const THEMES: { id: string; nom: string; description: string; couleurs: string[] }[] = [
   {
     id: "defaut",
@@ -60,6 +63,12 @@ const THEMES: { id: string; nom: string; description: string; couleurs: string[]
     nom: "Menthe Fraîche",
     description: "Clair et minimaliste, vert menthe et bleu ciel.",
     couleurs: ["#FFFFFF", "#EFFAF5", "#00B894", "#3D8BFF"],
+  },
+  {
+    id: "saison",
+    nom: "Saison",
+    description: "Change automatiquement de palette à chaque équinoxe/solstice — printemps, été, automne, hiver.",
+    couleurs: ["#7CB86F", "#FF9F1C", "#D97D3D", "#6FC3FF"],
   },
 ];
 
@@ -128,6 +137,9 @@ export default function ParametresPage() {
     setSucces(null);
     setError(null);
     document.body.dataset.theme = id;
+    if (id === "saison") {
+      document.body.dataset.saison = saisonActuelle();
+    }
     try {
       await updateTenantConfig({ theme: id });
       setSucces("Thème appliqué.");
@@ -221,6 +233,8 @@ export default function ParametresPage() {
     }
   }
 
+  const saisonAujourdhui = saisonActuelle();
+
   return (
     <>
       <NavBar />
@@ -258,6 +272,11 @@ export default function ParametresPage() {
                     ))}
                   </div>
                   <p className="text-xs text-textMuted">{t.description}</p>
+                  {t.id === "saison" && (
+                    <p className="mt-1.5 text-[11px] font-medium text-violet">
+                      {EMOJIS_SAISONS[saisonAujourdhui]} En ce moment : {NOMS_SAISONS[saisonAujourdhui]}
+                    </p>
+                  )}
                 </button>
               ))}
             </div>

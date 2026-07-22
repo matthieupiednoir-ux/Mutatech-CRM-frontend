@@ -111,7 +111,7 @@ body[data-mode="idel"][data-theme="serenite"] {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   THEMES CRM (5 au total, "Defaut" = palette :root ci-dessus)
+   THEMES CRM (6 au total, "Defaut" = palette :root ci-dessus)
    Selectionnables depuis /parametres, stockes dans TenantConfig.theme,
    appliques via body[data-theme] -- jamais actifs hors du mode CRM
    (data-mode="crm"), Nova/IDEL garde toujours sa propre identite rose.
@@ -162,7 +162,6 @@ body[data-mode="crm"][data-theme="bois"] {
   color-scheme: dark;
   background-color: #241C14;
   background-image:
-    /* fibres fines du bois, deux couches a angle legerement different */
     repeating-linear-gradient(89deg,
       rgba(0,0,0,0.10) 0px, rgba(0,0,0,0.10) 1px,
       transparent 1px, transparent 3px,
@@ -171,26 +170,19 @@ body[data-mode="crm"][data-theme="bois"] {
     repeating-linear-gradient(91deg,
       rgba(0,0,0,0.06) 0px, transparent 2px,
       transparent 14px, rgba(255,205,150,0.02) 16px, transparent 19px),
-    /* noeuds de bois */
     radial-gradient(ellipse 60px 90px at 18% 22%, rgba(0,0,0,0.20), transparent 70%),
     radial-gradient(ellipse 40px 70px at 78% 68%, rgba(0,0,0,0.16), transparent 70%),
     radial-gradient(ellipse 50px 80px at 60% 12%, rgba(0,0,0,0.12), transparent 70%),
-    /* jointures de planches verticales */
     repeating-linear-gradient(90deg,
       transparent 0, transparent 218px,
       rgba(0,0,0,0.35) 218px, rgba(0,0,0,0.35) 220px,
       rgba(255,205,150,0.05) 220px, rgba(255,205,150,0.05) 221px,
       transparent 221px),
-    /* lumiere ambiante existante, attenuee pour laisser respirer la texture */
     radial-gradient(circle at 10% -8%, rgba(201, 124, 61, 0.16), transparent 45%),
     radial-gradient(circle at 90% 105%, rgba(139, 154, 91, 0.08), transparent 48%),
-    /* degrade de fond, planche eclairee en haut, plus sombre en bas */
     linear-gradient(180deg, #2E2317 0%, #24190F 55%, #1D140B 100%);
 }
 
-/* -- Accents metal, actifs uniquement sur le theme "bois" -- */
-
-/* Barre de navigation : panneau d'acier brosse + rangee de rivets */
 body[data-mode="crm"][data-theme="bois"] header {
   position: relative;
   background-image:
@@ -211,7 +203,6 @@ body[data-mode="crm"][data-theme="bois"] header::after {
   opacity: 0.85;
 }
 
-/* Boutons d'accent (Pixel) : plaque metal embossee, biseau + rivets d'angle */
 body[data-mode="crm"][data-theme="bois"] .bg-violet {
   background-image:
     linear-gradient(155deg, rgba(255,255,255,0.30) 0%, transparent 35%),
@@ -226,7 +217,6 @@ body[data-mode="crm"][data-theme="bois"] .bg-violet:hover {
   filter: brightness(1.07);
 }
 
-/* Cartes et panneaux : bordure metal fine + liseré clair superieur (bord tole) */
 body[data-mode="crm"][data-theme="bois"] .border-line {
   border-color: #5A4632;
 }
@@ -270,6 +260,96 @@ body[data-mode="crm"][data-theme="menthe"] {
   background-image:
     radial-gradient(circle at 12% -8%, rgba(0, 184, 148, 0.14), transparent 42%),
     radial-gradient(circle at 90% 105%, rgba(61, 139, 255, 0.10), transparent 45%);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Theme 6 : Saison -- change automatiquement de palette selon la date du
+   jour (calcul cote client, voir lib/saison.ts::saisonActuelle). Pilote
+   par un second attribut, data-saison, pose par NavBar.tsx et
+   /parametres au moment du choix du theme -- distinct de data-theme pour
+   ne pas multiplier les entrees de la liste deroulante par 4. Le bloc
+   ci-dessous (sans [data-saison]) sert de repli le temps que le JS pose
+   l'attribut au chargement (tres bref, imperceptible en pratique).
+   ══════════════════════════════════════════════════════════════════════ */
+body[data-mode="crm"][data-theme="saison"] {
+  --accent: #6C63FF;
+  --accent-soft: rgba(108, 99, 255, 0.12);
+}
+
+/* Printemps (20 mars -> 20 juin) -- vert tendre + rose floraison, clair */
+body[data-mode="crm"][data-theme="saison"][data-saison="printemps"] {
+  --color-ink: #F4FBF0;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #E9F6E1;
+  --color-line: #CFEAC0;
+  --color-violet: #7CB86F;
+  --color-teal: #FF9FC0;
+  --color-amber: #FFD166;
+  --color-text-primary: #223318;
+  --color-text-muted: #7C9470;
+  --accent: #7CB86F;
+  --accent-soft: rgba(124, 184, 111, 0.14);
+  color-scheme: light;
+  background-image:
+    radial-gradient(circle at 15% -8%, rgba(124, 184, 111, 0.18), transparent 42%),
+    radial-gradient(circle at 90% 105%, rgba(255, 159, 192, 0.14), transparent 45%);
+}
+
+/* Ete (21 juin -> 21 septembre) -- soleil et mer, chaud et lumineux */
+body[data-mode="crm"][data-theme="saison"][data-saison="ete"] {
+  --color-ink: #FFF9EC;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #FFF1D6;
+  --color-line: #FFDD9E;
+  --color-violet: #FF9F1C;
+  --color-teal: #2EC4E8;
+  --color-amber: #FFD23F;
+  --color-text-primary: #3A2A0F;
+  --color-text-muted: #9C8358;
+  --accent: #FF9F1C;
+  --accent-soft: rgba(255, 159, 28, 0.14);
+  color-scheme: light;
+  background-image:
+    radial-gradient(circle at 88% -8%, rgba(255, 159, 28, 0.20), transparent 42%),
+    radial-gradient(circle at 10% 105%, rgba(46, 196, 232, 0.14), transparent 45%);
+}
+
+/* Automne (22 septembre -> 20 decembre) -- roux et cuivre, chaleureux et sombre */
+body[data-mode="crm"][data-theme="saison"][data-saison="automne"] {
+  --color-ink: #201812;
+  --color-surface: #33231A;
+  --color-surface-alt: #46301F;
+  --color-line: #5C4028;
+  --color-violet: #D97D3D;
+  --color-teal: #B5482F;
+  --color-amber: #E8B54C;
+  --color-text-primary: #F5E6D3;
+  --color-text-muted: #BFA184;
+  --accent: #D97D3D;
+  --accent-soft: rgba(217, 125, 61, 0.16);
+  color-scheme: dark;
+  background-image:
+    radial-gradient(circle at 12% -8%, rgba(217, 125, 61, 0.22), transparent 42%),
+    radial-gradient(circle at 90% 105%, rgba(181, 72, 47, 0.14), transparent 45%);
+}
+
+/* Hiver (21 decembre -> 19 mars) -- bleu glace et argent, froid et sombre */
+body[data-mode="crm"][data-theme="saison"][data-saison="hiver"] {
+  --color-ink: #0B1420;
+  --color-surface: #101E2E;
+  --color-surface-alt: #17293D;
+  --color-line: #24405A;
+  --color-violet: #6FC3FF;
+  --color-teal: #B8E8FF;
+  --color-amber: #E8F4FF;
+  --color-text-primary: #EAF6FF;
+  --color-text-muted: #7FA3C0;
+  --accent: #6FC3FF;
+  --accent-soft: rgba(111, 195, 255, 0.16);
+  color-scheme: dark;
+  background-image:
+    radial-gradient(circle at 12% -8%, rgba(111, 195, 255, 0.20), transparent 42%),
+    radial-gradient(circle at 90% 105%, rgba(184, 232, 255, 0.10), transparent 45%);
 }
 
 :focus-visible {

@@ -39,6 +39,21 @@ interface PlanningViewProps {
 
 const PALETTE = ["#6C63FF", "#00D4AA", "#F5A623", "#a89eff", "#EF4444", "#FF2E9A", "#5fe0c0"];
 
+// Formate une date en "YYYY-MM-DD" a partir de SES COMPOSANTES LOCALES
+// (annee/mois/jour tels qu'affiches a l'ecran) -- jamais via
+// toISOString(), qui convertit d'abord en UTC et decale donc la date
+// d'un jour des que l'heure locale est proche de minuit (systematique
+// en France, UTC+1/+2 : minuit local = la veille en UTC). C'est cette
+// conversion involontaire qui causait le decalage J+1 avec Google
+// Calendar -- toutes les comparaisons de "quel jour est cet evenement"
+// doivent passer par cette fonction, jamais par toISOString().
+function dateLocaleISO(d: Date): string {
+  const annee = d.getFullYear();
+  const mois = String(d.getMonth() + 1).padStart(2, "0");
+  const jour = String(d.getDate()).padStart(2, "0");
+  return `${annee}-${mois}-${jour}`;
+}
+
 function lundiDeSemaine(offsetSemaines = 0): Date {
   const d = new Date();
   const jour = (d.getDay() + 6) % 7;
@@ -54,7 +69,7 @@ function joursDeLaSemaine(lundi: Date): Date[] {
   });
 }
 function toISODateTime(jour: Date, heure: string): string {
-  return `${jour.toISOString().slice(0, 10)}T${heure}:00`;
+  return `${dateLocaleISO(jour)}T${heure}:00`;
 }
 
 export default function PlanningView({
@@ -91,8 +106,16 @@ export default function PlanningView({
   function charger() {
     setLoading(true);
     setError(null);
-    const debut = `${jours[0].toISOString().slice(0, 10)}T00:00:00Z`;
-    const fin = `${jours[6].toISOString().slice(0, 10)}T23:59:59Z`;
+    // Bornes de la semaine en heure LOCALE (pas UTC) -- decalage de
+    // l'offset local ajoute manuellement pour que "00:00 lundi France"
+    // et "23:59 dimanche France" restent les vraies bornes demandees a
+    // Google Calendar, quelle que soit la saison (UTC+1 ou UTC+2).
+    const offsetMin = new Date().getTimezoneOffset(); // minutes, positif si en retard sur UTC
+    const signe = offsetMin > 0 ? "-" : "+";
+    const abs = Math.abs(offsetMin);
+    const decalage = `${signe}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+    const debut = `${dateLocaleISO(jours[0])}T00:00:00${decalage}`;
+    const fin = `${dateLocaleISO(jours[6])}T23:59:59${decalage}`;
     Promise.all([fetchMembres(), fetchEvenements(debut, fin)])
       .then(([m, e]) => { setMembres(m); setEvenements(e); })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Erreur de chargement"))
@@ -126,7 +149,7 @@ export default function PlanningView({
   }
 
   function ouvrirNouveau(jour: Date) {
-    setJourForm(jour.toISOString().slice(0, 10));
+    setJourForm(dateLocaleISO(jour));
     setTitre("");
     setLieu("");
     setAssigneA(membres.find((m) => m.connecte)?.contexte || "");
@@ -159,7 +182,7 @@ export default function PlanningView({
   }
 
   function evenementsDuJour(jour: Date): EvenementPlanning[] {
-    const iso = jour.toISOString().slice(0, 10);
+    const iso = dateLocaleISO(jour);
     return evenements.filter((e) => e.debut?.slice(0, 10) === iso);
   }
 
@@ -242,7 +265,7 @@ export default function PlanningView({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {jours.map((jour, i) => {
-            const estAujourdhui = jour.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+            const estAujourdhui = dateLocaleISO(jour) === dateLocaleISO(new Date());
             const evtsJour = evenementsDuJour(jour);
             return (
               <div key={i} className="rounded-xl border border-line bg-surface p-3">
