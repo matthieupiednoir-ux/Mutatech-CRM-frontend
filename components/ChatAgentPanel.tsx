@@ -5,9 +5,17 @@ import { chatAgent, agentConfirmerAction, getAgentHistorique, effacerAgentHistor
 import { AgentMessage, ConfirmationRequise } from "@/lib/types";
 
 interface MessageAffiche {
+  id: string;
   role: "user" | "assistant";
   content: string;
   actions?: string[];
+  echec?: boolean; // true si l'envoi de CE message a echoue -- affiche un bouton Reessayer
+}
+
+let compteurMessages = 0;
+function nouvelId(): string {
+  compteurMessages += 1;
+  return `m${Date.now()}_${compteurMessages}`;
 }
 
 interface ReponseAgent {
@@ -129,7 +137,7 @@ export default function ChatAgentPanel({
   suggestions = SUGGESTIONS_DEFAUT,
   accentClass = "bg-violet hover:bg-violet/90",
 }: ChatAgentPanelProps) {
-  const accueil: MessageAffiche = { role: "assistant", content: messageAccueil };
+  const accueil: MessageAffiche = { id: "accueil", role: "assistant", content: messageAccueil };
   const [messages, setMessages] = useState<MessageAffiche[]>([accueil]);
   const [historiquePret, setHistoriquePret] = useState(false);
   const [saisie, setSaisie] = useState("");
@@ -162,6 +170,7 @@ export default function ChatAgentPanel({
       .then((data: unknown) => {
         if (!Array.isArray(data) || data.length === 0) return;
         const mapped: MessageAffiche[] = (data as AgentMessage[]).map((m) => ({
+          id: nouvelId(),
           role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
           content: m.content ?? "",
           actions: Array.isArray(m.actions_effectuees) ? m.actions_effectuees : [],
@@ -274,10 +283,13 @@ export default function ChatAgentPanel({
     const message = (texte ?? saisie).trim();
     if (!message || envoi) return;
 
+    const idMessage = nouvelId();
     const safeMsg = safeMessages(messages, accueil);
     const historique = safeMsg.map((m) => ({ role: m.role, content: m.content }));
-    setMessages([...safeMsg, { role: "user", content: message }]);
-    setSaisie("");
+    setMessages([...safeMsg, { id: idMessage, role: "user", content: message }]);
+    // La saisie n'est effacee qu'apres un envoi reussi (voir catch ci-dessous) --
+    // sinon un echec reseau forcerait a retaper tout le message.
+    if (!texte) setSaisie("");
     setEnvoi(true);
     setError(null);
 
@@ -286,11 +298,13 @@ export default function ChatAgentPanel({
       setMessages((prev) => [
         ...safeMessages(prev, accueil),
         {
+          id: nouvelId(),
           role: "assistant",
           content: reponse.reply ?? "",
           actions: Array.isArray(reponse.actions_effectuees) ? reponse.actions_effectuees : [],
         },
       ]);
+      if (!texte) setSaisie("");
 
       if (voice && reponse.confirmation_requise) {
         // Coupe la boucle d'ecoute automatique -- la confirmation ne peut
@@ -306,10 +320,20 @@ export default function ChatAgentPanel({
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur de connexion à l'agent.");
+      // Marque CE message comme en echec (bouton Reessayer sur la bulle) et
+      // restaure le texte dans le champ de saisie s'il venait de la saisie
+      // manuelle -- sinon l'utilisateur devrait tout retaper.
+      setMessages((prev) => safeMessages(prev, accueil).map((m) => (m.id === idMessage ? { ...m, echec: true } : m)));
+      if (!texte) setSaisie(message);
       if (voice && modeVocalRef.current) setTimeout(demarrerEcoute, 800);
     } finally {
       setEnvoi(false);
     }
+  }
+
+  function reessayerMessage(id: string, contenu: string) {
+    setMessages((prev) => safeMessages(prev, accueil).filter((m) => m.id !== id));
+    envoyer(contenu);
   }
 
   async function confirmerActionVocale() {
@@ -321,7 +345,7 @@ export default function ChatAgentPanel({
       const resultat = await confirmerFn(conf.outil, conf.args);
       setMessages((prev) => [
         ...safeMessages(prev, accueil),
-        { role: "assistant", content: `✓ ${resultat.libelle}` },
+        { id: nouvelId(), role: "assistant", content: `✓ ${resultat.libelle}` },
       ]);
       setConfirmationEnAttente(null);
       if (modeVocalRef.current) {
@@ -340,7 +364,7 @@ export default function ChatAgentPanel({
     setConfirmationEnAttente(null);
     setMessages((prev) => [
       ...safeMessages(prev, accueil),
-      { role: "assistant", content: "Action annulée." },
+      { id: nouvelId(), role: "assistant", content: "Action annulée." },
     ]);
     if (modeVocalRef.current) demarrerEcoute();
   }
@@ -383,7 +407,7 @@ export default function ChatAgentPanel({
               <button
                 onClick={modeVocal ? arreterModeVocal : activerModeVocal}
                 title={modeVocal ? "Désactiver le mode vocal" : "Activer le mode vocal"}
-                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition ${
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] transition ${
                   modeVocal
                     ? "border-transparent bg-amber text-white"
                     : "border-line text-textMuted hover:border-violet hover:text-textPrimary"
@@ -394,7 +418,7 @@ export default function ChatAgentPanel({
               </button>
             )}
             {safeMsg.length > 1 && (
-              <button onClick={effacer} className="text-xs text-textMuted hover:text-amber">
+              <button onClick={effacer} className="rounded-full px-2 py-2 text-xs text-textMuted hover:text-amber">
                 Effacer l'historique
               </button>
             )}
@@ -406,17 +430,32 @@ export default function ChatAgentPanel({
         {!historiquePret && (
           <p className="text-center text-xs text-textMuted">Chargement…</p>
         )}
-        {safeMsg.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
-              m.role === "user" ? `${accentClass.split(" ")[0]} text-white` : "bg-surfaceAlt text-textPrimary"
-            }`}>
-              {m.content}
-              {Array.isArray(m.actions) && m.actions.length > 0 && (
-                <div className="mt-2 space-y-1 border-t border-line/50 pt-2">
-                  {m.actions.map((a, j) => (
-                    <div key={j} className="text-[11px] text-teal">✓ {a}</div>
-                  ))}
+        {safeMsg.map((m) => (
+          <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className="max-w-[90%]">
+              <div className={`rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                m.echec
+                  ? "border border-amber/60 bg-amber/10 text-textPrimary"
+                  : m.role === "user" ? `${accentClass.split(" ")[0]} text-white` : "bg-surfaceAlt text-textPrimary"
+              }`}>
+                {m.content}
+                {Array.isArray(m.actions) && m.actions.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-line/50 pt-2">
+                    {m.actions.map((a, j) => (
+                      <div key={j} className="text-[11px] text-teal">✓ {a}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {m.echec && (
+                <div className="mt-1 flex items-center justify-end gap-2">
+                  <span className="text-[11px] text-amber">⚠️ Non envoyé</span>
+                  <button
+                    onClick={() => reessayerMessage(m.id, m.content)}
+                    className="rounded-full border border-amber/50 px-3 py-1.5 text-[11px] font-medium text-amber hover:bg-amber/10"
+                  >
+                    Réessayer
+                  </button>
                 </div>
               )}
             </div>
@@ -437,14 +476,14 @@ export default function ChatAgentPanel({
                 <button
                   onClick={confirmerActionVocale}
                   disabled={confirmationEnCours}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 ${accentClass}`}
+                  className={`rounded-lg px-4 py-2.5 text-xs font-medium text-white disabled:opacity-50 ${accentClass}`}
                 >
                   {confirmationEnCours ? "…" : "Confirmer"}
                 </button>
                 <button
                   onClick={annulerActionVocale}
                   disabled={confirmationEnCours}
-                  className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary disabled:opacity-50"
+                  className="rounded-lg border border-line px-4 py-2.5 text-xs text-textMuted hover:text-textPrimary disabled:opacity-50"
                 >
                   Annuler
                 </button>
@@ -464,7 +503,7 @@ export default function ChatAgentPanel({
         <div className="mt-2 flex flex-wrap gap-1.5">
           {suggestions.map((s) => (
             <button key={s} onClick={() => envoyer(s)}
-              className="rounded-full border border-line px-2.5 py-1 text-[11px] text-textMuted hover:border-violet hover:text-textPrimary">
+              className="rounded-full border border-line px-3 py-2 text-[11px] text-textMuted hover:border-violet hover:text-textPrimary">
               {s}
             </button>
           ))}
