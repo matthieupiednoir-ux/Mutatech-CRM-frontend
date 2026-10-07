@@ -37,6 +37,7 @@ const ONGLETS_IDEL_BASE = [
   { id: "catalogue", href: "/idel/catalogue", label: "Catalogue" },
   { id: "planning", href: "/idel/planning", label: "Planning" },
   { id: "journal", href: "/idel/journal", label: "Journal" },
+  { id: "remplacements", href: "/idel/remplacements", label: "Remplacements" },
   { id: "nova", href: "/idel/nova", label: "✨ Nova" },
 ];
 const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {

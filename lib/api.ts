@@ -558,6 +558,63 @@ export const pharmaCreerCommande = (data: {
 export const pharmaChangerStatutCommande = (id: string, status: string, comment?: string) =>
  requeteIdel<PharmaOrder>(`/api/pharma/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status, comment }) });
 
+// --- Module Remplacements (retrocession d'honoraires) ---
+export interface Remplacant {
+ id: string; nom: string; prenom: string;
+ numero_adeli?: string | null; siret?: string | null; email?: string | null;
+ telephone?: string | null; notes?: string | null; actif: boolean;
+}
+export interface Retrocession {
+ id: string; remplacant_id: string; remplacant: Remplacant;
+ titulaire_nom: string; titulaire_siret?: string | null; titulaire_adresse?: string | null;
+ montant: number; date_debut: string; date_fin: string;
+ virement_reference?: string | null; banque?: string | null;
+ lieu_signature?: string | null; date_signature?: string | null;
+ pdf_path?: string | null;
+}
+export const remplacantsLister = (actif?: boolean) =>
+ requeteIdel<Remplacant[]>(`/api/remplacants${actif !== undefined ? `?actif=${actif}` : ""}`);
+export const remplacantsCreer = (data: {
+ nom: string; prenom: string; numero_adeli?: string; siret?: string; email?: string; telephone?: string; notes?: string;
+}) => requeteIdel<Remplacant>("/api/remplacants", { method: "POST", body: JSON.stringify(data) });
+export const remplacantsModifier = (id: string, data: Partial<{
+ nom: string; prenom: string; numero_adeli: string; siret: string; email: string; telephone: string; notes: string; actif: boolean;
+}>) => requeteIdel<Remplacant>(`/api/remplacants/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const remplacantsDesactiver = (id: string) =>
+ requeteIdel<{ ok: boolean }>(`/api/remplacants/${id}`, { method: "DELETE" });
+
+export const retrocessionsLister = (remplacantId?: string) =>
+ requeteIdel<Retrocession[]>(`/api/remplacements${remplacantId ? `?remplacant_id=${remplacantId}` : ""}`);
+export const retrocessionsCreer = (data: {
+ remplacant_id: string; titulaire_nom: string; titulaire_siret?: string; titulaire_adresse?: string;
+ montant: number; date_debut: string; date_fin: string;
+ virement_reference?: string; banque?: string; lieu_signature?: string; date_signature?: string;
+}) => requeteIdel<Retrocession>("/api/remplacements", { method: "POST", body: JSON.stringify(data) });
+export const retrocessionsVoir = (id: string) => requeteIdel<Retrocession>(`/api/remplacements/${id}`);
+export const retrocessionsModifier = (id: string, data: Partial<{
+ titulaire_nom: string; titulaire_siret: string; titulaire_adresse: string;
+ montant: number; date_debut: string; date_fin: string;
+ virement_reference: string; banque: string; lieu_signature: string; date_signature: string;
+}>) => requeteIdel<Retrocession>(`/api/remplacements/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const retrocessionsSupprimer = (id: string) =>
+ requeteIdel<{ ok: boolean }>(`/api/remplacements/${id}`, { method: "DELETE" });
+// Genere (ou regenere) le PDF puis retourne le fichier comme Blob --
+// meme raison que requeteIdelBlob : un <a href> classique ne peut pas
+// transporter le header Authorization.
+export const retrocessionsGenererPdf = async (id: string): Promise<Blob> => {
+ const token = getToken();
+ const headers: Record<string, string> = {};
+ if (token) headers["Authorization"] = `Bearer ${token}`;
+ const res = await fetch(`${IDEL_API_URL}/api/remplacements/${id}/pdf`, { method: "POST", headers });
+ if (!res.ok) {
+ const corps = await res.text();
+ throw new ApiError(corps || `Erreur ${res.status}`);
+ }
+ return res.blob();
+};
+export const retrocessionsTelechargerPdf = (id: string) =>
+ requeteIdelBlob(`/api/remplacements/${id}/pdf`);
+
 // --- Module Ordonnances (suivi de validite / renouvellement) ---
 export interface Prescription {
  id: string; patient_id?: string | null; patient_nom: string; patient_prenom: string;
