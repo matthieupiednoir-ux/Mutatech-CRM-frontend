@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { idelGetMe, idelUpdateMe, monOrganisation, idelChangerTheme, idelChangerOnglets, ApiError } from "@/lib/api";
+import { idelGetMe, idelUpdateMe, monOrganisation, idelChangerTheme, idelChangerOnglets, idelModifierTitulaire, ApiError } from "@/lib/api";
 import { IdelMe, LpsChoisi } from "@/lib/types";
 
 const LPS_OPTIONS: { value: LpsChoisi; label: string }[] = [
@@ -74,6 +74,14 @@ export default function ParametresPage() {
   const [ongletsError, setOngletsError] = useState<string | null>(null);
   const [ongletsSucces, setOngletsSucces] = useState<string | null>(null);
 
+  // Identite "titulaire" -- preremplit les attestations de retrocession
+  // d'honoraires (module Remplacements)
+  const [titulaireSiret, setTitulaireSiret] = useState("");
+  const [titulaireAdresse, setTitulaireAdresse] = useState("");
+  const [titulaireEnregistrement, setTitulaireEnregistrement] = useState(false);
+  const [titulaireError, setTitulaireError] = useState<string | null>(null);
+  const [titulaireSucces, setTitulaireSucces] = useState<string | null>(null);
+
   useEffect(() => {
     idelGetMe()
       .then((data) => {
@@ -91,10 +99,31 @@ export default function ParametresPage() {
         setTheme(org.theme || "defaut");
         const liste = (org.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
         setOngletsMasques(new Set(liste));
+        setTitulaireSiret(org.siret_utilisateur ?? "");
+        setTitulaireAdresse(org.adresse_utilisateur ?? "");
       })
       .catch(() => {})
       .finally(() => setThemeLoading(false));
   }, []);
+
+  async function handleEnregistrerTitulaire(e: React.FormEvent) {
+    e.preventDefault();
+    setTitulaireEnregistrement(true);
+    setTitulaireError(null);
+    setTitulaireSucces(null);
+    try {
+      await idelModifierTitulaire({
+        siret: titulaireSiret.trim() || null,
+        adresse: titulaireAdresse.trim() || null,
+      });
+      setTitulaireSucces("Enregistré — les attestations de rétrocession seront préremplies.");
+      setTimeout(() => setTitulaireSucces(null), 3000);
+    } catch (e) {
+      setTitulaireError(e instanceof ApiError ? e.message : "Erreur lors de l'enregistrement.");
+    } finally {
+      setTitulaireEnregistrement(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -244,6 +273,48 @@ export default function ParametresPage() {
           >
             {ongletsEnregistrement ? "Enregistrement..." : "Enregistrer"}
           </button>
+        </section>
+
+        {/* Identite "titulaire" -- preremplit les attestations de rétrocession */}
+        <section className="mb-8">
+          <h2 className="font-display text-lg text-textPrimary mb-1">Titulaire</h2>
+          <p className="mb-4 text-sm text-textMuted">
+            Ton SIRET et ton adresse professionnelle — préremplis automatiquement les attestations
+            de rétrocession d'honoraires dans l'onglet Remplacements, propres à toi (pas partagés
+            avec le reste de l'organisation).
+          </p>
+
+          {titulaireError && <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{titulaireError}</p>}
+          {titulaireSucces && <p className="mb-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">{titulaireSucces}</p>}
+
+          {themeLoading ? (
+            <p className="text-sm text-textMuted">Chargement…</p>
+          ) : (
+            <form onSubmit={handleEnregistrerTitulaire} className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-5 sm:grid-cols-2">
+              <input
+                placeholder="SIRET"
+                value={titulaireSiret}
+                onChange={(e) => setTitulaireSiret(e.target.value)}
+                className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
+              />
+              <input
+                placeholder="Adresse professionnelle"
+                value={titulaireAdresse}
+                onChange={(e) => setTitulaireAdresse(e.target.value)}
+                className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
+              />
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={titulaireEnregistrement}
+                  className="rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: "var(--accent)" }}
+                >
+                  {titulaireEnregistrement ? "Enregistrement..." : "Enregistrer"}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
 
         {loading ? (

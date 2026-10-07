@@ -7,7 +7,8 @@ import {
   remplacantsLister, remplacantsCreer, remplacantsModifier, remplacantsDesactiver,
   retrocessionsLister, retrocessionsCreer, retrocessionsSupprimer,
   retrocessionsGenererPdf, retrocessionsTelechargerPdf,
-  Remplacant, Retrocession,
+  monOrganisation,
+  Remplacant, Retrocession, MonOrganisation,
 } from "@/lib/api";
 
 interface RemplacantForm {
@@ -55,15 +56,30 @@ export default function RemplacementsPage() {
 
   const [pdfEnCours, setPdfEnCours] = useState<string | null>(null);
 
+  // Identite "titulaire" (Paramètres) -- preremplit le formulaire
+  // d'attestation plutot que de la ressaisir a chaque fois.
+  const [moi, setMoi] = useState<MonOrganisation | null>(null);
+
   function charger() {
     setLoading(true);
     Promise.all([remplacantsLister(), retrocessionsLister()])
       .then(([r, a]) => { setRemplacants(r); setRetrocessions(a); })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
+    monOrganisation().then(setMoi).catch(() => {});
   }
 
   useEffect(() => { charger(); }, []);
+
+  function ouvrirFormRetrocession() {
+    setRetrocessionForm({
+      ...RETROCESSION_VIDE,
+      titulaire_nom: moi ? `${moi.prenom_utilisateur} ${moi.nom_utilisateur}` : "",
+      titulaire_siret: moi?.siret_utilisateur || "",
+      titulaire_adresse: moi?.adresse_utilisateur || "",
+    });
+    setFormRetrocession(true);
+  }
 
   async function handleCreerRemplacant(e: React.FormEvent) {
     e.preventDefault();
@@ -210,7 +226,7 @@ export default function RemplacementsPage() {
               {onglet === "retrocessions" ? "Remplaçant(e)s →" : "← Attestations"}
             </button>
             <button
-              onClick={() => onglet === "retrocessions" ? setFormRetrocession(true) : setFormRemplacant(true)}
+              onClick={() => onglet === "retrocessions" ? ouvrirFormRetrocession() : setFormRemplacant(true)}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
               style={{ backgroundColor: "var(--accent)" }}
             >
@@ -293,6 +309,14 @@ export default function RemplacementsPage() {
                     <option value="">— Remplaçant(e) —</option>
                     {remplacantsActifs.map((r) => <option key={r.id} value={r.id}>{r.prenom} {r.nom}</option>)}
                   </select>
+
+                  {!moi?.siret_utilisateur && (
+                    <p className="text-xs text-textMuted sm:col-span-2">
+                      Astuce : renseigne ton SIRET et ton adresse dans{" "}
+                      <a href="/idel/parametres" className="underline hover:text-textPrimary">Paramètres</a>{" "}
+                      pour que ces champs se préremplissent automatiquement la prochaine fois.
+                    </p>
+                  )}
 
                   <input required placeholder="Nom du titulaire" value={retrocessionForm.titulaire_nom}
                     onChange={(e) => setRetrocessionForm({ ...retrocessionForm, titulaire_nom: e.target.value })}
