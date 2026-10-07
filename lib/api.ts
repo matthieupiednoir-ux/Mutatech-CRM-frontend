@@ -469,12 +469,18 @@ export interface MonOrganisation {
  prenom_utilisateur: string;
  theme: string;
  onglets_masques: string;
+ siret_utilisateur?: string | null;
+ adresse_utilisateur?: string | null;
 }
 export const monOrganisation = () => requeteIdel<MonOrganisation>("/auth-org/me/organization");
 export const idelChangerTheme = (theme: string) =>
  requeteIdel<MonOrganisation>("/auth-org/me/organization/theme", { method: "PUT", body: JSON.stringify({ theme }) });
 export const idelChangerOnglets = (onglets_masques: string) =>
  requeteIdel<MonOrganisation>("/auth-org/me/organization/onglets", { method: "PUT", body: JSON.stringify({ onglets_masques }) });
+// Identite "titulaire" (SIRET / adresse) -- preremplit automatiquement
+// les attestations de retrocession d'honoraires (module remplacements).
+export const idelModifierTitulaire = (data: { siret?: string | null; adresse?: string | null }) =>
+ requeteIdel<MonOrganisation>("/auth-org/me/titulaire", { method: "PUT", body: JSON.stringify(data) });
 
 // --- Module Tournees ---
 export interface VisitItem {
