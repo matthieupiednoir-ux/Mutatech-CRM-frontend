@@ -789,3 +789,66 @@ export const idelPlanningSupprimerEvenement = (eventId: string, assigneAContexte
  method: "DELETE",
  body: JSON.stringify({ event_id: eventId, assigne_a_contexte: assigneAContexte }),
  });
+
+// --- E-learning (formation IA par abonnement) ---
+export interface ElearningStatut {
+ abonnement_statut: "inactif" | "en_attente_paiement" | "actif" | "impaye" | "resilie";
+ a_acces: boolean;
+ est_proprietaire: boolean;
+ est_admin: boolean;
+ paiement_en_ligne_disponible: boolean;
+ accepte_le?: string | null;
+ periode_fin?: string | null;
+}
+export interface ElearningModule {
+ num: number;
+ titre: string;
+ sous_titre: string;
+ sequences: string[];
+ duree_heures: number;
+ termine: boolean;
+}
+export interface ElearningAccesMembre {
+ user_id: string;
+ email: string;
+ nom?: string | null;
+ role: string;
+ actif: boolean;
+ a_acces: boolean;
+}
+export interface ElearningAbonnementAdmin {
+ tenant_id: string;
+ nom: string;
+ statut: string;
+ mode?: string | null;
+ periode_fin?: string | null;
+}
+
+// Le contenu d'un module est un document HTML (pas du JSON) : lu en texte
+// avec le meme header Authorization que les autres appels.
+async function requeteTexte(chemin: string): Promise<string> {
+ const token = getToken();
+ const headers: Record<string, string> = {};
+ if (token) headers["Authorization"] = `Bearer ${token}`;
+ const res = await fetch(`${API_URL}${chemin}`, { headers });
+ if (!res.ok) {
+ const corps = await res.text();
+ throw new ApiError(corps || `Erreur ${res.status}`);
+ }
+ return res.text();
+}
+
+export const elearningStatut = () => requete<ElearningStatut>("/api/elearning/statut");
+export const elearningSouscrire = (accepte_conditions: boolean) =>
+ requete<{ url: string }>("/api/elearning/abonnement/checkout", { method: "POST", body: JSON.stringify({ accepte_conditions }) });
+export const elearningPortail = () => requete<{ url: string }>("/api/elearning/abonnement/portail", { method: "POST" });
+export const elearningModules = () => requete<ElearningModule[]>("/api/elearning/modules");
+export const elearningContenuModule = (num: number) => requeteTexte(`/api/elearning/modules/${num}`);
+export const elearningProgression = (num: number, termine: boolean) =>
+ requete<{ num: number; termine: boolean }>(`/api/elearning/modules/${num}/progression`, { method: "PUT", body: JSON.stringify({ termine }) });
+export const elearningAccesLister = () => requete<ElearningAccesMembre[]>("/api/elearning/acces");
+export const elearningAccesModifier = (userId: string, acces: boolean) =>
+ requete<ElearningAccesMembre>(`/api/elearning/acces/${userId}`, { method: "PUT", body: JSON.stringify({ acces }) });
+export const elearningAdminAbonnements = () => requete<ElearningAbonnementAdmin[]>("/api/elearning/admin/abonnements");
+export const elearningAdminModifier = (tenantId: string, statut: "actif" | "resilie" | "inactif") =>
+ requete<{ tenant_id: string; statut: string; mode?: string | null }>(`/api/elearning/admin/abonnements/${tenantId}`, { method: "PUT", body: JSON.stringify({ statut }) });

@@ -29,6 +29,9 @@ const ONGLETS_CRM = [
 // l'equipe), donc elle ne doit pas dependre du choix d'affichage d'un
 // utilisateur non-owner.
 const ONGLET_EQUIPE_CLIENT = { id: "equipe", href: "/equipe", label: "Mon équipe" };
+// Formation IA (abonnement) : toujours visible -- la page elle-meme
+// explique comment obtenir l'acces, le backend filtre le contenu.
+const ONGLET_FORMATION = { id: "formation", href: "/formation", label: "🎓 Formation" };
 
 const ONGLETS_IDEL_BASE = [
   { id: "pipeline", href: "/idel", label: "Pipeline" },
@@ -53,6 +56,7 @@ const ONGLETS_ADMIN = [
   { href: "/admin/organisations", label: "Organisations & Modules" },
   { href: "/admin/equipe", label: "Équipe Mutatech" },
   { href: "/admin/outils", label: "🗂 Outils" },
+  { href: "/formation", label: "🎓 Formation" },
 ];
 
 export default function NavBar() {
@@ -129,6 +133,7 @@ function NavBarInterieur() {
     : [
         ...ongletsCrmFiltres,
         ...(peutGererEquipe ? [ONGLET_EQUIPE_CLIENT] : []),
+        ONGLET_FORMATION,
         { id: "parametres", href: "/parametres", label: "⚙" },
       ];
   const labelProduit = estAdmin
