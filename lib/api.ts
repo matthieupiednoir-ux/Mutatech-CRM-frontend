@@ -247,7 +247,7 @@ export const creerFacture = (data: FactureInput) => requete<Facture>("/api/factu
 export const modifierFacture = (id: string, data: FactureInput) => requete<Facture>(`/api/factures/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const supprimerFacture = (id: string) => requete<{ statut: string }>(`/api/factures/${id}`, { method: "DELETE" });
 export const envoyerFacture = (id: string) => requete<Facture>(`/api/factures/${id}/envoyer`, { method: "POST" });
-export const marquerFacturePayee = (id: string) => requete<Facture>(`/api/factures/${id}/payer`, { method: "POST" });
+export const marquerFacturePayee = (id: string) => requete<Facture>(`/api/factures/${id}/marquer-payee`, { method: "POST" });
 export const relancerFacture = (id: string) => requete<Facture>(`/api/factures/${id}/relancer`, { method: "POST" });
 export const getEcheances = () => requete<RecapEcheances>("/api/factures/echeances");
 
