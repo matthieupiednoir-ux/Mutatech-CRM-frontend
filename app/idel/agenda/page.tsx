@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { ApiError } from "@/lib/api";
-import { agendaListerEvenements, agendaCreerEvenement, agendaModifierEvenement, agendaSupprimerEvenement, idelInsights, CalendarEvent } from "@/lib/api";
+import { agendaListerEvenements, agendaCreerEvenement, agendaModifierEvenement, agendaSupprimerEvenement, agendaLienIcs, agendaRegenererLienIcs, idelInsights, CalendarEvent } from "@/lib/api";
 import InsightStrip from "@/components/InsightStrip";
 import { idelGetPatients } from "@/lib/api";
 import { IdelPatient } from "@/lib/types";
@@ -56,6 +56,18 @@ const FORM_VIDE: FormEvent = {
 
 export default function AgendaPage() {
   const [offsetSemaine, setOffsetSemaine] = useState(0);
+  // Abonnement depuis le téléphone : lien personnel et secret (C6), le
+  // flux n'affiche que le type de soin et les initiales du patient.
+  const [lienIcs, setLienIcs] = useState<string | null>(null);
+  const [icsOuvert, setIcsOuvert] = useState(false);
+
+  async function afficherLienIcs(regenerer = false) {
+    if (regenerer && !confirm("Créer un nouveau lien ? L'ancien cessera de fonctionner sur les téléphones déjà abonnés.")) return;
+    try {
+      const r = regenerer ? await agendaRegenererLienIcs() : await agendaLienIcs();
+      setLienIcs(r.url); setIcsOuvert(true);
+    } catch (e) { setError(e instanceof ApiError ? e.message : "Lien indisponible"); }
+  }
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [patients, setPatients] = useState<IdelPatient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,6 +195,7 @@ export default function AgendaPage() {
             <button onClick={() => setOffsetSemaine((o) => o - 1)} className="rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary">←</button>
             <button onClick={() => setOffsetSemaine(0)} className="rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary">Aujourd'hui</button>
             <button onClick={() => setOffsetSemaine((o) => o + 1)} className="rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary">→</button>
+            <button onClick={() => (icsOuvert ? setIcsOuvert(false) : afficherLienIcs())} className="rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary" title="S'abonner depuis mon téléphone">📱</button>
             <button onClick={() => ouvrirNouveau(new Date())} className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90" style={{ backgroundColor: "var(--accent)" }}>
               + Événement
             </button>
@@ -190,6 +203,19 @@ export default function AgendaPage() {
         </div>
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
+
+        {icsOuvert && lienIcs && (
+          <div className="mb-4 space-y-2 rounded-xl border border-line bg-surface p-4 text-sm">
+            <p className="text-textPrimary">Abonnez votre téléphone à cet agenda avec ce lien personnel. Ne le partagez pas.</p>
+            <input readOnly value={lienIcs} onFocus={(e) => e.target.select()}
+              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 font-mono text-xs text-textPrimary" />
+            <p className="text-[11px] text-textMuted">Pour la confidentialité, les rendez-vous patients n&apos;y apparaissent qu&apos;avec le type de soin et les initiales.</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => navigator.clipboard?.writeText(lienIcs)} className="rounded-lg border border-line px-3 py-1.5 text-xs text-textPrimary">Copier</button>
+              <button onClick={() => afficherLienIcs(true)} className="rounded-lg border border-amber/40 px-3 py-1.5 text-xs text-amber">Créer un nouveau lien (téléphone perdu)</button>
+            </div>
+          </div>
+        )}
 
         {form && (
           <form onSubmit={handleEnregistrer} className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-5 sm:grid-cols-2">

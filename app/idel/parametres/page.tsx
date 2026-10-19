@@ -26,6 +26,7 @@ const ONGLETS_CONFIGURABLES_IDEL = [
   { id: "catalogue", label: "Catalogue" },
   { id: "planning", label: "Planning" },
   { id: "journal", label: "Journal" },
+  { id: "remplacements", label: "Remplacements" },
 ];
 // "pipeline" et "nova" restent volontairement absents : toujours
 // visibles, comme "Dashboard"/"Agent IA" cote CRM.
@@ -64,6 +65,9 @@ export default function ParametresPage() {
 
   // Theme visuel de l'organisation
   const [theme, setTheme] = useState<string>("defaut");
+  // Thème et onglets s'appliquent à tout le cabinet : réservés aux
+  // responsables (administrateur du cabinet, gérant), comme côté serveur.
+  const [responsable, setResponsable] = useState(false);
   const [themeLoading, setThemeLoading] = useState(true);
   const [themeError, setThemeError] = useState<string | null>(null);
   const [themeSucces, setThemeSucces] = useState<string | null>(null);
@@ -97,6 +101,7 @@ export default function ParametresPage() {
     monOrganisation()
       .then((org) => {
         setTheme(org.theme || "defaut");
+        setResponsable(["org_admin", "gerant", "mutatech_admin"].includes(org.role));
         const liste = (org.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
         setOngletsMasques(new Set(liste));
         setTitulaireSiret(org.siret_utilisateur ?? "");
@@ -197,6 +202,12 @@ export default function ParametresPage() {
           reprise sont la solution de démarrage en attendant.
         </p>
 
+        {!themeLoading && !responsable && (
+          <p className="mb-8 rounded-lg border border-line bg-surfaceAlt px-4 py-3 text-sm text-textMuted">
+            Le thème et les onglets visibles s&apos;appliquent à tout le cabinet : seul un responsable du cabinet (administrateur ou gérant) peut les changer.
+          </p>
+        )}
+        {responsable && (<>
         {/* Thème visuel de l'organisation */}
         <section className="mb-8">
           <h2 className="font-display text-lg text-textPrimary mb-1">Thème</h2>
@@ -274,6 +285,7 @@ export default function ParametresPage() {
             {ongletsEnregistrement ? "Enregistrement..." : "Enregistrer"}
           </button>
         </section>
+        </>)}
 
         {/* Identite "titulaire" -- preremplit les attestations de rétrocession */}
         <section className="mb-8">

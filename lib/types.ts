@@ -359,7 +359,7 @@ export interface AgentResponse {
 }
 
 // --- IDEL ---
-export type ZoneDeplacement = "plaine" | "montagne" | "tres_montagneux";
+export type ZoneDeplacement = "plaine" | "montagne" | "tres_montagneux" | "pied_ski";
 
 export type LpsChoisi =
   | "vega" | "albus" | "simply_vitale" | "agathe_you"
@@ -396,39 +396,134 @@ export interface IdelPatient {
   // Déplacement NGAP
   zone_deplacement?: ZoneDeplacement | null;
   distance_km?: number | null;
+  idel_id?: string | null;
+}
+
+// Résultat de POST /api/patients/import-lot : les doublons (même NIR, ou
+// même nom + prénom + date de naissance) sont ignorés, pas recréés.
+export interface ImportPatientsResultat {
+  crees: IdelPatient[];
+  doublons_ignores: string[];
 }
 
 export interface CotationOut {
+  id?: string;
   code_acte: string;
   libelle?: string | null;
   coefficient?: number | null;
   quantite?: number | null;
   montant_unitaire?: number | null;
   montant_total?: number | null;
-  modificateurs?: string[] | null;
+  majoration_dimanche_ferie?: boolean;
+  majoration_nuit?: boolean;
+  date_soin?: string | null;
 }
 
-export interface CotationValidationItem {
+// Une ligne d'acte saisie par l'IDEL (code AMI/AIS avec coefficient, ou
+// forfait BSA/BSB/BSC). Les majorations et déplacements sont portés par
+// la séance (SeanceCotation), pas par chaque ligne.
+export interface ActeSaisi {
   code_acte: string;
   libelle?: string | null;
-  coefficient: number;
-  quantite: number;
-  majoration_dimanche_ferie: boolean;
-  majoration_nuit: boolean;
+  coefficient?: number | null;
+}
+
+export type NuitPlage = "20h_23h_5h_8h" | "23h_5h";
+export type ZoneIk = "plaine" | "montagne" | "pied_ski";
+
+export interface SeanceCotation {
+  lignes: ActeSaisi[];
+  dimanche_ferie: boolean;
+  nuit: NuitPlage | null;
+  domicile: boolean;
   distance_km: number;
-  zone_montagne: boolean;
+  zone: ZoneIk;
+  mci: boolean;
+  nb_seances: number;
+  date_soin?: string | null;
+}
+
+// Calcul renvoyé par le moteur NGAP unique du serveur (POST /api/ngap/simuler) :
+// l'écran l'affiche tel quel, la validation enregistre exactement le même.
+export interface LigneSimulee {
+  code_acte: string;
+  libelle: string;
+  type: "acte" | "forfait" | "majoration" | "deplacement";
+  coefficient?: number | null;
+  taux: number;
+  quantite: number;
+  montant_unitaire: number;
+  montant_total: number;
+  detail?: string;
+}
+
+export interface SimulationNGAP {
+  lignes: LigneSimulee[];
+  montant_seance: number;
+  nb_seances: number;
+  montant_total: number;
+  regles: string[];
+  alertes: string[];
+  tarifs: string;
+}
+
+export interface ActeReferentiel {
+  id: string;
+  code_acte: string;
+  libelle: string;
+  lettre_cle: string;
+  coefficient: number;
+}
+
+export interface PropositionCotation {
+  acte_prescrit_texte?: string | null;
+  propositions: (ActeReferentiel & { quantite: number })[];
+  passages_par_jour: number;
+  mci_suggeree: boolean;
+  alertes: string[];
+  simulation: SimulationNGAP | null;
+  confiance: number;
+}
+
+export type StatutFse = "non_transmise" | "transmise" | "payee" | "rejetee";
+
+export interface FactureResume {
+  id: string;
+  montant_total: number;
+  statut_fse: StatutFse;
+  numero?: string | null;
+  date_transmission_lps?: string | null;
+  date_paiement?: string | null;
+  retour_noemie?: string | null;
 }
 
 export interface IdelOrdonnance {
   id: string;
   statut: "reception" | "en_cours" | "traite";
+  idel_id?: string | null;
+  soignante?: string | null;
   patient?: IdelPatient | null;
   medecin_prescripteur?: string | null;
+  rpps_prescripteur?: string | null;
   date_prescription?: string | null;
   acte_prescrit_texte?: string | null;
+  duree_traitement?: string | null;
   cotations?: CotationOut[] | null;
   confiance_ocr?: number | null;
   necessite_validation?: boolean | null;
+  date_reception?: string | null;
+  fichier_nom_original?: string | null;
+  a_fichier?: boolean;
+  facture?: FactureResume | null;
+}
+
+export interface OrdonnanceSaisie {
+  patient_id?: string | null;
+  medecin_prescripteur?: string | null;
+  rpps_prescripteur?: string | null;
+  date_prescription?: string | null;
+  acte_prescrit_texte?: string | null;
+  duree_traitement?: string | null;
 }
 
 // --- Fiche de reprise assistée (point 3 : ressaisie manuelle dans le LPS) ---
@@ -438,11 +533,13 @@ export interface FicheRepriseActe {
   coefficient?: number | null;
   quantite?: number | null;
   majorations: { dimanche_ferie: boolean; nuit: boolean };
+  date_soin?: string | null;
   montant?: number | null;
 }
 
 export interface FicheReprise {
   idel: string;
+  rpps_idel?: string | null;
   lps_cible: string;
   patient: {
     nom: string;
@@ -460,24 +557,6 @@ export interface FicheReprise {
   instructions: string;
 }
 
-// --- Calcul NGAP Article 11B ---
-export interface LigneCotationCalculee {
-  code_acte: string;
-  libelle: string;
-  coefficient: number;
-  montant_brut: number;
-  pourcentage: 100 | 50 | 0;
-  montant_net: number;
-  gratuit: boolean;
-}
-
-export interface DetailCotationNGAP {
-  lignes: LigneCotationCalculee[];
-  ifd: number;
-  ik: number;
-  majorations: { code: string; label: string; montant: number }[];
-  total: number;
-}
 
 // --- Organisations multi-tenant PSDM (backend IDEL) ---
 export type OrganizationType = "idel_independant" | "psdm" | "autre";

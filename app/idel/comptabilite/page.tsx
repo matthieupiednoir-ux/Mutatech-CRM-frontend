@@ -2,59 +2,29 @@
 
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
-import { ApiError } from "@/lib/api";
-import { getToken } from "@/lib/auth";
+import { ApiError, idelComptaStats, idelComptaFactures, monOrganisation } from "@/lib/api";
+import type { ComptaStatsAnnee, ComptaFacture } from "@/lib/api";
 
-const API_IDEL = process.env.NEXT_PUBLIC_IDEL_API_URL || "";
+const ROLES_COORDINATION = ["org_admin", "gerant", "mutatech_admin", "idec"];
 
 const MOIS_LABEL = [
   "Janvier","Février","Mars","Avril","Mai","Juin",
   "Juillet","Août","Septembre","Octobre","Novembre","Décembre",
 ];
 
-interface StatsMois {
-  mois: number;
-  annee: number;
-  nb_traitees: number;
-  montant_total: number;
-}
-
-interface StatsAnnee {
-  annee: number;
-  nb_traitees: number;
-  montant_total: number;
-  par_mois: StatsMois[];
-}
-
-interface Facture {
-  id: string;
-  numero: string;
-  patient_nom: string;
-  montant: number;
-  statut: string;
-  date_creation: string;
-  date_paiement?: string | null;
-}
-
-async function requeteIdel<T>(chemin: string): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${API_IDEL}${chemin}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-  if (!res.ok) {
-    const corps = await res.text();
-    throw new ApiError(corps || `Erreur ${res.status}`);
-  }
-  return res.json();
-}
-
 export default function IdelComptabilitePage() {
   const [annee, setAnnee] = useState(new Date().getFullYear());
-  const [stats, setStats] = useState<StatsAnnee | null>(null);
-  const [factures, setFactures] = useState<Facture[]>([]);
+  const [stats, setStats] = useState<ComptaStatsAnnee | null>(null);
+  const [factures, setFactures] = useState<ComptaFacture[]>([]);
+  const [coordination, setCoordination] = useState(false);
+  // Vue « cabinet » (IDEC, gérant) : toutes les factures des soignantes du cabinet.
+  const [vue, setVue] = useState<"moi" | "cabinet">("moi");
+
+  useEffect(() => {
+    monOrganisation().then((o) => {
+      if (ROLES_COORDINATION.includes(o.role)) { setCoordination(true); setVue("cabinet"); }
+    }).catch(() => setCoordination(false));
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,8 +32,8 @@ export default function IdelComptabilitePage() {
     setLoading(true);
     setError(null);
     Promise.all([
-      requeteIdel<StatsAnnee>(`/api/compta/stats?annee=${annee}`),
-      requeteIdel<Facture[]>(`/api/compta/factures?annee=${annee}`),
+      idelComptaStats(annee, vue),
+      idelComptaFactures(annee, vue),
     ])
       .then(([s, f]) => {
         setStats(s);
@@ -71,7 +41,7 @@ export default function IdelComptabilitePage() {
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
-  }, [annee]);
+  }, [annee, vue]);
 
   const anneesDisponibles = Array.from(
     { length: 3 },
@@ -93,6 +63,14 @@ export default function IdelComptabilitePage() {
               Suivi des actes transmis et des paiements CPAM
             </p>
           </div>
+          <div className="flex gap-2">
+          {coordination && (
+            <select value={vue} onChange={(e) => setVue(e.target.value as "moi" | "cabinet")}
+              className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
+              <option value="cabinet">Tout le cabinet</option>
+              <option value="moi">Mes factures</option>
+            </select>
+          )}
           <select
             value={annee}
             onChange={(e) => setAnnee(parseInt(e.target.value))}
@@ -102,6 +80,7 @@ export default function IdelComptabilitePage() {
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
+          </div>
         </div>
 
         {error && (
@@ -185,6 +164,7 @@ export default function IdelComptabilitePage() {
                     >
                       <div>
                         <p className="text-sm font-medium text-textPrimary">
+                          {f.numero && <span className="mr-2 font-mono text-[11px] text-textMuted">{f.numero}</span>}
                           {f.patient_nom}
                           <span className={`ml-2 rounded px-2 py-0.5 text-[10px] font-medium ${
                             f.statut === "payee"
@@ -193,16 +173,18 @@ export default function IdelComptabilitePage() {
                               ? "bg-amber/10 text-amber"
                               : "bg-violet/10 text-violet"
                           }`}>
-                            {f.statut === "payee" ? "Payée" : f.statut === "rejetee" ? "Rejetée" : "En attente"}
+                            {f.statut === "payee" ? "Payée" : f.statut === "rejetee" ? "Rejetée" : f.statut === "transmise" ? "Transmise" : "Non transmise"}
                           </span>
                         </p>
                         <p className="text-xs text-textMuted">
-                          {new Date(f.date_creation).toLocaleDateString("fr-FR")}
+                          {f.date_creation ? new Date(f.date_creation).toLocaleDateString("fr-FR") : ""}
                           {f.date_paiement && ` · Payée le ${new Date(f.date_paiement).toLocaleDateString("fr-FR")}`}
+                          {vue === "cabinet" && f.soignante && ` · ${f.soignante}`}
+                          {f.statut === "rejetee" && f.retour_noemie && ` · Motif : ${f.retour_noemie}`}
                         </p>
                       </div>
                       <span className="font-display text-sm font-bold text-teal">
-                        {f.montant.toFixed(2)} €
+                        {(f.montant ?? 0).toFixed(2)} €
                       </span>
                     </div>
                   ))}

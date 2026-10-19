@@ -22,7 +22,7 @@ async function chargerConfigEtRediriger(produit?: string) {
   const p = produit ?? "";
   if (p === "idel") {
     window.location.href = "/idel";
-  } else if (p === "crm_idel") {
+  } else if (p === "crm+idel" || p === "crm_idel") {
     window.location.href = "/choix-produit";
   } else {
     window.location.href = "/dashboard";
@@ -79,31 +79,34 @@ function LoginForm() {
     e.preventDefault();
     setChargement(true);
     setErreur(null);
+    // Le backend des cabinets (IDEL / PSDM) est essayé en premier : le mot
+    // de passe d'une soignante ne transite plus par le backend CRM. Un
+    // compte CRM classique y est inconnu, on tente alors le CRM.
+    let erreurIdel: unknown = null;
+    try {
+      const auth = await loginOrg({ email, mot_de_passe: motDePasse });
+      await chargerConfigEtRediriger(auth.produit);
+      return;
+    } catch (e) {
+      erreurIdel = e;
+    }
     try {
       const auth = await loginCrm({ email, mot_de_passe: motDePasse });
       await chargerConfigEtRediriger(auth.produit);
       return;
     } catch (erreurCrm) {
-      // Compte introuvable cote CRM classique -- on tente le backend
-      // organisations (JMS+ / PSDM) avant d'abandonner. Meme formulaire,
-      // detection automatique, transparente pour l'utilisateur.
-      try {
-        const auth = await loginOrg({ email, mot_de_passe: motDePasse });
-        await chargerConfigEtRediriger(auth.produit);
-        return;
-      } catch {
-        let msg = "Email ou mot de passe incorrect.";
-        if (erreurCrm instanceof ApiError) {
-          try {
-            const parsed = JSON.parse(erreurCrm.message);
-            msg = parsed.detail ?? erreurCrm.message;
-          } catch {
-            msg = erreurCrm.message;
-          }
+      let msg = "Email ou mot de passe incorrect.";
+      const source = erreurIdel instanceof ApiError && /tentatives/i.test(erreurIdel.message) ? erreurIdel : erreurCrm;
+      if (source instanceof ApiError) {
+        try {
+          const parsed = JSON.parse(source.message);
+          msg = parsed.detail ?? source.message;
+        } catch {
+          msg = source.message;
         }
-        setErreur(msg);
-        setChargement(false);
       }
+      setErreur(msg);
+      setChargement(false);
     }
   }
 

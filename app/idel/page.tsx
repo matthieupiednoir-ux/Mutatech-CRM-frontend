@@ -1,29 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import {
-  idelGetOrdonnances, idelUploaderOrdonnance,
-  idelProposerCotation, idelValiderCotation, idelAnnulerCotation,
-  idelMarquerTransmis, idelExporterCsv, idelFicheReprise,
-  idelGetPatients, idelCreerPatient, idelGetMe, chatAgent, ApiError,
+  idelGetOrdonnances, idelUploaderOrdonnance, idelSaisirOrdonnance, idelPasserEnCours,
+  idelFichierOrdonnance, idelProposerCotation, idelReferentielNgap, idelSimulerCotation,
+  idelValiderCotation, idelAnnulerCotation, idelMarquerTransmis, idelRetourNoemie,
+  idelExporterCsv, idelFicheReprise, idelGetPatients, idelCreerPatient, idelGetMe,
+  monOrganisation, ApiError, PerimetrePipeline,
 } from "@/lib/api";
 import {
-  IdelOrdonnance, CotationOut, IdelPatient, CotationValidationItem, FicheReprise, IdelMe,
-  ZoneDeplacement, LigneCotationCalculee, DetailCotationNGAP,
+  IdelOrdonnance, CotationOut, IdelPatient, FicheReprise, IdelMe, ZoneDeplacement,
+  ActeReferentiel, ActeSaisi, SeanceCotation, SimulationNGAP, NuitPlage, ZoneIk, StatutFse,
 } from "@/lib/types";
 
-// ===== TYPE CUSTOM RECONNAISSANCE VOCALE (évite la dépendance aux types DOM) =====
-interface ISpeechRecognition {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-}
+// Recette du 19/10/2026 : l'écran n'a plus son propre calcul NGAP (C7,
+// O2). Il envoie la séance au moteur unique du serveur (POST
+// /api/ngap/simuler) et affiche le résultat tel quel ; la validation
+// enregistre exactement le même calcul. L'« Assistant NGAP » qui passait
+// par l'agent du CRM avec des tarifs faux a été retiré (I18).
 
 // ===== TYPES LOCAUX =====
 interface PatientForm {
@@ -31,42 +26,51 @@ interface PatientForm {
   telephone: string; adresse: string; medecin_traitant: string; notes: string;
   zone_deplacement: ZoneDeplacement; distance_km: string;
 }
+interface SaisieForm {
+  medecin_prescripteur: string; rpps_prescripteur: string; date_prescription: string;
+  acte_prescrit_texte: string; duree_traitement: string;
+}
 interface TourneeItem { patientId: string; heure: string; ordre: number; note: string; }
-interface ChatMsg { role: "user" | "assistant"; content: string; }
 
-// ===== CONSTANTES NGAP =====
-const IFD = 2.50;
-const IK_ZONES: Record<ZoneDeplacement, number> = { plaine: 0.91, montagne: 1.05, tres_montagneux: 1.10 };
-const MAJORATIONS = [
-  { code: "MS", label: "Soirée (20h–0h)", montant: 3.15 },
-  { code: "MN", label: "Nuit (0h–7h)", montant: 4.72 },
-  { code: "MJF", label: "Dimanche / Jour férié", montant: 11.65 },
-];
 const ZONES: { value: ZoneDeplacement; label: string }[] = [
-  { value: "plaine", label: "Plaine (0.91€/km)" },
-  { value: "montagne", label: "Montagne (1.05€/km)" },
-  { value: "tres_montagneux", label: "Très montagneux (1.10€/km)" },
+  { value: "plaine", label: "Plaine" },
+  { value: "montagne", label: "Montagne" },
+  { value: "tres_montagneux", label: "Très montagneux (IK montagne)" },
+  { value: "pied_ski", label: "À pied ou à ski" },
 ];
-const NGAP_CONTEXT = `Tu es un assistant spécialisé en cotation NGAP pour infirmiers libéraux (IDEL) en France. Tu connais l'article 11B (acte 1=100%, acte 2=50%, suivants gratuit), les codes AMI/AIS, les majorations MS (+3.15€), MN (+4.72€), MJF (+11.65€), l'IFD (2.50€) et les IK (plaine 0.91€/km, montagne 1.05€/km, très montagneux 1.10€/km). Réponds de façon claire et concise en français.`;
+const NUITS: { value: NuitPlage | ""; label: string }[] = [
+  { value: "", label: "Pas de nuit" },
+  { value: "20h_23h_5h_8h", label: "Nuit 20h-23h ou 5h-8h" },
+  { value: "23h_5h", label: "Nuit 23h-5h" },
+];
 
-// ===== MOTEUR NGAP ART.11B =====
-function calculerNGAP(cotations: CotationOut[], patient: IdelPatient | null | undefined, majActives: string[]): DetailCotationNGAP {
-  const tries = [...cotations].sort((a, b) => (b.montant_total ?? 0) - (a.montant_total ?? 0));
-  const lignes: LigneCotationCalculee[] = tries.map((c, i) => {
-    const brut = c.montant_total ?? 0;
-    const pct: 100 | 50 | 0 = i === 0 ? 100 : i === 1 ? 50 : 0;
-    const net = pct === 100 ? brut : pct === 50 ? brut * 0.5 : 0;
-    return { code_acte: c.code_acte, libelle: c.libelle ?? c.code_acte, coefficient: c.coefficient ?? 0, montant_brut: brut, pourcentage: pct, montant_net: net, gratuit: pct === 0 };
-  });
-  const zone = patient?.zone_deplacement ?? "plaine";
-  const dist = patient?.distance_km ?? 0;
-  const ik = dist > 0 ? dist * IK_ZONES[zone] * 2 : 0;
-  const macts = MAJORATIONS.filter((m) => majActives.includes(m.code));
-  const total = lignes.reduce((s, l) => s + l.montant_net, 0) + IFD + ik + macts.reduce((s, m) => s + m.montant, 0);
-  return { lignes, ifd: IFD, ik, majorations: macts, total };
+function zoneIk(z?: ZoneDeplacement | null): ZoneIk {
+  if (z === "montagne" || z === "tres_montagneux") return "montagne";
+  if (z === "pied_ski") return "pied_ski";
+  return "plaine";
+}
+
+function aujourdhui(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function estDimanche(dateIso: string): boolean {
+  const d = new Date(`${dateIso}T12:00:00`);
+  return !Number.isNaN(d.getTime()) && d.getDay() === 0;
 }
 
 function safeArr<T>(v: unknown): T[] { return Array.isArray(v) ? (v as T[]) : []; }
+
+function euros(n?: number | null): string {
+  return `${(n ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+}
+
+function dateFr(v?: string | null): string {
+  if (!v) return "";
+  const d = new Date(v.length === 10 ? `${v}T12:00:00` : v);
+  return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString("fr-FR");
+}
 
 const VIDE_PATIENT: PatientForm = {
   nom: "", prenom: "", date_naissance: "", numero_secu: "",
@@ -74,11 +78,13 @@ const VIDE_PATIENT: PatientForm = {
   zone_deplacement: "plaine", distance_km: "",
 };
 
-function extraireNomPrenom(texte?: string | null): { nom: string; prenom: string } {
-  if (!texte) return { nom: "", prenom: "" };
-  const match = texte.match(/(?:patient|pour|madame|monsieur|mme|m\.)\s+([A-ZÉÀÂ][a-zéàâ]+)\s+([A-ZÉÀÂ][a-zéàâ]+)/i);
-  if (match) return { nom: match[1] ?? "", prenom: match[2] ?? "" };
-  return { nom: "", prenom: "" };
+function seanceInitiale(patient?: IdelPatient | null): SeanceCotation {
+  const jour = aujourdhui();
+  return {
+    lignes: [], dimanche_ferie: estDimanche(jour), nuit: null, domicile: true,
+    distance_km: patient?.distance_km ?? 0, zone: zoneIk(patient?.zone_deplacement),
+    mci: false, nb_seances: 1, date_soin: jour,
+  };
 }
 
 const STATUT_LABEL: Record<string, string> = { reception: "Réception", en_cours: "En cours", traite: "Traité" };
@@ -87,55 +93,21 @@ const STATUT_COL: Record<string, string> = {
   en_cours: "border-amber/40 bg-amber/10 text-amber",
   traite: "border-teal/40 bg-teal/10 text-teal",
 };
+const FSE_LABEL: Record<StatutFse, string> = {
+  non_transmise: "Non transmise", transmise: "Transmise, en attente NOEMIE", payee: "Payée", rejetee: "Rejetée",
+};
+const FSE_COL: Record<StatutFse, string> = {
+  non_transmise: "bg-surfaceAlt text-textMuted", transmise: "bg-amber/20 text-amber",
+  payee: "bg-teal/20 text-teal", rejetee: "bg-red-500/15 text-red-400",
+};
+const ROLES_COORDINATION = ["org_admin", "gerant", "mutatech_admin", "idec"];
 
 const LPS_LABELS: Record<string, string> = {
-  vega: "Vega",
-  albus: "Albus",
-  simply_vitale: "Simply Vitale",
-  agathe_you: "Agathe&You",
-  ozzen: "Ozzen",
-  desmos: "Desmos",
-  carecare: "CareCare",
-  infimax: "Infimax",
-  autre: "votre logiciel",
+  vega: "Vega", albus: "Albus", simply_vitale: "Simply Vitale", agathe_you: "Agathe&You",
+  ozzen: "Ozzen", desmos: "Desmos", carecare: "CareCare", infimax: "Infimax", autre: "votre logiciel",
 };
 
-// ===== HOOK VOIX =====
-function useVoice(onResult: (text: string) => void) {
-  const [ecoute, setEcoute] = useState(false);
-  const [supporte, setSupporte] = useState(false);
-  const recRef = useRef<ISpeechRecognition | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SR) {
-      setSupporte(true);
-      recRef.current = new SR() as ISpeechRecognition;
-    }
-  }, []);
-
-  function toggleEcoute() {
-    if (!recRef.current) return;
-    if (ecoute) { recRef.current.stop(); setEcoute(false); return; }
-    const rec = recRef.current;
-    rec.lang = "fr-FR";
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      const transcript = (e.results[0] as ArrayLike<{ transcript: string }>)[0]?.transcript ?? "";
-      if (transcript) onResult(transcript);
-      setEcoute(false);
-    };
-    rec.onerror = () => setEcoute(false);
-    rec.onend = () => setEcoute(false);
-    rec.start();
-    setEcoute(true);
-  }
-
-  return { ecoute, supporte, toggleEcoute };
-}
+const champ = "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary";
 
 export default function IdelPage() {
   const [vue, setVue] = useState<"pipeline" | "tournee">("pipeline");
@@ -143,23 +115,33 @@ export default function IdelPage() {
   const [patients, setPatients] = useState<IdelPatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [upload, setUpload] = useState(false);
   const [panneau, setPanneau] = useState<IdelOrdonnance | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [moi, setMoi] = useState<IdelMe | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [perimetre, setPerimetre] = useState<PerimetrePipeline>("moi");
+  const [referentiel, setReferentiel] = useState<ActeReferentiel[]>([]);
 
   // Export CSV / Fiche de reprise
   const [ficheReprise, setFicheReprise] = useState<FicheReprise | null>(null);
   const [ficheLoading, setFicheLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
 
-  // Cotation
-  const [cotProp, setCotProp] = useState<CotationOut[] | null>(null);
+  // Saisie manuelle de l'ordonnance (C9)
+  const [saisie, setSaisie] = useState<SaisieForm | null>(null);
+  const [saisieErr, setSaisieErr] = useState<string | null>(null);
+
+  // Cotation : séance éditable + simulation renvoyée par le serveur
+  const [seance, setSeance] = useState<SeanceCotation>(seanceInitiale());
+  const [simulation, setSimulation] = useState<SimulationNGAP | null>(null);
+  const [simErr, setSimErr] = useState<string | null>(null);
+  const [propAlertes, setPropAlertes] = useState<string[]>([]);
   const [cotLoading, setCotLoading] = useState(false);
   const [cotErr, setCotErr] = useState<string | null>(null);
-  const [cotValidee, setCotValidee] = useState(false);
   const [patientId, setPatientId] = useState("");
-  const [majActives, setMajActives] = useState<string[]>([]);
+  const [codeLibre, setCodeLibre] = useState("");
 
   // Création patient inline
   const [creerMode, setCreerMode] = useState(false);
@@ -167,28 +149,19 @@ export default function IdelPage() {
   const [patSaving, setPatSaving] = useState(false);
   const [patErr, setPatErr] = useState<string | null>(null);
 
-  // Chat NGAP
-  const [chat, setChat] = useState<ChatMsg[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatOuvert, setChatOuvert] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Tournée
+  // Tournée du jour (aide-mémoire local, non enregistré : le module
+  // Tournées enregistre et partage les tournées du cabinet).
   const [tournee, setTournee] = useState<TourneeItem[]>([]);
   const [tourneePatient, setTourneePatient] = useState("");
   const [tourneeHeure, setTourneeHeure] = useState("08:00");
   const [tourneeNote, setTourneeNote] = useState("");
 
-  // Voix
-  const { ecoute, supporte: voixSupporte, toggleEcoute } = useVoice((transcript) => {
-    setChatInput((prev) => prev ? prev + " " + transcript : transcript);
-  });
+  const coordination = role ? ROLES_COORDINATION.includes(role) : false;
 
-  function charger(): Promise<IdelOrdonnance[]> {
+  function charger(p: PerimetrePipeline = perimetre): Promise<IdelOrdonnance[]> {
     setLoading(true);
     return Promise.all([
-      idelGetOrdonnances(),
+      idelGetOrdonnances(p),
       idelGetPatients().catch(() => [] as IdelPatient[]),
     ])
       .then(([ordo, pts]) => {
@@ -204,63 +177,131 @@ export default function IdelPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { charger(); }, []);
-  useEffect(() => { idelGetMe().then(setMoi).catch(() => setMoi(null)); }, []);
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
+  async function rafraichirPanneau(id: string) {
+    const fraiches = await charger();
+    const maj = fraiches.find((o) => o.id === id);
+    if (maj) ouvrirPanneau(maj, false); else setPanneau(null);
+  }
 
-  function ouvrirPanneau(o: IdelOrdonnance) {
+  useEffect(() => {
+    idelGetMe().then(setMoi).catch(() => setMoi(null));
+    idelReferentielNgap().then((r) => setReferentiel(safeArr<ActeReferentiel>(r.actes))).catch(() => setReferentiel([]));
+    monOrganisation()
+      .then((org) => {
+        setRole(org.role);
+        const p: PerimetrePipeline = ROLES_COORDINATION.includes(org.role) ? "cabinet" : "moi";
+        setPerimetre(p);
+        charger(p);
+      })
+      .catch(() => { setRole(null); charger("moi"); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Simulation par le serveur à chaque modification de la séance.
+  useEffect(() => {
+    if (!panneau || panneau.statut !== "en_cours" || seance.lignes.length === 0) { setSimulation(null); setSimErr(null); return; }
+    const t = setTimeout(() => {
+      idelSimulerCotation(seance)
+        .then((r) => { setSimulation(r); setSimErr(null); })
+        .catch((e) => { setSimulation(null); setSimErr(e instanceof ApiError ? e.message : "Calcul impossible"); });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [seance, panneau]);
+
+  function ouvrirPanneau(o: IdelOrdonnance, reinitialiser = true) {
     setPanneau(o);
-    setCotProp(null); setCotErr(null); setCotValidee(false);
     setPatientId(o.patient?.id ?? "");
-    setMajActives([]);
-    setCreerMode(false); setPatErr(null);
-    const { nom, prenom } = extraireNomPrenom(o.acte_prescrit_texte);
-    setPatForm({ ...VIDE_PATIENT, nom, prenom, medecin_traitant: o.medecin_prescripteur ?? "" });
+    setSaisieErr(null);
+    setSaisie(o.statut === "reception" ? {
+      medecin_prescripteur: o.medecin_prescripteur ?? "", rpps_prescripteur: o.rpps_prescripteur ?? "",
+      date_prescription: o.date_prescription ?? "", acte_prescrit_texte: o.acte_prescrit_texte ?? "",
+      duree_traitement: o.duree_traitement ?? "",
+    } : null);
+    if (reinitialiser) {
+      setSeance(seanceInitiale(o.patient));
+      setSimulation(null); setSimErr(null); setPropAlertes([]);
+      setCotErr(null); setCodeLibre("");
+      setCreerMode(false); setPatErr(null);
+      setPatForm({ ...VIDE_PATIENT, medecin_traitant: o.medecin_prescripteur ?? "" });
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
-    setUpload(true);
-    try { const fd = new FormData(); fd.append("file", f); await idelUploaderOrdonnance(fd); charger(); }
-    catch (e) { setError(e instanceof ApiError ? e.message : "Erreur d'upload"); }
+    setUpload(true); setError(null);
+    try {
+      const fd = new FormData(); fd.append("file", f);
+      await idelUploaderOrdonnance(fd);
+      setInfo("Ordonnance déposée. La lecture automatique remplit les champs dans quelques secondes ; vous pouvez aussi les saisir vous-même.");
+      charger();
+    }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Erreur d'envoi"); }
     finally { setUpload(false); e.target.value = ""; }
   }
 
+  async function handleVoirScan(id: string) {
+    try {
+      const blob = await idelFichierOrdonnance(id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) { setError(e instanceof ApiError ? e.message : "Fichier indisponible"); }
+  }
+
+  async function handleEnregistrerSaisie(passer: boolean) {
+    if (!panneau || !saisie) return;
+    setActionId(panneau.id); setSaisieErr(null);
+    try {
+      await idelSaisirOrdonnance(panneau.id, {
+        medecin_prescripteur: saisie.medecin_prescripteur.trim() || null,
+        rpps_prescripteur: saisie.rpps_prescripteur.trim() || null,
+        date_prescription: saisie.date_prescription || null,
+        acte_prescrit_texte: saisie.acte_prescrit_texte.trim() || null,
+        duree_traitement: saisie.duree_traitement.trim() || null,
+        ...(patientId && patientId !== panneau.patient?.id ? { patient_id: patientId } : {}),
+      });
+      if (passer) await idelPasserEnCours(panneau.id);
+      await rafraichirPanneau(panneau.id);
+    } catch (e) { setSaisieErr(e instanceof ApiError ? e.message : "Enregistrement impossible"); }
+    finally { setActionId(null); }
+  }
+
   async function handleProposerCotation(id: string) {
-    setCotLoading(true); setCotErr(null); setCotProp(null);
-    try { const props = await idelProposerCotation(id); setCotProp(safeArr<CotationOut>(props)); }
+    setCotLoading(true); setCotErr(null);
+    try {
+      const p = await idelProposerCotation(id);
+      const lignes: ActeSaisi[] = safeArr<{ code_acte: string; libelle: string }>(p.propositions)
+        .map((a) => ({ code_acte: a.code_acte, libelle: a.libelle }));
+      setSeance((s) => ({ ...s, lignes, mci: p.mci_suggeree || s.mci }));
+      setPropAlertes(safeArr<string>(p.alertes));
+      if (lignes.length === 0) setCotErr("Aucun acte reconnu dans le texte : ajoutez les actes à la main ci-dessous.");
+    }
     catch (e) { setCotErr(e instanceof ApiError ? e.message : "Erreur"); }
     finally { setCotLoading(false); }
+  }
+
+  function ajouterActe(a: ActeSaisi) {
+    setSeance((s) => s.lignes.length >= 10 ? s : ({ ...s, lignes: [...s.lignes, a] }));
+  }
+  function retirerActe(i: number) {
+    setSeance((s) => ({ ...s, lignes: s.lignes.filter((_, j) => j !== i) }));
+  }
+  function ajouterCodeLibre() {
+    const code = codeLibre.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) return;
+    ajouterActe({ code_acte: code });
+    setCodeLibre("");
   }
 
   async function handleValiderCotation(id: string) {
     const pid = patientId || panneau?.patient?.id;
     if (!pid) { setCotErr("Sélectionnez ou créez un patient."); return; }
-    if (!cotProp) return;
+    if (seance.lignes.length === 0 || !simulation) return;
+    if (actionId) return; // déjà en cours d'envoi (double clic)
     setActionId(id); setCotErr(null);
     try {
-      const majDimancheFerie = majActives.includes("MJF");
-      const majNuit = majActives.includes("MN");
-      const distanceKm = patientResolu?.distance_km ?? 0;
-      const zoneMontagne = patientResolu?.zone_deplacement === "montagne" || patientResolu?.zone_deplacement === "tres_montagneux";
-      const items: CotationValidationItem[] = safeArr<CotationOut>(cotProp).map((c, i) => ({
-        code_acte: c.code_acte,
-        libelle: c.libelle ?? c.code_acte,
-        coefficient: c.coefficient ?? 0,
-        quantite: c.quantite ?? 1,
-        majoration_dimanche_ferie: majDimancheFerie,
-        majoration_nuit: majNuit,
-        // L'IK (indemnité kilométrique) est due une seule fois par passage,
-        // pas par ligne d'acte : seule la première ligne la porte pour
-        // éviter de la compter en double si plusieurs actes sont cotés.
-        distance_km: i === 0 ? distanceKm : 0,
-        zone_montagne: i === 0 ? zoneMontagne : false,
-      }));
-      await idelValiderCotation(id, items, pid);
-      setCotValidee(true);
-      const ordoFraiches = await charger();
-      const miseAJour = ordoFraiches.find((o) => o.id === id);
-      if (miseAJour) setPanneau(miseAJour);
+      await idelValiderCotation(id, seance, pid);
+      await rafraichirPanneau(id);
     } catch (e) { setCotErr(e instanceof ApiError ? e.message : "Erreur de validation"); }
     finally { setActionId(null); }
   }
@@ -271,7 +312,21 @@ export default function IdelPage() {
       `Mutatech ne transmet rien à la CPAM elle-même : confirmez uniquement que VOUS avez déjà transmis cette FSE depuis ${lpsLabel}.`
     )) return;
     setActionId(id);
-    try { await idelMarquerTransmis(id); charger(); if (panneau?.id === id) setPanneau(null); }
+    try { await idelMarquerTransmis(id); await rafraichirPanneau(id); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Erreur"); }
+    finally { setActionId(null); }
+  }
+
+  async function handleRetourNoemie(id: string, statut: "payee" | "rejetee") {
+    let motif: string | undefined;
+    if (statut === "rejetee") {
+      const m = prompt("Motif du rejet indiqué par le retour NOEMIE :");
+      if (m === null) return;
+      if (!m.trim()) { setError("Le motif du rejet est obligatoire."); return; }
+      motif = m.trim();
+    }
+    setActionId(id);
+    try { await idelRetourNoemie(id, statut, motif); await rafraichirPanneau(id); }
     catch (e) { setError(e instanceof ApiError ? e.message : "Erreur"); }
     finally { setActionId(null); }
   }
@@ -281,8 +336,7 @@ export default function IdelPage() {
     setActionId(id);
     try {
       const miseAJour = await idelAnnulerCotation(id);
-      setCotProp(null); setCotErr(null); setCotValidee(false);
-      setPanneau(miseAJour);
+      ouvrirPanneau(miseAJour);
       charger();
     } catch (e) { setError(e instanceof ApiError ? e.message : "Erreur lors de l'annulation"); }
     finally { setActionId(null); }
@@ -309,14 +363,9 @@ export default function IdelPage() {
 
   async function handleFicheReprise(id: string) {
     setFicheLoading(true);
-    try {
-      const data = await idelFicheReprise(id);
-      setFicheReprise(data);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur lors du chargement de la fiche");
-    } finally {
-      setFicheLoading(false);
-    }
+    try { setFicheReprise(await idelFicheReprise(id)); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Erreur lors du chargement de la fiche"); }
+    finally { setFicheLoading(false); }
   }
 
   async function handleCreerPatient(e: React.FormEvent) {
@@ -325,7 +374,7 @@ export default function IdelPage() {
     const payload: Partial<IdelPatient> = {
       nom: patForm.nom.trim(), prenom: patForm.prenom.trim(),
       date_naissance: patForm.date_naissance || null,
-      numero_secu: patForm.numero_secu.trim() || null,
+      numero_secu: patForm.numero_secu.replace(/\s+/g, "") || null,
       telephone: patForm.telephone.trim() || null,
       adresse: patForm.adresse.trim() || null,
       medecin_traitant: patForm.medecin_traitant.trim() || null,
@@ -337,30 +386,19 @@ export default function IdelPage() {
       const newPat = await idelCreerPatient(payload);
       setPatients((prev) => [...prev, newPat]);
       setPatientId(newPat.id);
+      setSeance((s) => ({ ...s, distance_km: newPat.distance_km ?? 0, zone: zoneIk(newPat.zone_deplacement) }));
       setCreerMode(false);
     } catch (e) { setPatErr(e instanceof ApiError ? e.message : "Erreur de création"); }
     finally { setPatSaving(false); }
   }
 
-  async function handleChat(e?: React.FormEvent) {
-    e?.preventDefault();
-    const msg = chatInput.trim(); if (!msg || chatLoading) return;
-    const newHistory: ChatMsg[] = [...chat, { role: "user", content: msg }];
-    setChat(newHistory); setChatInput(""); setChatLoading(true);
-    try {
-      const historique = [
-        { role: "user", content: NGAP_CONTEXT },
-        { role: "assistant", content: "Compris ! Je suis votre assistant NGAP. Comment puis-je vous aider ?" },
-        ...newHistory.map((m) => ({ role: m.role as string, content: m.content })),
-      ];
-      const resp = await chatAgent(msg, historique);
-      setChat((prev) => [...prev, { role: "assistant", content: resp.reply }]);
-    } catch {
-      setChat((prev) => [...prev, { role: "assistant", content: "Désolé, réessayez dans un instant." }]);
-    } finally { setChatLoading(false); }
+  function choisirPatient(id: string) {
+    setPatientId(id);
+    const p = patients.find((x) => x.id === id);
+    if (p) setSeance((s) => ({ ...s, distance_km: p.distance_km ?? 0, zone: zoneIk(p.zone_deplacement) }));
   }
 
-  function setZone(z: ZoneDeplacement) { setPatForm((p) => ({ ...p, zone_deplacement: z })); }
+  function changerPerimetre(p: PerimetrePipeline) { setPerimetre(p); charger(p); }
 
   function ajouterTournee() {
     if (!tourneePatient || tournee.find((t) => t.patientId === tourneePatient)) return;
@@ -376,100 +414,51 @@ export default function IdelPage() {
     setTournee((p) => { if (idx >= p.length - 1) return p; const n = [...p]; [n[idx], n[idx + 1]] = [n[idx + 1], n[idx]]; return n.map((x, i) => ({ ...x, ordre: i + 1 })); });
   }
 
-  const patientResolu = panneau?.patient ?? patients.find((p) => p.id === patientId) ?? null;
-  const safeCot = safeArr<CotationOut>(cotProp);
-  const detail: DetailCotationNGAP | null = safeCot.length > 0 ? calculerNGAP(safeCot, patientResolu, majActives) : null;
+  const patientResolu = patients.find((p) => p.id === patientId) ?? panneau?.patient ?? null;
   const cotExist = safeArr<CotationOut>(panneau?.cotations);
   const colonnes: Array<"reception" | "en_cours" | "traite"> = ["reception", "en_cours", "traite"];
-  const totalIkJour = tournee.reduce((s, t) => {
-    const pt = patients.find((p) => p.id === t.patientId);
-    if (!pt?.distance_km) return s + IFD;
-    return s + pt.distance_km * IK_ZONES[pt.zone_deplacement ?? "plaine"] * 2 + IFD;
-  }, 0);
+  const facture = panneau?.facture ?? null;
 
   return (
     <>
       <NavBar />
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {/* Tabs */}
+        {/* Onglets */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-2">
-            {([["pipeline", "📋 Pipeline"], ["tournee", "🗺 Tournée"]] as const).map(([v, l]) => (
+          <div className="flex flex-wrap gap-2">
+            {([["pipeline", "📋 Pipeline"], ["tournee", "🗺 Tournée du jour"]] as const).map(([v, l]) => (
               <button key={v} onClick={() => setVue(v)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${vue === v ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted hover:text-textPrimary"}`}>
                 {l}
               </button>
             ))}
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setChatOuvert(!chatOuvert)}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${chatOuvert ? "border-teal bg-teal/15 text-teal" : "border-teal/40 bg-teal/10 text-teal"}`}>
-              🤖 Assistant NGAP {chatOuvert ? "▲" : "▼"}
-            </button>
-            {vue === "pipeline" && (
+          {vue === "pipeline" && (
+            <div className="flex flex-wrap items-center gap-2">
+              {coordination && (
+                <select value={perimetre} onChange={(e) => changerPerimetre(e.target.value as PerimetrePipeline)}
+                  className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-xs text-textPrimary">
+                  <option value="cabinet">Tout le cabinet</option>
+                  <option value="moi">Mes ordonnances</option>
+                </select>
+              )}
               <label className={`cursor-pointer rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 ${upload ? "opacity-50 pointer-events-none" : ""}`}>
-                {upload ? "Analyse…" : "+ Déposer ordonnance"}
-                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleUpload} disabled={upload} />
+                {upload ? "Envoi…" : "+ Déposer ordonnance"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={handleUpload} disabled={upload} />
               </label>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
-
-        {/* ===== ASSISTANT NGAP ===== */}
-        {chatOuvert && (
-          <div className="mb-6 rounded-xl border border-teal/30 bg-surface overflow-hidden shadow-lg">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-teal/5">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-textPrimary">🤖 Assistant NGAP IA</span>
-                {voixSupporte && <span className="text-[11px] text-teal">· 🎤 Micro actif</span>}
-              </div>
-              <button onClick={() => setChat([])} className="text-[11px] text-textMuted hover:text-amber">Effacer</button>
-            </div>
-            <div className="max-h-56 overflow-y-auto p-3 space-y-2">
-              {chat.length === 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-[11px] text-textMuted">Exemples :</p>
-                  {["Comment coter AMI4 + AMI1 + AIS3 ?", "Quand appliquer MJF ?", "IK pour 12km en montagne ?", "Cumul pansement + injection ?"].map((q) => (
-                    <button key={q} onClick={() => setChatInput(q)} className="block text-left text-xs text-teal hover:underline">→ {q}</button>
-                  ))}
-                </div>
-              )}
-              {chat.map((m, i) => (
-                <div key={i} className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-                  <div className={`max-w-[88%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-violet text-white rounded-br-sm" : "bg-surfaceAlt text-textPrimary rounded-bl-sm"}`}>
-                    {m.content}
-                  </div>
-                </div>
-              ))}
-              {chatLoading && (
-                <div className="flex gap-1 px-3 py-2 bg-surfaceAlt rounded-xl w-fit">
-                  {[0, 150, 300].map((d) => (
-                    <span key={d} className="w-1.5 h-1.5 bg-teal rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
-                  ))}
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-            <form onSubmit={handleChat} className="flex gap-2 p-3 border-t border-line items-end">
-              <textarea value={chatInput}
-                onChange={(e) => { setChatInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 80) + "px"; }}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChat(); } }}
-                placeholder={ecoute ? "🎤 Parlez…" : "Question NGAP… (ou utilisez le micro)"}
-                rows={1}
-                className={`flex-1 rounded-lg border bg-surfaceAlt px-3 py-2 text-xs text-textPrimary outline-none resize-none ${ecoute ? "border-teal bg-teal/5" : "border-line focus:border-teal"}`}
-              />
-              {voixSupporte && (
-                <button type="button" onClick={toggleEcoute}
-                  className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition ${ecoute ? "border-teal bg-teal text-black animate-pulse" : "border-line text-textMuted hover:border-teal hover:text-teal"}`}>
-                  🎤
-                </button>
-              )}
-              <button type="submit" disabled={chatLoading || !chatInput.trim()}
-                className="shrink-0 rounded-lg bg-teal px-3 py-2 text-xs font-bold text-black disabled:opacity-40">→</button>
-            </form>
-          </div>
+        {error && (
+          <p className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
+            <span>{error}</span><button onClick={() => setError(null)} className="shrink-0">✕</button>
+          </p>
+        )}
+        {info && (
+          <p className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">
+            <span>{info}</span><button onClick={() => setInfo(null)} className="shrink-0">✕</button>
+          </p>
         )}
 
         {/* ===== PIPELINE ===== */}
@@ -494,11 +483,19 @@ export default function IdelPage() {
                               {o.patient ? `${o.patient.nom} ${o.patient.prenom}` : "⚠ Patient non associé"}
                             </p>
                             <p className="mt-0.5 text-[11px] text-textMuted truncate">
-                              {o.medecin_prescripteur ?? "Médecin non extrait"}
-                              {o.date_prescription ? ` · ${new Date(o.date_prescription).toLocaleDateString("fr-FR")}` : ""}
+                              {o.medecin_prescripteur ?? (o.statut === "reception" ? "À compléter" : "Médecin non renseigné")}
+                              {o.date_prescription ? ` · ${dateFr(o.date_prescription)}` : ""}
                             </p>
-                            {o.necessite_validation && o.statut === "en_cours" && (
-                              <span className="mt-1 inline-block rounded bg-amber/20 px-1.5 py-0.5 text-[10px] text-amber">⚠ Validation requise</span>
+                            {perimetre === "cabinet" && o.soignante && (
+                              <p className="mt-0.5 text-[10px] text-textMuted">👩‍⚕️ {o.soignante}</p>
+                            )}
+                            {o.statut === "en_cours" && safeArr(o.cotations).length === 0 && (
+                              <span className="mt-1 inline-block rounded bg-amber/20 px-1.5 py-0.5 text-[10px] text-amber">À coter</span>
+                            )}
+                            {o.facture && (
+                              <span className={`mt-1 mr-1 inline-block rounded px-1.5 py-0.5 text-[10px] ${FSE_COL[o.facture.statut_fse]}`}>
+                                {o.facture.numero ? `${o.facture.numero} · ` : ""}{FSE_LABEL[o.facture.statut_fse]}
+                              </span>
                             )}
                           </button>
                         ))}
@@ -510,9 +507,12 @@ export default function IdelPage() {
           </div>
         )}
 
-        {/* ===== TOURNÉE ===== */}
+        {/* ===== TOURNÉE DU JOUR (aide-mémoire local) ===== */}
         {vue === "tournee" && (
           <div className="space-y-4">
+            <p className="rounded-lg border border-line bg-surfaceAlt px-4 py-3 text-xs text-textMuted">
+              Aide-mémoire du jour, gardé sur cet écran uniquement. Pour une tournée enregistrée, partagée avec le cabinet et envoyée à la cotation, utilisez l&apos;onglet Tournées.
+            </p>
             <div className="rounded-xl border border-line bg-surface p-5">
               <h2 className="font-display text-base font-bold text-textPrimary mb-3">Ajouter une visite</h2>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -525,8 +525,7 @@ export default function IdelPage() {
                 </select>
                 <input type="time" value={tourneeHeure} onChange={(e) => setTourneeHeure(e.target.value)}
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
-                <input value={tourneeNote} onChange={(e) => setTourneeNote(e.target.value)}
-                  placeholder="Note"
+                <input value={tourneeNote} onChange={(e) => setTourneeNote(e.target.value)} placeholder="Note"
                   className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary" />
               </div>
               <button onClick={ajouterTournee} disabled={!tourneePatient}
@@ -540,13 +539,8 @@ export default function IdelPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="flex justify-between text-xs text-textMuted px-1">
-                  <span>{tournee.length} visite{tournee.length > 1 ? "s" : ""}</span>
-                  <span className="text-teal font-medium">Déplacements ≈ {totalIkJour.toFixed(2)} €</span>
-                </div>
                 {tournee.map((item, idx) => {
                   const pt = patients.find((p) => p.id === item.patientId);
-                  const ik = pt?.distance_km ? pt.distance_km * IK_ZONES[pt.zone_deplacement ?? "plaine"] * 2 + IFD : IFD;
                   return (
                     <div key={item.patientId} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
                       <div className="flex flex-col gap-0.5 shrink-0">
@@ -559,10 +553,7 @@ export default function IdelPage() {
                         {pt?.adresse && <p className="text-[11px] text-textMuted truncate">📍 {pt.adresse}</p>}
                         {item.note && <p className="text-[11px] italic text-textMuted">{item.note}</p>}
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-medium text-textPrimary">{item.heure}</p>
-                        <p className="text-[11px] text-teal">{ik.toFixed(2)} €</p>
-                      </div>
+                      <p className="text-sm font-medium text-textPrimary shrink-0">{item.heure}</p>
                       <button onClick={() => retirerTournee(item.patientId)} className="text-textMuted hover:text-amber text-sm shrink-0">✕</button>
                     </div>
                   );
@@ -577,15 +568,22 @@ export default function IdelPage() {
           <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/50 sm:items-center"
             onClick={(e) => { if (e.target === e.currentTarget) setPanneau(null); }}>
             <div className="w-full max-w-lg rounded-t-2xl bg-surface p-5 sm:rounded-2xl sm:m-4 max-h-[90vh] overflow-y-auto space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-bold text-textPrimary">Ordonnance</h3>
-                <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary text-xl">✕</button>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-display text-lg font-bold text-textPrimary">Ordonnance · {STATUT_LABEL[panneau.statut]}</h3>
+                <div className="flex items-center gap-2">
+                  {panneau.a_fichier && (
+                    <button onClick={() => handleVoirScan(panneau.id)}
+                      className="rounded-lg border border-line px-2 py-1 text-xs text-textMuted hover:text-textPrimary">📄 Voir le scan</button>
+                  )}
+                  <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary text-xl">✕</button>
+                </div>
               </div>
+              {panneau.soignante && <p className="text-[11px] text-textMuted">Soignante : {panneau.soignante}</p>}
 
               {/* Patient */}
               <div className="rounded-lg bg-surfaceAlt p-3">
                 <p className="mb-2 text-[11px] uppercase tracking-wide text-textMuted font-medium">Patient</p>
-                {patientResolu && !creerMode ? (
+                {patientResolu && !creerMode && (panneau.statut !== "reception" || cotExist.length > 0) ? (
                   <div>
                     <p className="font-medium text-sm text-textPrimary">{patientResolu.nom} {patientResolu.prenom}</p>
                     {patientResolu.adresse && <p className="text-xs text-textMuted">{patientResolu.adresse}</p>}
@@ -594,16 +592,14 @@ export default function IdelPage() {
                 ) : !creerMode ? (
                   <div className="space-y-2">
                     {patients.length > 0 && (
-                      <select value={patientId} onChange={(e) => setPatientId(e.target.value)}
-                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary">
+                      <select value={patientId} onChange={(e) => choisirPatient(e.target.value)} className={champ}>
                         <option value="">— Patient existant —</option>
-                        {patients.map((p) => <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>)}
+                        {patients.map((p) => <option key={p.id} value={p.id}>{p.nom} {p.prenom}{p.date_naissance ? ` (${dateFr(p.date_naissance)})` : ""}</option>)}
                       </select>
                     )}
                     <button onClick={() => setCreerMode(true)}
                       className="w-full rounded-lg border border-violet/40 bg-violet/10 px-3 py-2 text-sm font-medium text-violet hover:bg-violet/20 text-left">
                       ✚ Créer un patient
-                      {(patForm.nom || patForm.prenom) && <span className="ml-2 text-[11px] opacity-60">(pré-rempli OCR)</span>}
                     </button>
                   </div>
                 ) : null}
@@ -612,28 +608,25 @@ export default function IdelPage() {
                   <form onSubmit={handleCreerPatient} className="mt-2 space-y-2">
                     {patErr && <p className="text-xs text-amber">{patErr}</p>}
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <input required value={patForm.nom} onChange={(e) => setPatForm((p) => ({ ...p, nom: e.target.value }))}
-                        placeholder="Nom *" className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
-                      <input required value={patForm.prenom} onChange={(e) => setPatForm((p) => ({ ...p, prenom: e.target.value }))}
-                        placeholder="Prénom *" className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
-                      <input value={patForm.telephone} onChange={(e) => setPatForm((p) => ({ ...p, telephone: e.target.value }))}
-                        placeholder="Téléphone" className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
-                      <input value={patForm.medecin_traitant} onChange={(e) => setPatForm((p) => ({ ...p, medecin_traitant: e.target.value }))}
-                        placeholder="Médecin traitant" className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
-                      <input value={patForm.adresse} onChange={(e) => setPatForm((p) => ({ ...p, adresse: e.target.value }))}
-                        placeholder="Adresse" className="sm:col-span-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
-                      <select value={patForm.zone_deplacement} onChange={(e) => setZone(e.target.value as ZoneDeplacement)}
-                        className="rounded-lg border border-teal/30 bg-teal/5 px-3 py-2 text-sm text-textPrimary">
+                      <input required value={patForm.nom} onChange={(e) => setPatForm((p) => ({ ...p, nom: e.target.value }))} placeholder="Nom *" className={champ} />
+                      <input required value={patForm.prenom} onChange={(e) => setPatForm((p) => ({ ...p, prenom: e.target.value }))} placeholder="Prénom *" className={champ} />
+                      <label className="text-[11px] text-textMuted">Date de naissance
+                        <input type="date" value={patForm.date_naissance} onChange={(e) => setPatForm((p) => ({ ...p, date_naissance: e.target.value }))} className={champ} />
+                      </label>
+                      <label className="text-[11px] text-textMuted">N° de sécurité sociale (15 chiffres)
+                        <input value={patForm.numero_secu} onChange={(e) => setPatForm((p) => ({ ...p, numero_secu: e.target.value }))} inputMode="numeric" className={champ} />
+                      </label>
+                      <input value={patForm.telephone} onChange={(e) => setPatForm((p) => ({ ...p, telephone: e.target.value }))} placeholder="Téléphone" className={champ} />
+                      <input value={patForm.medecin_traitant} onChange={(e) => setPatForm((p) => ({ ...p, medecin_traitant: e.target.value }))} placeholder="Médecin traitant" className={champ} />
+                      <input value={patForm.adresse} onChange={(e) => setPatForm((p) => ({ ...p, adresse: e.target.value }))} placeholder="Adresse" className={`sm:col-span-2 ${champ}`} />
+                      <select value={patForm.zone_deplacement} onChange={(e) => setPatForm((p) => ({ ...p, zone_deplacement: e.target.value as ZoneDeplacement }))} className={champ}>
                         {ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
                       </select>
-                      <input type="number" min="0" step="0.1" value={patForm.distance_km}
-                        onChange={(e) => setPatForm((p) => ({ ...p, distance_km: e.target.value }))}
-                        placeholder="Distance aller (km)"
-                        className="rounded-lg border border-teal/30 bg-teal/5 px-3 py-2 text-sm text-textPrimary" />
+                      <input type="number" min="0" max="300" step="0.1" value={patForm.distance_km}
+                        onChange={(e) => setPatForm((p) => ({ ...p, distance_km: e.target.value }))} placeholder="Distance aller (km)" className={champ} />
                     </div>
                     <div className="flex gap-2">
-                      <button type="submit" disabled={patSaving}
-                        className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+                      <button type="submit" disabled={patSaving} className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
                         {patSaving ? "Création…" : "✓ Créer"}
                       </button>
                       <button type="button" onClick={() => setCreerMode(false)} className="text-sm text-textMuted hover:text-textPrimary px-2">Annuler</button>
@@ -642,93 +635,179 @@ export default function IdelPage() {
                 )}
               </div>
 
-              {panneau.medecin_prescripteur && (
-                <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-1 uppercase">Prescripteur</p>
-                  <p className="text-sm text-textPrimary">{panneau.medecin_prescripteur}</p>
-                  {panneau.date_prescription && <p className="text-xs text-textMuted">Le {new Date(panneau.date_prescription).toLocaleDateString("fr-FR")}</p>}
+              {/* Réception : saisie manuelle (C9) */}
+              {panneau.statut === "reception" && saisie && (
+                <div className="rounded-lg border border-line p-3 space-y-2">
+                  <p className="text-[11px] uppercase tracking-wide text-textMuted font-medium">Ordonnance {panneau.confiance_ocr != null ? "(lue automatiquement, à vérifier)" : "(à compléter)"}</p>
+                  {saisieErr && <p className="text-xs text-amber">{saisieErr}</p>}
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input value={saisie.medecin_prescripteur} onChange={(e) => setSaisie({ ...saisie, medecin_prescripteur: e.target.value })} placeholder="Médecin prescripteur" className={champ} />
+                    <input value={saisie.rpps_prescripteur} onChange={(e) => setSaisie({ ...saisie, rpps_prescripteur: e.target.value })} placeholder="RPPS (11 chiffres)" inputMode="numeric" className={champ} />
+                    <label className="text-[11px] text-textMuted">Date de prescription
+                      <input type="date" value={saisie.date_prescription} onChange={(e) => setSaisie({ ...saisie, date_prescription: e.target.value })} className={champ} />
+                    </label>
+                    <label className="text-[11px] text-textMuted">Durée du traitement
+                      <input value={saisie.duree_traitement} onChange={(e) => setSaisie({ ...saisie, duree_traitement: e.target.value })} placeholder="ex. 15 jours" className={champ} />
+                    </label>
+                    <textarea value={saisie.acte_prescrit_texte} onChange={(e) => setSaisie({ ...saisie, acte_prescrit_texte: e.target.value })}
+                      placeholder="Soins prescrits (ex. pansement d'ulcère tous les jours pendant 15 jours)" rows={3} className={`sm:col-span-2 ${champ}`} />
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button onClick={() => handleEnregistrerSaisie(false)} disabled={actionId === panneau.id}
+                      className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textPrimary disabled:opacity-50">Enregistrer</button>
+                    <button onClick={() => handleEnregistrerSaisie(true)} disabled={actionId === panneau.id || !saisie.acte_prescrit_texte.trim()}
+                      className="flex-1 rounded-lg bg-violet px-3 py-2 text-xs font-medium text-white disabled:opacity-50">
+                      {actionId === panneau.id ? "…" : "Enregistrer et passer à la cotation →"}
+                    </button>
+                  </div>
                 </div>
               )}
-              {panneau.acte_prescrit_texte && (
+
+              {panneau.statut !== "reception" && panneau.medecin_prescripteur && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-1 uppercase">Acte prescrit (OCR)</p>
+                  <p className="text-[11px] text-textMuted mb-1 uppercase">Prescripteur</p>
+                  <p className="text-sm text-textPrimary">{panneau.medecin_prescripteur}{panneau.rpps_prescripteur ? ` · RPPS ${panneau.rpps_prescripteur}` : ""}</p>
+                  {panneau.date_prescription && <p className="text-xs text-textMuted">Le {dateFr(panneau.date_prescription)}</p>}
+                </div>
+              )}
+              {panneau.statut !== "reception" && panneau.acte_prescrit_texte && (
+                <div className="rounded-lg bg-surfaceAlt p-3">
+                  <p className="text-[11px] text-textMuted mb-1 uppercase">Soins prescrits</p>
                   <p className="text-xs text-textPrimary leading-relaxed">{panneau.acte_prescrit_texte}</p>
                 </div>
               )}
 
               {cotExist.length > 0 && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
-                  <p className="text-[11px] text-textMuted mb-2 uppercase">Cotation validée</p>
+                  <p className="text-[11px] text-textMuted mb-2 uppercase">Cotation validée{cotExist[0]?.date_soin ? ` · soin du ${dateFr(cotExist[0].date_soin)}` : ""}</p>
                   {cotExist.map((c, i) => (
-                    <div key={i} className="flex justify-between text-xs gap-2 py-0.5">
+                    <div key={c.id ?? i} className="flex justify-between text-xs gap-2 py-0.5">
                       <span className="font-bold text-textPrimary">{c.code_acte}</span>
                       <span className="text-textMuted flex-1 truncate">{c.libelle}</span>
-                      <span className="text-teal font-medium">{(c.montant_total ?? 0).toFixed(2)} €</span>
+                      <span className="text-teal font-medium">{euros(c.montant_total)}</span>
                     </div>
                   ))}
+                  {facture && (
+                    <div className="mt-2 flex justify-between border-t border-line pt-2 text-sm font-bold">
+                      <span className="text-textPrimary">Total{facture.numero ? ` · ${facture.numero}` : ""}</span>
+                      <span className="text-teal">{euros(facture.montant_total)}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* En cours : éditeur de cotation, calcul par le serveur */}
               {panneau.statut === "en_cours" && cotExist.length === 0 && (
                 <div className="rounded-xl border border-violet/20 bg-violet/5 p-4 space-y-3">
-                  <p className="text-[11px] uppercase tracking-wide text-textMuted font-medium">Cotation NGAP · Art.11B</p>
-                  {!cotProp && !cotLoading && !cotValidee && (
-                    <button onClick={() => handleProposerCotation(panneau.id)}
-                      className="w-full rounded-lg bg-violet px-4 py-2.5 text-sm font-medium text-white hover:bg-violet/90">
-                      🤖 Proposer une cotation IA
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-wide text-textMuted font-medium">Cotation NGAP</p>
+                    <button onClick={() => handleProposerCotation(panneau.id)} disabled={cotLoading}
+                      className="rounded-lg border border-violet/40 px-2 py-1 text-[11px] text-violet disabled:opacity-50">
+                      {cotLoading ? "Analyse…" : "Proposer d'après l'ordonnance"}
                     </button>
-                  )}
-                  {cotLoading && <p className="text-xs text-textMuted text-center animate-pulse">Analyse en cours…</p>}
+                  </div>
                   {cotErr && <p className="text-xs text-amber">{cotErr}</p>}
-                  {detail && !cotValidee && (
-                    <div className="space-y-3">
-                      {detail.lignes.map((l, i) => (
-                        <div key={i} className={`flex items-center gap-2 text-xs ${l.gratuit ? "opacity-50" : ""}`}>
-                          <span className="font-bold text-textPrimary w-14 shrink-0">{l.code_acte}</span>
-                          <span className="text-textMuted flex-1 text-[11px] truncate">{l.libelle}</span>
-                          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${l.pourcentage === 100 ? "bg-teal/20 text-teal" : l.pourcentage === 50 ? "bg-amber/20 text-amber" : "bg-surfaceAlt text-textMuted"}`}>
-                          {l.gratuit ? "Gratuit" : `${l.pourcentage}%`}
-                          </span>
-                          <span className="shrink-0 font-medium text-textPrimary w-14 text-right">{l.gratuit ? "0.00 €" : `${l.montant_net.toFixed(2)} €`}</span>
+                  {propAlertes.map((a, i) => <p key={i} className="text-[11px] text-amber">⚠ {a}</p>)}
+
+                  {/* Actes */}
+                  <div className="space-y-1">
+                    {seance.lignes.length === 0 && <p className="text-xs text-textMuted">Aucun acte. Ajoutez-en depuis la liste ou saisissez un code.</p>}
+                    {seance.lignes.map((l, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="w-16 shrink-0 font-bold text-textPrimary">{l.code_acte}</span>
+                        <span className="flex-1 truncate text-textMuted">{l.libelle ?? ""}</span>
+                        <button onClick={() => retirerActe(i)} className="text-textMuted hover:text-amber">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select value="" onChange={(e) => {
+                      const a = referentiel.find((x) => x.id === e.target.value);
+                      if (a) ajouterActe({ code_acte: a.code_acte, libelle: a.libelle });
+                    }} className={champ}>
+                      <option value="">+ Ajouter un acte courant</option>
+                      {referentiel.map((a) => <option key={a.id} value={a.id}>{a.code_acte} · {a.libelle}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <input value={codeLibre} onChange={(e) => setCodeLibre(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); ajouterCodeLibre(); } }}
+                        placeholder="Code (ex. AMI 4.5)" className={champ} />
+                      <button onClick={ajouterCodeLibre} className="shrink-0 rounded-lg border border-line px-3 text-xs text-textPrimary">OK</button>
+                    </div>
+                  </div>
+
+                  {/* Séance */}
+                  <div className="grid gap-2 border-t border-line pt-3 sm:grid-cols-2">
+                    <label className="text-[11px] text-textMuted">Date du soin
+                      <input type="date" value={seance.date_soin ?? ""} onChange={(e) => {
+                        const v = e.target.value;
+                        setSeance((s) => ({ ...s, date_soin: v || null, dimanche_ferie: v ? estDimanche(v) || s.dimanche_ferie : s.dimanche_ferie }));
+                      }} className={champ} />
+                    </label>
+                    <label className="text-[11px] text-textMuted">Nombre de séances identiques
+                      <input type="number" min={1} max={366} value={seance.nb_seances}
+                        onChange={(e) => setSeance((s) => ({ ...s, nb_seances: Math.max(1, Math.min(366, parseInt(e.target.value || "1", 10))) }))} className={champ} />
+                    </label>
+                    <label className="text-[11px] text-textMuted">Horaire
+                      <select value={seance.nuit ?? ""} onChange={(e) => setSeance((s) => ({ ...s, nuit: (e.target.value || null) as NuitPlage | null }))} className={champ}>
+                        {NUITS.map((n) => <option key={n.value} value={n.value}>{n.label}</option>)}
+                      </select>
+                    </label>
+                    <div className="flex flex-col justify-end gap-1 text-xs text-textPrimary">
+                      <label className="flex items-center gap-2"><input type="checkbox" className="accent-violet" checked={seance.dimanche_ferie}
+                        onChange={(e) => setSeance((s) => ({ ...s, dimanche_ferie: e.target.checked }))} />Dimanche ou jour férié</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" className="accent-violet" checked={seance.mci}
+                        onChange={(e) => setSeance((s) => ({ ...s, mci: e.target.checked }))} />Coordination (MCI)</label>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-textPrimary sm:col-span-2">
+                      <input type="checkbox" className="accent-violet" checked={seance.domicile}
+                        onChange={(e) => setSeance((s) => ({ ...s, domicile: e.target.checked }))} />Soin au domicile (IFD et indemnités kilométriques)
+                    </label>
+                    {seance.domicile && (
+                      <>
+                        <label className="text-[11px] text-textMuted">Distance aller (km)
+                          <input type="number" min={0} max={300} step={0.1} value={seance.distance_km}
+                            onChange={(e) => setSeance((s) => ({ ...s, distance_km: Math.max(0, parseFloat(e.target.value || "0")) }))} className={champ} />
+                        </label>
+                        <label className="text-[11px] text-textMuted">Zone
+                          <select value={seance.zone} onChange={(e) => setSeance((s) => ({ ...s, zone: e.target.value as ZoneIk }))} className={champ}>
+                            <option value="plaine">Plaine</option>
+                            <option value="montagne">Montagne</option>
+                            <option value="pied_ski">À pied ou à ski</option>
+                          </select>
+                        </label>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Résultat du moteur serveur */}
+                  {simErr && <p className="text-xs text-amber">{simErr}</p>}
+                  {simulation && (
+                    <div className="space-y-1 border-t border-line pt-3">
+                      {simulation.lignes.map((l, i) => (
+                        <div key={i} className={`flex items-center gap-2 text-xs ${l.montant_unitaire === 0 ? "opacity-50" : ""}`}>
+                          <span className="w-12 shrink-0 font-bold text-textPrimary">{l.code_acte}</span>
+                          <span className="flex-1 truncate text-[11px] text-textMuted" title={l.detail || l.libelle}>{l.detail || l.libelle}</span>
+                          <span className="w-16 shrink-0 text-right font-medium text-textPrimary">{euros(l.montant_unitaire)}</span>
                         </div>
                       ))}
-                      <div className="border-t border-line pt-2 space-y-0.5">
-                        <div className="flex justify-between text-[11px] text-textMuted"><span>IFD</span><span>{IFD.toFixed(2)} €</span></div>
-                        {detail.ik > 0 && patientResolu
-                          ? <div className="flex justify-between text-[11px] text-textMuted"><span>IK {patientResolu.zone_deplacement} · {patientResolu.distance_km}km A/R</span><span>{detail.ik.toFixed(2)} €</span></div>
-                          : <p className="text-[10px] text-textMuted italic">Ajoutez la distance dans la fiche patient</p>
-                        }
+                      {simulation.regles.map((r, i) => <p key={`r${i}`} className="text-[10px] text-textMuted">• {r}</p>)}
+                      {simulation.alertes.map((a, i) => <p key={`a${i}`} className="text-[11px] text-amber">⚠ {a}</p>)}
+                      <div className="flex justify-between border-t border-line pt-2 font-bold">
+                        <span className="text-sm text-textPrimary">{simulation.nb_seances > 1 ? `Séance ${euros(simulation.montant_seance)} × ${simulation.nb_seances}` : "Total séance"}</span>
+                        <span className="text-lg text-teal">{euros(simulation.montant_total)}</span>
                       </div>
-                      <div className="border-t border-line pt-2">
-                        <p className="text-[11px] text-textMuted font-medium mb-2">Majorations</p>
-                        {MAJORATIONS.map((m) => (
-                          <label key={m.code} className="flex items-center gap-2 cursor-pointer mb-1.5">
-                            <input type="checkbox" checked={majActives.includes(m.code)}
-                              onChange={() => setMajActives((p) => p.includes(m.code) ? p.filter((c) => c !== m.code) : [...p, m.code])}
-                              className="accent-violet" />
-                            <span className="text-xs text-textPrimary flex-1">{m.label}</span>
-                            <span className="text-xs text-teal font-medium">+{m.montant.toFixed(2)} €</span>
-                          </label>
-                        ))}
-                      </div>
-                      <div className="border-t border-line pt-2 flex justify-between font-bold">
-                        <span className="text-sm text-textPrimary">Total séance</span>
-                        <span className="text-teal text-lg">{detail.total.toFixed(2)} €</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => setCotProp(null)} className="flex-1 rounded-lg border border-line px-3 py-2 text-xs text-textMuted hover:text-textPrimary">Relancer</button>
-                        <button onClick={() => handleValiderCotation(panneau.id)}
-                          disabled={actionId === panneau.id || (!panneau.patient?.id && !patientId)}
-                          className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black disabled:opacity-50">
-                          {actionId === panneau.id ? "Validation…" : "✓ Valider"}
-                        </button>
-                      </div>
-                      {!panneau.patient?.id && !patientId && (
-                        <p className="text-[11px] text-amber text-center">Créez ou sélectionnez un patient d'abord</p>
-                      )}
+                      <p className="text-[10px] italic text-textMuted">{simulation.tarifs}</p>
                     </div>
                   )}
-                  {cotValidee && <p className="text-xs text-teal text-center py-2">✓ Cotation validée</p>}
+                  <button onClick={() => handleValiderCotation(panneau.id)}
+                    disabled={actionId !== null || !simulation || (!panneau.patient?.id && !patientId)}
+                    className="w-full rounded-lg bg-teal px-3 py-2 text-sm font-medium text-black disabled:opacity-50">
+                    {actionId === panneau.id ? "Validation…" : "✓ Valider cette cotation"}
+                  </button>
+                  {!panneau.patient?.id && !patientId && (
+                    <p className="text-[11px] text-amber text-center">Créez ou sélectionnez un patient d&apos;abord</p>
+                  )}
                 </div>
               )}
 
@@ -743,28 +822,46 @@ export default function IdelPage() {
                     {ficheLoading ? "…" : "↓ Fiche de reprise"}
                   </button>
                   <p className="text-center text-[10px] text-textMuted italic">
-                    Mutatech ne transmet rien à la CPAM : le bouton ci-dessous ne fait que noter que vous l'avez fait vous-même.
+                    Mutatech ne transmet rien à la CPAM : le bouton ci-dessous ne fait que noter que vous l&apos;avez fait vous-même.
                   </p>
-                  <button onClick={() => handleMarquerTransmis(panneau.id)} disabled={actionId === panneau.id}
+                  <button onClick={() => handleMarquerTransmis(panneau.id)} disabled={actionId !== null}
                     className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-black disabled:opacity-50">
                     {actionId === panneau.id ? "…" : "✓ J'ai transmis via mon LPS"}
                   </button>
-                  <button onClick={() => handleAnnulerCotation(panneau.id)} disabled={actionId === panneau.id}
+                  <button onClick={() => handleAnnulerCotation(panneau.id)} disabled={actionId !== null}
                     className="rounded-lg border border-amber/40 bg-amber/5 px-4 py-2 text-center text-xs font-medium text-amber hover:bg-amber/10 disabled:opacity-50">
                     ↺ Annuler cette cotation et refaire
                   </button>
                 </div>
               )}
-              {panneau.statut === "traite" && (
-                <p className="text-xs text-teal text-center">
-                  ✓ Transmission confirmée par vous {moi?.lps_utilise && `(via ${LPS_LABELS[moi.lps_utilise] ?? moi.lps_utilise})`}
-                </p>
+
+              {/* Traité : retour NOEMIE (C12) */}
+              {panneau.statut === "traite" && facture && (
+                <div className="rounded-lg border border-line p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-wide text-textMuted font-medium">Facture {facture.numero ?? ""}</p>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] ${FSE_COL[facture.statut_fse]}`}>{FSE_LABEL[facture.statut_fse]}</span>
+                  </div>
+                  {facture.date_transmission_lps && <p className="text-xs text-textMuted">Transmise le {dateFr(facture.date_transmission_lps)}{moi?.lps_utilise ? ` via ${LPS_LABELS[moi.lps_utilise] ?? moi.lps_utilise}` : ""}</p>}
+                  {facture.date_paiement && facture.statut_fse === "payee" && <p className="text-xs text-teal">Payée le {dateFr(facture.date_paiement)}</p>}
+                  {facture.statut_fse === "rejetee" && facture.retour_noemie && <p className="text-xs text-red-400">Motif : {facture.retour_noemie}</p>}
+                  {(facture.statut_fse === "transmise" || facture.statut_fse === "rejetee") && (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleRetourNoemie(panneau.id, "payee")} disabled={actionId !== null}
+                        className="flex-1 rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black disabled:opacity-50">✓ Payée</button>
+                      {facture.statut_fse === "transmise" && (
+                        <button onClick={() => handleRetourNoemie(panneau.id, "rejetee")} disabled={actionId !== null}
+                          className="flex-1 rounded-lg border border-red-400/50 px-3 py-2 text-xs font-medium text-red-400 disabled:opacity-50">✕ Rejetée…</button>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
         )}
 
-        <p className="mt-8 text-[11px] text-textMuted">⚠ Cotation indicative (Art.11B NGAP). Ne se substitue pas à votre LPS agréé SESAM-Vitale.</p>
+        <p className="mt-8 text-[11px] text-textMuted">⚠ Cotation indicative calculée selon la NGAP (tarifs et règles à faire valider par une IDEL). Ne se substitue pas à votre LPS agréé SESAM-Vitale.</p>
 
         {/* ===== MODAL FICHE DE REPRISE ===== */}
         {ficheReprise && (
@@ -777,21 +874,21 @@ export default function IdelPage() {
               </div>
 
               <div className="text-xs text-textMuted">
-                {ficheReprise.idel} · LPS cible : {ficheReprise.lps_cible}
+                {ficheReprise.idel}{ficheReprise.rpps_idel ? ` · RPPS ${ficheReprise.rpps_idel}` : ""} · LPS cible : {ficheReprise.lps_cible}
               </div>
 
               <div className="rounded-lg bg-surfaceAlt p-3">
                 <p className="mb-1 text-[11px] uppercase tracking-wide text-textMuted font-medium">Patient</p>
                 <p className="text-sm text-textPrimary">{ficheReprise.patient.nom} {ficheReprise.patient.prenom}</p>
-                {ficheReprise.patient.date_naissance && <p className="text-xs text-textMuted">Né(e) le {ficheReprise.patient.date_naissance}</p>}
+                {ficheReprise.patient.date_naissance && <p className="text-xs text-textMuted">Né(e) le {dateFr(ficheReprise.patient.date_naissance)}</p>}
                 {ficheReprise.patient.numero_secu && <p className="text-xs text-textMuted">N° sécu : {ficheReprise.patient.numero_secu}</p>}
               </div>
 
               {ficheReprise.prescription.medecin && (
                 <div className="rounded-lg bg-surfaceAlt p-3">
                   <p className="mb-1 text-[11px] uppercase tracking-wide text-textMuted font-medium">Prescripteur</p>
-                  <p className="text-sm text-textPrimary">{ficheReprise.prescription.medecin}</p>
-                  {ficheReprise.prescription.date && <p className="text-xs text-textMuted">Le {ficheReprise.prescription.date}</p>}
+                  <p className="text-sm text-textPrimary">{ficheReprise.prescription.medecin}{ficheReprise.prescription.rpps ? ` · RPPS ${ficheReprise.prescription.rpps}` : ""}</p>
+                  {ficheReprise.prescription.date && <p className="text-xs text-textMuted">Le {dateFr(ficheReprise.prescription.date)}</p>}
                 </div>
               )}
 
@@ -803,32 +900,24 @@ export default function IdelPage() {
                       <div>
                         <p className="font-bold text-textPrimary">{a.code} <span className="font-normal text-textMuted">{a.libelle}</span></p>
                         <p className="text-[11px] text-textMuted">
-                          Coeff. {a.coefficient ?? "—"} · Qté {a.quantite ?? 1}
-                          {a.majorations.dimanche_ferie && " · MJF"}
-                          {a.majorations.nuit && " · MN"}
+                          {a.date_soin ? `Soin du ${dateFr(a.date_soin)} · ` : ""}Qté {a.quantite ?? 1}
                         </p>
                       </div>
-                      <span className="shrink-0 font-medium text-teal">{(a.montant ?? 0).toFixed(2)} €</span>
+                      <span className="shrink-0 font-medium text-teal">{euros(a.montant)}</span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 flex justify-between border-t border-line pt-2 font-bold">
                   <span className="text-sm text-textPrimary">Total estimé</span>
-                  <span className="text-teal text-lg">{ficheReprise.montant_total_estime.toFixed(2)} €</span>
+                  <span className="text-teal text-lg">{euros(ficheReprise.montant_total_estime)}</span>
                 </div>
               </div>
 
               <p className="text-xs italic text-textMuted">{ficheReprise.instructions}</p>
 
               <div className="flex gap-2 print:hidden">
-                <button onClick={() => window.print()}
-                  className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white hover:bg-violet/90">
-                  🖨 Imprimer
-                </button>
-                <button onClick={() => setFicheReprise(null)}
-                  className="flex-1 rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary">
-                  Fermer
-                </button>
+                <button onClick={() => window.print()} className="flex-1 rounded-lg bg-violet px-3 py-2 text-sm font-medium text-white hover:bg-violet/90">🖨 Imprimer</button>
+                <button onClick={() => setFicheReprise(null)} className="flex-1 rounded-lg border border-line px-3 py-2 text-sm text-textMuted hover:text-textPrimary">Fermer</button>
               </div>
             </div>
           </div>

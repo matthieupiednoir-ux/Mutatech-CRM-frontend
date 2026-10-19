@@ -6,14 +6,17 @@ import { ApiError } from "@/lib/api";
 import {
   pharmaListerPharmacies, pharmaCreerPharmacie,
   pharmaListerCommandes, pharmaCreerCommande, pharmaChangerStatutCommande,
-  Pharmacy, PharmaOrder,
+  pharmaModifierLignesCommande, pharmaHistoriqueCommande,
+  Pharmacy, PharmaOrder, HistoriqueCommande,
 } from "@/lib/api";
 import { idelGetPatients, idelInsights } from "@/lib/api";
 import { IdelPatient } from "@/lib/types";
 import InsightStrip from "@/components/InsightStrip";
 
 const STATUT_LABEL: Record<string, string> = {
-  brouillon: "Brouillon", envoyee: "Envoyée", en_preparation: "En préparation",
+  // « Envoyée » est déclaratif : Mutatech n'envoie rien à la pharmacie,
+  // l'IDEL indique qu'elle a transmis la commande (téléphone, fax, MSSanté).
+  brouillon: "Brouillon", envoyee: "Transmise à la pharmacie", en_preparation: "En préparation",
   prete: "Prête", livree: "Livrée", annulee: "Annulée",
 };
 const STATUT_COULEUR: Record<string, string> = {
@@ -48,6 +51,9 @@ export default function PharmaPage() {
   const [commandePharmacyId, setCommandePharmacyId] = useState("");
   const [lignesProduits, setLignesProduits] = useState<LigneProduit[]>([{ produit: "", quantite: "1" }]);
   const [creationCommande, setCreationCommande] = useState(false);
+  const [dureeTraitement, setDureeTraitement] = useState("");
+  const [historique, setHistorique] = useState<{ id: string; lignes: HistoriqueCommande[] } | null>(null);
+  const [edition, setEdition] = useState<{ id: string; lignes: LigneProduit[] } | null>(null);
 
   function charger() {
     setLoading(true);
@@ -126,7 +132,11 @@ export default function PharmaPage() {
         setCreationCommande(false);
         return;
       }
-      await pharmaCreerCommande({ patient_id: commandePatientId, pharmacy_id: commandePharmacyId, items });
+      await pharmaCreerCommande({
+        patient_id: commandePatientId, pharmacy_id: commandePharmacyId, items,
+        ...(dureeTraitement ? { treatment_duration_days: parseInt(dureeTraitement, 10) } : {}),
+      });
+      setDureeTraitement("");
       setCommandePatientId("");
       setCommandePharmacyId("");
       setLignesProduits([{ produit: "", quantite: "1" }]);
@@ -149,6 +159,22 @@ export default function PharmaPage() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur lors du changement de statut.");
     }
+  }
+
+  async function voirHistorique(c: PharmaOrder) {
+    if (historique?.id === c.id) { setHistorique(null); return; }
+    try { setHistorique({ id: c.id, lignes: await pharmaHistoriqueCommande(c.id) }); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Historique indisponible."); }
+  }
+
+  async function enregistrerLignes() {
+    if (!edition) return;
+    const items = edition.lignes.filter((l) => l.produit.trim())
+      .map((l) => ({ product_name: l.produit.trim(), quantity: parseFloat(l.quantite) || 0 }));
+    if (items.length === 0) { setError("Une commande doit contenir au moins un produit."); return; }
+    setError(null);
+    try { await pharmaModifierLignesCommande(edition.id, items); setEdition(null); charger(); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Modification impossible."); }
   }
 
   function statutSuivant(statut: string): string | null {
@@ -275,6 +301,9 @@ export default function PharmaPage() {
                     <option value="">— Pharmacie —</option>
                     {pharmacies.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <input type="number" min="1" max="366" value={dureeTraitement} onChange={(e) => setDureeTraitement(e.target.value)}
+                    placeholder="Durée du traitement (jours, optionnel)"
+                    className="rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary sm:col-span-2" />
                 </div>
 
                 <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-textMuted">Produits</p>
@@ -325,6 +354,7 @@ export default function PharmaPage() {
                         <div>
                           <p className="text-sm text-textPrimary">{c.order_number} — {c.patient_prenom} {c.patient_nom}</p>
                           <p className="text-xs text-textMuted">{c.pharmacy_name} · {c.items.map(i => `${i.product_name} (${i.quantity})`).join(", ")}</p>
+                          {c.treatment_end_date && <p className="text-[11px] text-textMuted">Fin de traitement prévue le {new Date(`${c.treatment_end_date.slice(0, 10)}T12:00:00`).toLocaleDateString("fr-FR")}</p>}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: `${STATUT_COULEUR[c.status]}22`, color: STATUT_COULEUR[c.status] }}>
@@ -335,8 +365,44 @@ export default function PharmaPage() {
                               → {STATUT_LABEL[suivant]}
                             </button>
                           )}
+                          {c.status === "brouillon" && (
+                            <button onClick={() => setEdition(edition?.id === c.id ? null : { id: c.id, lignes: c.items.map((i) => ({ produit: i.product_name, quantite: String(i.quantity) })) })}
+                              className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-textPrimary">✎ Produits</button>
+                          )}
+                          {c.status !== "livree" && c.status !== "annulee" && (
+                            <button onClick={() => { if (confirm(`Annuler la commande ${c.order_number} ?`)) handleChangerStatut(c, "annulee"); }}
+                              className="rounded-lg border border-amber/40 px-2.5 py-1 text-xs text-amber">Annuler</button>
+                          )}
+                          <button onClick={() => voirHistorique(c)} className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-textPrimary">Historique</button>
                         </div>
                       </div>
+                      {edition?.id === c.id && (
+                        <div className="mt-3 space-y-2 rounded-lg bg-surfaceAlt p-3">
+                          {edition.lignes.map((l, i) => (
+                            <div key={i} className="flex gap-2">
+                              <input value={l.produit} onChange={(e) => setEdition({ ...edition, lignes: edition.lignes.map((x, j) => j === i ? { ...x, produit: e.target.value } : x) })}
+                                className="flex-1 rounded border border-line bg-surface px-2 py-1 text-xs text-textPrimary" />
+                              <input type="number" min="0.5" step="0.5" value={l.quantite} onChange={(e) => setEdition({ ...edition, lignes: edition.lignes.map((x, j) => j === i ? { ...x, quantite: e.target.value } : x) })}
+                                className="w-20 rounded border border-line bg-surface px-2 py-1 text-xs text-textPrimary" />
+                              <button onClick={() => setEdition({ ...edition, lignes: edition.lignes.filter((_, j) => j !== i) })} className="text-xs text-textMuted hover:text-amber">✕</button>
+                            </div>
+                          ))}
+                          <div className="flex gap-2">
+                            <button onClick={() => setEdition({ ...edition, lignes: [...edition.lignes, { produit: "", quantite: "1" }] })} className="text-xs text-textMuted">+ Produit</button>
+                            <button onClick={enregistrerLignes} className="rounded px-3 py-1 text-xs font-medium text-white" style={{ backgroundColor: "var(--accent)" }}>Enregistrer</button>
+                          </div>
+                        </div>
+                      )}
+                      {historique?.id === c.id && (
+                        <ul className="mt-3 space-y-1 rounded-lg bg-surfaceAlt p-3 text-[11px] text-textMuted">
+                          {historique.lignes.length === 0 && <li>Aucun changement de statut.</li>}
+                          {historique.lignes.map((h, i) => (
+                            <li key={i}>
+                              {new Date(h.changed_at).toLocaleString("fr-FR")} · {h.from_status ? `${STATUT_LABEL[h.from_status] ?? h.from_status} → ` : ""}{STATUT_LABEL[h.to_status] ?? h.to_status} · {h.changed_by}{h.comment ? ` · ${h.comment}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   );
                 })}
