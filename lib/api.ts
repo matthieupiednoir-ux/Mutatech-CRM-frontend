@@ -11,8 +11,9 @@ import {
  AuthResponse, UserMe, TenantConfig,
  CreerClientInput, ClientCreeOut,
  AgentMessage, AgentResponse,
- IdelOrdonnance, IdelPatient, CotationOut, CotationValidationItem, FicheReprise,
- IdelMe, IdelUpdateInput,
+ IdelOrdonnance, IdelPatient, FicheReprise,
+ IdelMe, IdelUpdateInput, OrdonnanceSaisie, PropositionCotation, ActeReferentiel,
+ SeanceCotation, SimulationNGAP, ImportPatientsResultat,
  Organization, OrganizationCreateInput, OrgUserCreateInput, OrgUserCreeOut, ModuleType,
  OrgUser, OrgUserUpdateInput,
 } from "./types";
@@ -22,6 +23,24 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const IDEL_API_URL = process.env.NEXT_PUBLIC_IDEL_API_URL || "http://localhost:8001";
 
 export class ApiError extends Error {}
+
+// Message lisible à partir d'une réponse d'erreur FastAPI : { detail: "..." }
+// ou, pour une saisie refusée (422), la liste des champs en erreur.
+function messageErreur(corps: string, statut: number): string {
+ try {
+ const json = JSON.parse(corps) as { detail?: unknown };
+ const d = json.detail;
+ if (typeof d === "string") return d;
+ if (Array.isArray(d)) {
+ return d.map((e: { msg?: string; loc?: unknown[] }) => {
+ const champ = Array.isArray(e.loc) ? e.loc.filter((x) => x !== "body").join(" › ") : "";
+ const msg = (e.msg || "").replace(/^Value error, /, "");
+ return champ ? `${champ} : ${msg}` : msg;
+ }).join(" · ");
+ }
+ } catch { /* corps non JSON */ }
+ return corps || `Erreur ${statut}`;
+}
 
 async function requete<T>(
  chemin: string,
@@ -69,7 +88,7 @@ async function requeteIdelFormData<T>(chemin: string, formData: FormData): Promi
  const res = await fetch(`${IDEL_API_URL}${chemin}`, { method: "POST", headers, body: formData });
  if (!res.ok) {
  const corps = await res.text();
- throw new ApiError(corps || `Erreur ${res.status}`);
+ throw new ApiError(messageErreur(corps, res.status));
  }
  return res.json();
 }
@@ -84,7 +103,7 @@ function requeteIdel<T>(chemin: string, options?: RequestInit): Promise<T> {
  return fetch(`${IDEL_API_URL}${chemin}`, { ...options, headers }).then(async (res) => {
  if (!res.ok) {
  const corps = await res.text();
- throw new ApiError(corps || `Erreur ${res.status}`);
+ throw new ApiError(messageErreur(corps, res.status));
  }
  return res.json() as Promise<T>;
  });
@@ -100,7 +119,7 @@ async function requeteIdelBlob(chemin: string): Promise<Blob> {
  const res = await fetch(`${IDEL_API_URL}${chemin}`, { headers });
  if (!res.ok) {
  const corps = await res.text();
- throw new ApiError(corps || `Erreur ${res.status}`);
+ throw new ApiError(messageErreur(corps, res.status));
  }
  return res.blob();
 }
@@ -340,43 +359,46 @@ export const getAgentHistorique = () => requete<AgentMessage[]>("/api/agent/hist
 export const effacerAgentHistorique = () => requete<{ statut: string }>("/api/agent/history", { method: "DELETE" });
 
 // --- IDEL ---
-export const idelGetOrdonnances = () =>
- Promise.all([
- requeteIdel<IdelOrdonnance[]>("/api/reception/ordonnances"),
- requeteIdel<IdelOrdonnance[]>("/api/encours/ordonnances"),
- requeteIdel<IdelOrdonnance[]>("/api/traite/ordonnances"),
+// perimetre "cabinet" : toutes les ordonnances du cabinet (IDEC, gérant,
+// remplaçante) ; "moi" : uniquement les miennes. Sans paramètre, le
+// serveur choisit selon le rôle.
+export type PerimetrePipeline = "moi" | "cabinet";
+export const idelGetOrdonnances = (perimetre?: PerimetrePipeline) => {
+ const qs = perimetre ? `?perimetre=${perimetre}` : "";
+ return Promise.all([
+ requeteIdel<IdelOrdonnance[]>(`/api/reception/ordonnances${qs}`),
+ requeteIdel<IdelOrdonnance[]>(`/api/encours/ordonnances${qs}`),
+ requeteIdel<IdelOrdonnance[]>(`/api/traite/ordonnances${qs}`),
  ]).then(([reception, encours, traite]) => [...reception, ...encours, ...traite]);
+};
 
 export const idelUploaderOrdonnance = (formData: FormData) =>
  requeteIdelFormData<IdelOrdonnance>("/api/reception/ordonnances", formData);
 
-// L'API retourne { propositions: [...], confiance: 0.55, validation_humaine_obligatoire: true }
-// On normalise en tableau
-export const idelProposerCotation = async (id: string): Promise<CotationOut[]> => {
- const raw = await requeteIdel<unknown>(`/api/encours/ordonnances/${id}/proposition-cotation`);
- if (Array.isArray(raw)) return raw as CotationOut[];
- if (raw && typeof raw === "object") {
- const obj = raw as Record<string, unknown>;
- if (Array.isArray(obj.propositions)) return obj.propositions as CotationOut[];
- }
- return [];
-};
+// Saisie ou correction manuelle (médecin, date, acte, patient) : une
+// ordonnance non lue automatiquement n'est plus bloquée en réception.
+export const idelSaisirOrdonnance = (id: string, data: OrdonnanceSaisie) =>
+ requeteIdel<IdelOrdonnance>(`/api/reception/ordonnances/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const idelPasserEnCours = (id: string) =>
+ requeteIdel<IdelOrdonnance>(`/api/reception/ordonnances/${id}/passer-en-cours`, { method: "POST" });
+// Scan déposé, servi par le backend authentifié (jamais d'URL publique).
+export const idelFichierOrdonnance = (id: string) =>
+ requeteIdelBlob(`/api/reception/ordonnances/${id}/fichier`);
 
-// Le backend exige : { patient_id, lignes } -- "lignes" est le SEUL champ lu
-// cote serveur (routers/encours.py -> valider_cotation), tout autre nom
-// de cle serait silencieusement ignore par Pydantic sans jamais creer de
-// ligne de cotation en base.
-export const idelValiderCotation = (
- id: string,
- items: CotationValidationItem[],
- patientId?: string | null
-) =>
+export const idelProposerCotation = (id: string) =>
+ requeteIdel<PropositionCotation>(`/api/encours/ordonnances/${id}/proposition-cotation`);
+
+// Moteur NGAP unique (serveur) : l'écran affiche cette simulation telle
+// quelle, et la validation enregistre exactement le même calcul.
+export const idelReferentielNgap = () =>
+ requeteIdel<{ actes: ActeReferentiel[]; tarifs: Record<string, unknown> }>("/api/ngap/referentiel");
+export const idelSimulerCotation = (seance: SeanceCotation) =>
+ requeteIdel<SimulationNGAP>("/api/ngap/simuler", { method: "POST", body: JSON.stringify(seance) });
+
+export const idelValiderCotation = (id: string, seance: SeanceCotation, patientId: string) =>
  requeteIdel<IdelOrdonnance>(`/api/encours/ordonnances/${id}/valider-cotation`, {
  method: "POST",
- body: JSON.stringify({
- ...(patientId ? { patient_id: patientId } : {}),
- lignes: items,
- }),
+ body: JSON.stringify({ ...seance, patient_id: patientId }),
  });
 
 // Annule une cotation validee par erreur, pour la refaire depuis zero.
@@ -389,7 +411,14 @@ export const idelAnnulerCotation = (id: string) =>
 export const idelMarquerTransmis = (id: string) =>
  requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${id}/marquer-transmis`, {
  method: "POST",
- body: JSON.stringify({ lps_choisi: "logiciel_metier" }),
+ body: JSON.stringify({}),
+ });
+
+// Retour NOEMIE saisi par l'IDEL : payée, ou rejetée avec son motif.
+export const idelRetourNoemie = (id: string, statut: "payee" | "rejetee", motif?: string) =>
+ requeteIdel<IdelOrdonnance>(`/api/traite/ordonnances/${id}/retour-noemie`, {
+ method: "POST",
+ body: JSON.stringify({ statut_fse: statut, retour_noemie: motif || null }),
  });
 
 // Retourne le CSV comme Blob (telechargement authentifie) -- ne peut pas
@@ -402,11 +431,42 @@ export const idelExporterCsv = (id: string) =>
 export const idelFicheReprise = (id: string) =>
  requeteIdel<FicheReprise>(`/api/encours/ordonnances/${id}/fiche-reprise`);
 
+// Patients du cabinet (partagés entre ses membres).
 export const idelGetPatients = () => requeteIdel<IdelPatient[]>("/api/patients");
 export const idelCreerPatient = (data: Partial<IdelPatient>) =>
  requeteIdel<IdelPatient>("/api/patients", { method: "POST", body: JSON.stringify(data) });
+export const idelModifierPatient = (id: string, data: Partial<IdelPatient>) =>
+ requeteIdel<IdelPatient>(`/api/patients/${id}`, { method: "PUT", body: JSON.stringify(data) });
+// Archive le patient s'il a un historique (ordonnances, visites...), le
+// supprime sinon.
+export const idelSupprimerPatient = (id: string) =>
+ requeteIdel<{ ok: boolean; resultat?: "archive" }>(`/api/patients/${id}`, { method: "DELETE" });
 export const idelImporterPatientsLot = (data: Partial<IdelPatient>[]) =>
- requeteIdel<IdelPatient[]>("/api/patients/import-lot", { method: "POST", body: JSON.stringify(data) });
+ requeteIdel<ImportPatientsResultat>("/api/patients/import-lot", { method: "POST", body: JSON.stringify(data) });
+
+// --- Trésorerie IDEL ---
+// vue "cabinet" réservée à la coordination (IDEC, gérant, administrateur).
+export interface ComptaStatsAnnee {
+ annee: number;
+ nb_traitees: number;
+ montant_total: number;
+ par_mois: { mois: number; annee: number; nb_traitees: number; montant_total: number }[];
+}
+export interface ComptaFacture {
+ id: string;
+ numero: string;
+ patient_nom: string;
+ soignante?: string | null;
+ montant: number;
+ statut: string;
+ retour_noemie?: string | null;
+ date_creation?: string | null;
+ date_paiement?: string | null;
+}
+export const idelComptaStats = (annee: number, vue: PerimetrePipeline = "moi") =>
+ requeteIdel<ComptaStatsAnnee>(`/api/compta/stats?annee=${annee}&vue=${vue}`);
+export const idelComptaFactures = (annee: number, vue: PerimetrePipeline = "moi") =>
+ requeteIdel<ComptaFacture[]>(`/api/compta/factures?annee=${annee}&vue=${vue}`);
 
 // Profil IDEL (notamment le LPS utilise, pour un affichage honnete dans
 // le pipeline -- Mutatech ne transmet jamais rien elle-meme).
@@ -508,13 +568,25 @@ export interface Tournee {
  id: string;
  date: string;
  technicien_name: string;
+ technicien_id?: string | null;
  status: string;
  visits: TourneeVisit[];
 }
+// Soignantes actives du cabinet (pour désigner la soignante d'une tournée).
+export interface MembreCabinet { id: string; nom: string; prenom: string; role: string; }
+export const cabinetMembres = () => requeteIdel<MembreCabinet[]>("/auth-org/me/membres");
+
 export const tourneesLister = (date?: string) =>
  requeteIdel<Tournee[]>(`/api/tournees${date ? `?date=${date}` : ""}`);
-export const tourneesCreer = (data: { date: string; technicien_name: string }) =>
+export const tourneesCreer = (data: { date: string; technicien_name?: string; technicien_id?: string }) =>
  requeteIdel<Tournee>("/api/tournees", { method: "POST", body: JSON.stringify(data) });
+export const tourneesModifier = (id: string, data: { date?: string; technicien_name?: string; technicien_id?: string; status?: string }) =>
+ requeteIdel<Tournee>(`/api/tournees/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const tourneesSupprimer = (id: string) =>
+ requeteIdel<{ ok: boolean }>(`/api/tournees/${id}`, { method: "DELETE" });
+// Visite terminée -> dossier prêt à coter dans le Pipeline de la soignante.
+export const tourneesCoterVisite = (tourneeId: string, visitId: string) =>
+ requeteIdel<{ ordonnance_id: string; statut: string }>(`/api/tournees/${tourneeId}/visits/${visitId}/coter`, { method: "POST" });
 export const tourneesVoir = (id: string) => requeteIdel<Tournee>(`/api/tournees/${id}`);
 export const tourneesAjouterVisite = (tourneeId: string, data: {
  patient_id: string; scheduled_time: string; duration_minutes?: number; prestation: string; notes?: string;
@@ -548,6 +620,10 @@ export interface PharmaOrder {
  id: string; order_number: string; patient_id: string; patient_nom: string; patient_prenom: string;
  pharmacy_id: string; pharmacy_name: string; status: string; date_creation: string;
  scheduled_delivery_date?: string | null; items: OrderItem[];
+ treatment_duration_days?: number | null; treatment_end_date?: string | null; notes?: string | null;
+}
+export interface HistoriqueCommande {
+ from_status?: string | null; to_status: string; changed_by: string; changed_at: string; comment?: string | null;
 }
 export const pharmaListerPharmacies = () => requeteIdel<Pharmacy[]>("/api/pharma/pharmacies");
 export const pharmaCreerPharmacie = (data: { name: string; phone: string; adresse?: string; ville?: string; code_postal?: string; email?: string }) =>
@@ -558,9 +634,14 @@ export const pharmaCreerProduit = (data: { name: string; category: string; unit?
 export const pharmaListerCommandes = (status?: string) =>
  requeteIdel<PharmaOrder[]>(`/api/pharma/orders${status ? `?status=${status}` : ""}`);
 export const pharmaCreerCommande = (data: {
- patient_id: string; pharmacy_id: string; scheduled_delivery_date?: string;
+ patient_id: string; pharmacy_id: string; scheduled_delivery_date?: string; treatment_duration_days?: number;
  items: { product_name: string; quantity: number; unit?: string }[];
 }) => requeteIdel<PharmaOrder>("/api/pharma/orders", { method: "POST", body: JSON.stringify(data) });
+// Lignes modifiables tant que la commande est en brouillon.
+export const pharmaModifierLignesCommande = (id: string, items: { product_name: string; quantity: number; unit?: string }[]) =>
+ requeteIdel<PharmaOrder>(`/api/pharma/orders/${id}/items`, { method: "PUT", body: JSON.stringify({ items }) });
+export const pharmaHistoriqueCommande = (id: string) =>
+ requeteIdel<HistoriqueCommande[]>(`/api/pharma/orders/${id}/historique`);
 export const pharmaChangerStatutCommande = (id: string, status: string, comment?: string) =>
  requeteIdel<PharmaOrder>(`/api/pharma/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status, comment }) });
 
@@ -577,6 +658,9 @@ export interface Retrocession {
  virement_reference?: string | null; banque?: string | null;
  lieu_signature?: string | null; date_signature?: string | null;
  pdf_path?: string | null;
+ // Numéro RETRO-AAAA-NNN ; une attestation est verrouillée dès que son
+ // PDF est généré (pièce comptable), et archivée plutôt que supprimée.
+ numero?: string | null; user_id?: string | null; verrouille?: boolean; archive?: boolean;
 }
 export const remplacantsLister = (actif?: boolean) =>
  requeteIdel<Remplacant[]>(`/api/remplacants${actif !== undefined ? `?actif=${actif}` : ""}`);
@@ -589,8 +673,13 @@ export const remplacantsModifier = (id: string, data: Partial<{
 export const remplacantsDesactiver = (id: string) =>
  requeteIdel<{ ok: boolean }>(`/api/remplacants/${id}`, { method: "DELETE" });
 
-export const retrocessionsLister = (remplacantId?: string) =>
- requeteIdel<Retrocession[]>(`/api/remplacements${remplacantId ? `?remplacant_id=${remplacantId}` : ""}`);
+export const retrocessionsLister = (remplacantId?: string, inclureArchives = false) => {
+ const qs = new URLSearchParams();
+ if (remplacantId) qs.set("remplacant_id", remplacantId);
+ if (inclureArchives) qs.set("inclure_archives", "true");
+ const q = qs.toString();
+ return requeteIdel<Retrocession[]>(`/api/remplacements${q ? `?${q}` : ""}`);
+};
 export const retrocessionsCreer = (data: {
  remplacant_id: string; titulaire_nom: string; titulaire_siret?: string; titulaire_adresse?: string;
  montant: number; date_debut: string; date_fin: string;
@@ -602,8 +691,9 @@ export const retrocessionsModifier = (id: string, data: Partial<{
  montant: number; date_debut: string; date_fin: string;
  virement_reference: string; banque: string; lieu_signature: string; date_signature: string;
 }>) => requeteIdel<Retrocession>(`/api/remplacements/${id}`, { method: "PUT", body: JSON.stringify(data) });
+// Archive l'attestation (elle n'est jamais effacée).
 export const retrocessionsSupprimer = (id: string) =>
- requeteIdel<{ ok: boolean }>(`/api/remplacements/${id}`, { method: "DELETE" });
+ requeteIdel<{ ok: boolean; resultat?: string }>(`/api/remplacements/${id}`, { method: "DELETE" });
 // Genere (ou regenere) le PDF puis retourne le fichier comme Blob --
 // meme raison que requeteIdelBlob : un <a href> classique ne peut pas
 // transporter le header Authorization.
@@ -629,12 +719,31 @@ export interface Prescription {
  acte_prescrit_texte?: string | null; duree_traitement?: string | null;
  statut_validite?: string | null; renewal_of_id?: string | null; renewed_by_id?: string | null;
  fichier_nom_original?: string | null; confiance_ocr?: number | null;
+ doctor_email?: string | null;
+ // Étape du Pipeline de cotation (reception, en_cours, traite), null si
+ // l'ordonnance n'y a pas été envoyée.
+ statut_pipeline?: string | null;
 }
+export interface PrescriptionModification {
+ reference?: string | null; medecin_prescripteur?: string | null; doctor_mssante?: string | null; doctor_email?: string | null;
+ date_prescription?: string | null; date_expiration?: string | null; acte_prescrit_texte?: string | null; duree_traitement?: string | null;
+}
+export interface DemandeRenouvellement {
+ destinataire_mssante?: string | null; destinataire_email?: string | null; objet: string; corps: string; statut_validite: string;
+}
+export const prescriptionsModifier = (id: string, data: PrescriptionModification) =>
+ requeteIdel<Prescription>(`/api/prescriptions/${id}`, { method: "PUT", body: JSON.stringify(data) });
+// Prépare le message au médecin (à envoyer depuis la messagerie sécurisée
+// MSSanté de l'IDEL : Mutatech n'envoie rien lui-même).
+export const prescriptionsDemandeRenouvellement = (id: string) =>
+ requeteIdel<DemandeRenouvellement>(`/api/prescriptions/${id}/demande-renouvellement`, { method: "POST" });
+export const prescriptionsEnvoyerAuPipeline = (id: string) =>
+ requeteIdel<Prescription>(`/api/prescriptions/${id}/envoyer-au-pipeline`, { method: "POST" });
 export const prescriptionsLister = (statutValidite?: string) =>
  requeteIdel<Prescription[]>(`/api/prescriptions${statutValidite ? `?statut_validite=${statutValidite}` : ""}`);
 export const prescriptionsCreer = (data: {
  patient_id: string; reference?: string; medecin_prescripteur?: string; doctor_mssante?: string;
- date_prescription?: string; date_expiration?: string;
+ date_prescription?: string; date_expiration?: string; acte_prescrit_texte?: string; duree_traitement?: string;
 }) => requeteIdel<Prescription>("/api/prescriptions", { method: "POST", body: JSON.stringify(data) });
 
 // Depot photo/PDF avec extraction OCR automatique (Claude Vision, meme
@@ -651,7 +760,7 @@ export const prescriptionsUploader = (patientId: string, file: File) => {
  }).then(async (res) => {
  if (!res.ok) {
  const corps = await res.text();
- throw new ApiError(corps || `Erreur ${res.status}`);
+ throw new ApiError(messageErreur(corps, res.status));
  }
  return res.json() as Promise<Prescription>;
  });
@@ -684,6 +793,10 @@ export const agendaModifierEvenement = (id: string, data: {
 }) => requeteIdel<CalendarEvent>(`/api/agenda/events/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const agendaSupprimerEvenement = (id: string) =>
  requeteIdel<{ ok: boolean }>(`/api/agenda/events/${id}`, { method: "DELETE" });
+
+// Lien d'abonnement ICS personnel (jeton secret, révocable).
+export const agendaLienIcs = () => requeteIdel<{ url: string }>("/api/agenda/ics-lien");
+export const agendaRegenererLienIcs = () => requeteIdel<{ url: string }>("/api/agenda/ics-lien/regenerer", { method: "POST" });
 
 // --- Insights discrets IDEL/PSDM (tournees, pharma, prescriptions, agenda) ---
 export const idelInsights = () => requeteIdel<Insight[]>("/api/insights");
@@ -772,6 +885,11 @@ export const planningSupprimerEvenement = (eventId: string, assigneAContexte: st
 // --- Journal d'activite IA (Nova, cote IDEL) ---
 export const idelGetJournal = (limite?: number) =>
  requeteIdel<EntreeJournal[]>(`/api/journal${limite ? `?limite=${limite}` : ""}`);
+
+// Journal des accès aux dossiers (qui a consulté ou modifié quoi), réservé
+// à la coordination du cabinet. Ne contient jamais le contenu des dossiers.
+export interface EntreeAcces { id: string; utilisateur: string; action: string; ressource: string; ressource_id?: string | null; cree_le: string; }
+export const idelJournalAcces = (limite = 200) => requeteIdel<EntreeAcces[]>(`/api/journal/acces?limite=${limite}`);
 
 // IDEL (memes formes, endpoints relayes cote backend IDEL)
 export const idelPlanningLoginPersonnelUrl = () => requeteIdel<{ url: string }>("/api/planning/login-personnel-url");

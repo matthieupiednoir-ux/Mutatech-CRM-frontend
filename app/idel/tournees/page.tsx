@@ -4,16 +4,24 @@ import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { ApiError } from "@/lib/api";
 import {
-  tourneesLister, tourneesCreer, tourneesAjouterVisite, tourneesModifierVisite,
-  tourneesAjouterItem, tourneesSupprimerItem,
-  Tournee, TourneeVisit,
+  tourneesLister, tourneesCreer, tourneesModifier, tourneesSupprimer, tourneesAjouterVisite, tourneesModifierVisite,
+  tourneesSupprimerVisite, tourneesCoterVisite, tourneesAjouterItem, tourneesSupprimerItem, cabinetMembres,
+  Tournee, TourneeVisit, MembreCabinet,
 } from "@/lib/api";
 import { idelGetPatients, pharmaListerProduits, idelInsights } from "@/lib/api";
 import { Product } from "@/lib/api";
 import { IdelPatient } from "@/lib/types";
 import InsightStrip from "@/components/InsightStrip";
 
+// Soins IDEL d'abord, puis prestations PSDM (I10).
 const PRESTATION_LABEL: Record<string, string> = {
+  pansement: "Pansement",
+  injection: "Injection",
+  prelevement: "Prélèvement",
+  toilette: "Toilette / soins d'hygiène",
+  surveillance: "Surveillance",
+  soins_infirmiers: "Soins infirmiers",
+  autre: "Autre soin",
   oxygenotherapie: "Oxygénothérapie",
   perfusion: "Perfusion",
   nutrition_enterale: "Nutrition entérale",
@@ -38,7 +46,8 @@ const STATUS_COULEUR: Record<string, string> = {
 };
 
 function aujourdHui(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function urlWaze(adresse: string): string {
@@ -61,11 +70,15 @@ export default function TourneesPage() {
 
   const [formOuvert, setFormOuvert] = useState(false);
   const [technicien, setTechnicien] = useState("");
+  const [technicienId, setTechnicienId] = useState("");
+  const [membres, setMembres] = useState<MembreCabinet[]>([]);
+  const [info, setInfo] = useState<string | null>(null);
+  const [edition, setEdition] = useState<{ id: string; date: string; technicien_id: string } | null>(null);
   const [creation, setCreation] = useState(false);
 
   const [visiteTourneeId, setVisiteTourneeId] = useState<string | null>(null);
   const [visiteForm, setVisiteForm] = useState({
-    patient_id: "", scheduled_time: "09:00", prestation: "oxygenotherapie", notes: "",
+    patient_id: "", scheduled_time: "09:00", prestation: "pansement", notes: "",
   });
   const [ajoutVisite, setAjoutVisite] = useState(false);
 
@@ -91,6 +104,7 @@ export default function TourneesPage() {
   useEffect(() => {
     idelGetPatients().then(setPatients).catch(() => {});
     pharmaListerProduits().then(setProduits).catch(() => setProduits([]));
+    cabinetMembres().then(setMembres).catch(() => setMembres([]));
   }, []);
 
   async function handleCreerTournee(e: React.FormEvent) {
@@ -98,8 +112,8 @@ export default function TourneesPage() {
     setCreation(true);
     setError(null);
     try {
-      await tourneesCreer({ date, technicien_name: technicien });
-      setTechnicien("");
+      await tourneesCreer(technicienId ? { date, technicien_id: technicienId } : { date, technicien_name: technicien });
+      setTechnicien(""); setTechnicienId("");
       setFormOuvert(false);
       charger();
     } catch (e) {
@@ -120,7 +134,7 @@ export default function TourneesPage() {
         prestation: visiteForm.prestation,
         notes: visiteForm.notes || undefined,
       });
-      setVisiteForm({ patient_id: "", scheduled_time: "09:00", prestation: "oxygenotherapie", notes: "" });
+      setVisiteForm({ patient_id: "", scheduled_time: "09:00", prestation: "pansement", notes: "" });
       setVisiteTourneeId(null);
       charger();
     } catch (e) {
@@ -137,6 +151,43 @@ export default function TourneesPage() {
       charger();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erreur lors du changement de statut.");
+    }
+  }
+
+  async function handleEnregistrerTournee(e: React.FormEvent) {
+    e.preventDefault();
+    if (!edition) return;
+    setError(null);
+    try {
+      await tourneesModifier(edition.id, { date: edition.date, ...(edition.technicien_id ? { technicien_id: edition.technicien_id } : {}) });
+      setEdition(null);
+      charger();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Modification impossible.");
+    }
+  }
+
+  async function handleSupprimerTournee(t: Tournee) {
+    if (!confirm(`Supprimer la tournée de ${t.technicien_name} ?`)) return;
+    setError(null);
+    try { await tourneesSupprimer(t.id); charger(); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Suppression impossible."); }
+  }
+
+  async function handleSupprimerVisite(tourneeId: string, v: TourneeVisit) {
+    if (!confirm(`Retirer la visite de ${v.patient_prenom} ${v.patient_nom} ?`)) return;
+    setError(null);
+    try { await tourneesSupprimerVisite(tourneeId, v.id); charger(); }
+    catch (e) { setError(e instanceof ApiError ? e.message : "Suppression impossible."); }
+  }
+
+  async function handleCoterVisite(tourneeId: string, v: TourneeVisit) {
+    setError(null); setInfo(null);
+    try {
+      await tourneesCoterVisite(tourneeId, v.id);
+      setInfo(`Visite de ${v.patient_prenom} ${v.patient_nom} envoyée dans le Pipeline, colonne « En cours », prête à coter.`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Envoi impossible.");
     }
   }
 
@@ -187,7 +238,7 @@ export default function TourneesPage() {
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Tournées</h1>
             <p className="mt-1 text-sm text-textMuted">
-              Organise les visites patients par technicien et par jour.
+              Organise les visites patients par soignante et par jour.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -210,6 +261,12 @@ export default function TourneesPage() {
         {error && (
           <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>
         )}
+        {info && (
+          <p className="mb-4 flex justify-between gap-3 rounded-lg border border-teal/40 bg-teal/10 px-4 py-3 text-sm text-teal">
+            <span>{info} <a href="/idel" className="underline">Ouvrir le Pipeline</a></span>
+            <button onClick={() => setInfo(null)}>✕</button>
+          </p>
+        )}
 
         {formOuvert && (
           <form
@@ -217,7 +274,14 @@ export default function TourneesPage() {
             className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-5"
           >
             <div className="flex-1">
-              <label className="mb-1 block text-sm font-medium text-textPrimary">Technicien / IDEC</label>
+              <label className="mb-1 block text-sm font-medium text-textPrimary">Soignante</label>
+              {membres.length > 0 ? (
+                <select required value={technicienId} onChange={(e) => setTechnicienId(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary">
+                  <option value="">— Choisir une soignante du cabinet —</option>
+                  {membres.map((m) => <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+                </select>
+              ) : (
               <input
                 required
                 value={technicien}
@@ -225,6 +289,7 @@ export default function TourneesPage() {
                 placeholder="ex: Julie Martin"
                 className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2 text-sm text-textPrimary placeholder:text-textMuted/50"
               />
+              )}
             </div>
             <button
               type="submit"
@@ -248,7 +313,7 @@ export default function TourneesPage() {
           <p className="text-sm text-textMuted">Chargement...</p>
         ) : tournees.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line bg-surface/50 p-6 text-center text-sm text-textMuted">
-            Aucune tournée pour le {new Date(date).toLocaleDateString("fr-FR")}.
+            Aucune tournée pour le {new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR")}.
           </p>
         ) : (
           <div className="space-y-4">
@@ -260,7 +325,11 @@ export default function TourneesPage() {
                 <div key={t.id} className="rounded-xl border border-line bg-surface p-5">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-display text-lg text-textPrimary">{t.technicien_name}</h2>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setEdition(edition?.id === t.id ? null : { id: t.id, date: t.date, technicien_id: t.technicien_id ?? "" })}
+                        className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">✎ Modifier</button>
+                      <button onClick={() => handleSupprimerTournee(t)}
+                        className="rounded-lg border border-amber/40 px-3 py-1.5 text-xs text-amber hover:bg-amber/10">Supprimer</button>
                       {adressesOrdonnees.length > 1 && (
                         <a
                           href={urlMapsItineraire(adressesOrdonnees)}
@@ -280,6 +349,22 @@ export default function TourneesPage() {
                       </button>
                     </div>
                   </div>
+
+                  {edition?.id === t.id && (
+                    <form onSubmit={handleEnregistrerTournee} className="mb-3 flex flex-wrap items-end gap-2 rounded-lg bg-surfaceAlt p-3">
+                      <input type="date" required value={edition.date} onChange={(e) => setEdition({ ...edition, date: e.target.value })}
+                        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary" />
+                      {membres.length > 0 && (
+                        <select value={edition.technicien_id} onChange={(e) => setEdition({ ...edition, technicien_id: e.target.value })}
+                          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-textPrimary">
+                          <option value="">— Soignante inchangée —</option>
+                          {membres.map((m) => <option key={m.id} value={m.id}>{m.prenom} {m.nom}</option>)}
+                        </select>
+                      )}
+                      <button type="submit" className="rounded-lg px-3 py-2 text-xs font-medium text-white" style={{ backgroundColor: "var(--accent)" }}>Enregistrer</button>
+                      <button type="button" onClick={() => setEdition(null)} className="text-xs text-textMuted">Annuler</button>
+                    </form>
+                  )}
 
                   {t.visits.length === 0 ? (
                     <p className="text-xs text-textMuted">Aucune visite planifiée.</p>
@@ -307,6 +392,12 @@ export default function TourneesPage() {
                                 <span className="text-[10px] text-textMuted/60">— pas d'adresse renseignée —</span>
                               )}
                             </div>
+                            <div className="flex items-center gap-2">
+                            {v.status === "completed" && (
+                              <button onClick={() => handleCoterVisite(t.id, v)}
+                                className="rounded-full border border-teal/40 bg-teal/10 px-2.5 py-1 text-[11px] font-medium text-teal">€ Coter</button>
+                            )}
+                            <button onClick={() => handleSupprimerVisite(t.id, v)} className="text-xs text-textMuted hover:text-amber" title="Retirer la visite">✕</button>
                             <select
                               value={v.status}
                               onChange={(e) => handleChangerStatutVisite(t.id, v, e.target.value)}
@@ -320,6 +411,7 @@ export default function TourneesPage() {
                                 <option key={val} value={val}>{label}</option>
                               ))}
                             </select>
+                            </div>
                           </div>
 
                           {/* Produits a livrer / soins effectues */}

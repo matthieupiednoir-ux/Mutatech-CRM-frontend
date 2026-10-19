@@ -40,6 +40,7 @@ function telechargerBlob(blob: Blob, nomFichier: string) {
 
 export default function RemplacementsPage() {
   const [onglet, setOnglet] = useState<"retrocessions" | "remplacants">("retrocessions");
+  const [voirArchives, setVoirArchives] = useState(false);
   const [remplacants, setRemplacants] = useState<Remplacant[]>([]);
   const [retrocessions, setRetrocessions] = useState<Retrocession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,14 +63,15 @@ export default function RemplacementsPage() {
 
   function charger() {
     setLoading(true);
-    Promise.all([remplacantsLister(), retrocessionsLister()])
+    Promise.all([remplacantsLister(), retrocessionsLister(undefined, voirArchives)])
       .then(([r, a]) => { setRemplacants(r); setRetrocessions(a); })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Erreur de chargement"))
       .finally(() => setLoading(false));
     monOrganisation().then(setMoi).catch(() => {});
   }
 
-  useEffect(() => { charger(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { charger(); }, [voirArchives]);
 
   function ouvrirFormRetrocession() {
     setRetrocessionForm({
@@ -158,13 +160,13 @@ export default function RemplacementsPage() {
   }
 
   async function handleSupprimerRetrocession(r: Retrocession) {
-    if (!confirm("Supprimer cette attestation de rétrocession ?")) return;
+    if (!confirm("Archiver cette attestation ? Elle disparaît de la liste mais reste conservée (pièce comptable).")) return;
     setError(null);
     try {
       await retrocessionsSupprimer(r.id);
       charger();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erreur lors de la suppression.");
+      setError(e instanceof ApiError ? e.message : "Archivage impossible.");
     }
   }
 
@@ -219,6 +221,11 @@ export default function RemplacementsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {onglet === "retrocessions" && (
+              <label className="flex items-center gap-1.5 text-xs text-textMuted">
+                <input type="checkbox" checked={voirArchives} onChange={(e) => setVoirArchives(e.target.checked)} /> Archives
+              </label>
+            )}
             <button
               onClick={() => setOnglet(onglet === "retrocessions" ? "remplacants" : "retrocessions")}
               className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
@@ -381,7 +388,10 @@ export default function RemplacementsPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-sm text-textPrimary">
+                          {r.numero && <span className="mr-2 font-mono text-[11px] text-textMuted">{r.numero}</span>}
                           {r.remplacant.prenom} {r.remplacant.nom} — {formatMontant(r.montant)}
+                          {r.verrouille && <span className="ml-2 rounded bg-surfaceAlt px-1.5 py-0.5 text-[10px] text-textMuted" title="PDF généré : l'attestation ne peut plus être modifiée">🔒 Verrouillée</span>}
+                          {r.archive && <span className="ml-2 rounded bg-surfaceAlt px-1.5 py-0.5 text-[10px] text-textMuted">Archivée</span>}
                         </p>
                         <p className="text-xs text-textMuted">
                           Du {formatDateFr(r.date_debut)} au {formatDateFr(r.date_fin)} · titulaire : {r.titulaire_nom}
@@ -406,12 +416,14 @@ export default function RemplacementsPage() {
                             {pdfEnCours === r.id ? "..." : "📄 Générer le PDF"}
                           </button>
                         )}
-                        <button
-                          onClick={() => handleSupprimerRetrocession(r)}
-                          className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-amber"
-                        >
-                          ✕
-                        </button>
+                        {!r.archive && (
+                          <button
+                            onClick={() => handleSupprimerRetrocession(r)}
+                            className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-amber"
+                          >
+                            Archiver
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
