@@ -118,8 +118,10 @@ function LoginForm() {
         {/* Logo */}
         <div className="text-center">
           <a href="https://mutatech.fr" className="inline-flex items-center gap-2 font-display text-2xl font-bold text-textPrimary">
-            <img src="/mutatech-logo.png" alt="Mutatech" className="h-8 w-8 object-contain" />
-            Muta<span className="text-violet">tech</span>
+            <img src="/mutatech-logo.svg" alt="" aria-hidden="true" width={24} height={32} className="h-8 w-6" />
+            <span>
+              Muta<span className="text-violet">tech</span>
+            </span>
           </a>
           <p className="mt-2 text-sm text-textMuted">Connexion à votre espace</p>
         </div>
