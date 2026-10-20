@@ -21,7 +21,7 @@ async function chargerConfigEtRediriger(produit?: string) {
   try { await getTenantConfig(); } catch {}
   const p = produit ?? "";
   if (p === "idel") {
-    window.location.href = "/idel";
+    window.location.href = "/idel/accueil";
   } else if (p === "crm+idel" || p === "crm_idel") {
     window.location.href = "/choix-produit";
   } else {

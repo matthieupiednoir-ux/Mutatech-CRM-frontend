@@ -837,6 +837,34 @@ export interface IdelResume {
 }
 export const idelDashboardResume = () => requeteIdel<IdelResume>("/api/dashboard-resume");
 
+// --- Page d'accueil IDEL (tableau de bord) ---
+// Patients en initiales uniquement (minimisation HDS/RGPD), jamais mis
+// en cache : la reponse porte Cache-Control: no-store.
+export type IdelPerimetreAccueil = "moi" | "cabinet";
+export interface IdelAccueil {
+ date: string;
+ prenom: string;
+ perimetre: IdelPerimetreAccueil;
+ coordination: boolean;
+ modules: string[];
+ patients: number;
+ journee: {
+ nb_visites: number; nb_terminees: number; nb_restantes: number;
+ visites: { heure: string; patient: string; prestation: string; statut: string }[];
+ } | null;
+ agenda: { heure: string | null; titre: string; type: string; patient: string | null }[] | null;
+ pipeline: { a_saisir: number; a_coter: number; a_transmettre: number; rejetees: number };
+ facturation: {
+ montant_a_transmettre: number; montant_en_attente_paiement: number; montant_rejete: number;
+ facture_mois: number; encaisse_mois: number;
+ historique: { mois: string; montant: number }[];
+ };
+ ordonnances: { expirent_7j: number; a_renouveler: number } | null;
+ commandes_en_attente: number | null;
+}
+export const idelAccueil = (perimetre?: IdelPerimetreAccueil) =>
+ requeteIdel<IdelAccueil>(`/api/accueil${perimetre ? `?perimetre=${perimetre}` : ""}`, { cache: "no-store" });
+
 // --- Planning partage (Google Calendar personnel par utilisateur) ---
 export interface MembrePlanning {
  contexte: string;

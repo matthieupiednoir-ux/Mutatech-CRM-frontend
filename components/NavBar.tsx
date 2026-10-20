@@ -34,6 +34,7 @@ const ONGLET_EQUIPE_CLIENT = { id: "equipe", href: "/equipe", label: "Mon équip
 const ONGLET_FORMATION = { id: "formation", href: "/formation", label: "🎓 Formation" };
 
 const ONGLETS_IDEL_BASE = [
+  { id: "accueil", href: "/idel/accueil", label: "Accueil" },
   { id: "pipeline", href: "/idel", label: "Pipeline" },
   { id: "patients", href: "/idel/patients", label: "Patients" },
   { id: "comptabilite", href: "/idel/comptabilite", label: "Trésorerie" },
@@ -115,7 +116,7 @@ function NavBarInterieur() {
   }, [pathname]);
 
   const ongletsIdelBaseFiltres = ONGLETS_IDEL_BASE.filter(
-    (o) => o.id === "pipeline" || o.id === "nova" || !ongletsMasques.has(o.id)
+    (o) => o.id === "accueil" || o.id === "pipeline" || o.id === "nova" || !ongletsMasques.has(o.id)
   );
   const ongletsIdel = [
     ...ongletsIdelBaseFiltres,
@@ -228,7 +229,7 @@ function NavBarInterieur() {
             {/* Switcher CRM ↔ IDEL */}
             {produit === "crm+idel" && !estAdmin && (
               <Link
-                href={estIdel ? "/dashboard" : "/idel"}
+                href={estIdel ? "/dashboard" : "/idel/accueil"}
                 className="rounded-lg border px-3 py-1.5 text-xs font-medium text-textMuted transition hover:text-textPrimary"
                 style={{ borderColor: "var(--accent-soft, #2A2A4A)" }}
               >
