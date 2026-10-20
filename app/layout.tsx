@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -23,6 +23,19 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Mutatech CRM",
   description: "Gestion clients, devis et facturation Mutatech.",
+  // Installable sur l'ecran d'accueil du telephone (IDEL en tournee).
+  // Pas de service worker : rien n'est mis en cache sur l'appareil, les
+  // donnees de patients restent uniquement cote serveur.
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: { capable: true, title: "IDEL", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0F0F1E",
 };
 
 export default function RootLayout({

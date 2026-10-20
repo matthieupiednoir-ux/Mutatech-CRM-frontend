@@ -1,0 +1,18 @@
+{
+  "id": "/idel",
+  "name": "Mutatech IDEL",
+  "short_name": "IDEL",
+  "description": "Patients, tournées, ordonnances et facturation de l'IDEL, depuis l'écran d'accueil.",
+  "lang": "fr",
+  "start_url": "/idel",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F0F1E",
+  "theme_color": "#0F0F1E",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
