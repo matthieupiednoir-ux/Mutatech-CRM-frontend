@@ -44,7 +44,7 @@ export default function ChoixProduitPage() {
 
           {/* Plateforme IDEL */}
           <button
-            onClick={() => router.push("/idel")}
+            onClick={() => router.push("/idel/accueil")}
             className="group flex flex-col items-start rounded-2xl border border-line bg-surface p-7 text-left transition hover:border-teal/50 hover:shadow-[0_12px_32px_-8px_rgba(0,212,170,0.20)]"
           >
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-teal/10 text-2xl">
@@ -54,7 +54,7 @@ export default function ChoixProduitPage() {
               Plateforme IDEL
             </h2>
             <p className="text-sm text-textMuted leading-relaxed">
-              Pipeline ordonnances, cotation NGAP assistée, préparation des transmissions CPAM.
+              Tableau de bord du jour, pipeline ordonnances, cotation NGAP, préparation des transmissions CPAM.
             </p>
             <span className="mt-5 text-sm font-medium text-teal group-hover:underline">
               Accéder à l'espace IDEL →
