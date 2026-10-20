@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { loginCrm, loginOrg, loginGoogle, getTenantConfig, ApiError } from "@/lib/api";
+import { restaurerSession, getProduit } from "@/lib/auth";
 
 declare global {
   interface Window {
@@ -17,10 +18,20 @@ declare global {
   }
 }
 
-async function chargerConfigEtRediriger(produit?: string) {
+// Page demandee avant la redirection vers /login (?next=...). Chemin
+// interne uniquement : pas de redirection ouverte vers un autre site.
+function cheminSuivant(): string | null {
+  const next = new URLSearchParams(window.location.search).get("next") || "";
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) return null;
+  return next;
+}
+
+async function chargerConfigEtRediriger(produit?: string, suivant?: string | null) {
   try { await getTenantConfig(); } catch {}
   const p = produit ?? "";
-  if (p === "idel") {
+  if (suivant) {
+    window.location.href = suivant;
+  } else if (p === "idel") {
     window.location.href = "/idel/accueil";
   } else if (p === "crm+idel" || p === "crm_idel") {
     window.location.href = "/choix-produit";
@@ -38,6 +49,14 @@ function LoginForm() {
   const [googlePret, setGooglePret] = useState(false);
 
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+  // Jeton encore valide sur cet appareil : pas besoin de se reconnecter.
+  useEffect(() => {
+    if (restaurerSession()) {
+      setChargement(true);
+      chargerConfigEtRediriger(getProduit(), cheminSuivant());
+    }
+  }, []);
 
   useEffect(() => {
     if (!googleClientId) return;

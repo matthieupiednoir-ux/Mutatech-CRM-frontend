@@ -8,9 +8,37 @@ const USER_KEY = "mutatech_crm_user";
 const CONFIG_KEY = "mutatech_tenant_config";
 const COOKIE_PRESENCE = "mutatech_crm_has_token";
 
-function poserCookieMarqueur(): void {
+// Date d'expiration (secondes epoch) lue dans le JWT, sans le verifier :
+// la signature reste controlee par les backends a chaque appel. Sert
+// seulement a caler la duree du cookie marqueur et a ne pas garder un
+// jeton perime.
+function expirationJeton(token: string): number | null {
+  try {
+    const partie = token.split(".")[1];
+    if (!partie) return null;
+    const json = atob(partie.replace(/-/g, "+").replace(/_/g, "/"));
+    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
+    return typeof exp === "number" ? exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function jetonExpire(token: string): boolean {
+  const exp = expirationJeton(token);
+  return exp !== null && exp * 1000 <= Date.now();
+}
+
+// Le marqueur doit vivre aussi longtemps que le jeton : sans Max-Age c'etait
+// un cookie de session, efface a la fermeture du navigateur ou de l'appli
+// installee, et le middleware renvoyait alors vers /login alors que le
+// jeton du localStorage etait encore valide.
+function poserCookieMarqueur(token: string): void {
   if (typeof document === "undefined") return;
-  document.cookie = `${COOKIE_PRESENCE}=1; path=/; SameSite=Strict`;
+  const exp = expirationJeton(token);
+  const maxAge = exp !== null ? Math.max(0, Math.floor(exp - Date.now() / 1000)) : 60 * 60 * 24;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${COOKIE_PRESENCE}=1; path=/; Max-Age=${maxAge}; SameSite=Strict${secure}`;
 }
 
 function supprimerCookieMarqueur(): void {
@@ -41,12 +69,17 @@ export function sauvegarderAuth(auth: AuthResponse): void {
       email: auth.email,
     } satisfies UserSession)
   );
-  poserCookieMarqueur();
+  poserCookieMarqueur(auth.access_token);
 }
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token && jetonExpire(token)) {
+    deconnecter();
+    return null;
+  }
+  return token;
 }
 
 export function getUser(): UserSession | null {
@@ -62,6 +95,16 @@ export function getUser(): UserSession | null {
 
 export function estConnecte(): boolean {
   return !!getToken();
+}
+
+// Session encore valide mais cookie marqueur absent (session ouverte avant
+// ce correctif, cookie efface par le navigateur) : on le repose pour que
+// le middleware laisse passer, au lieu de redemander la connexion.
+export function restaurerSession(): boolean {
+  const token = getToken();
+  if (!token) return false;
+  poserCookieMarqueur(token);
+  return true;
 }
 
 export function getProduit(): string {
