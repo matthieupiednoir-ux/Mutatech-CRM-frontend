@@ -16,6 +16,7 @@
  *   /login         → page d'authentification
  *   /signer/*      → page de signature publique des devis (lien client)
  *   /api/*         → les appels API gèrent leur propre auth (JWT Bearer)
+ *   assets (.png, .svg, .webmanifest) → icônes et manifeste d'installation
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -44,5 +45,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$|.*\\.webmanifest$).*)"],
 };
