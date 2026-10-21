@@ -18,8 +18,8 @@ const VALIDITE_LABEL: Record<string, string> = {
   renouvelee: "Renouvelée", expiree: "Expirée",
 };
 const VALIDITE_COULEUR: Record<string, string> = {
-  active: "#00D4AA", a_renouveler: "#F5A623", renouvellement_demande: "#a89eff",
-  renouvelee: "#77778A", expiree: "#EF4444",
+  active: "#3DBE9C", a_renouveler: "#E5A33B", renouvellement_demande: "#9FA3F7",
+  renouvelee: "#8B90A0", expiree: "#E5605A",
 };
 
 function dateFr(v?: string | null): string {

@@ -426,7 +426,7 @@ export default function IdelPage() {
         {/* Onglets */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-            {([["pipeline", "📋 Pipeline"], ["tournee", "🗺 Tournée du jour"]] as const).map(([v, l]) => (
+            {([["pipeline", "Pipeline"], ["tournee", "Tournée du jour"]] as const).map(([v, l]) => (
               <button key={v} onClick={() => setVue(v)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${vue === v ? "border-violet bg-violet/10 text-violet" : "border-line text-textMuted hover:text-textPrimary"}`}>
                 {l}
@@ -550,7 +550,7 @@ export default function IdelPage() {
                       <span className="text-lg font-bold text-violet/30 w-6 shrink-0">{idx + 1}</span>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm text-textPrimary">{pt ? `${pt.nom} ${pt.prenom}` : "—"}</p>
-                        {pt?.adresse && <p className="text-[11px] text-textMuted truncate">📍 {pt.adresse}</p>}
+                        {pt?.adresse && <p className="text-[11px] text-textMuted truncate">{pt.adresse}</p>}
                         {item.note && <p className="text-[11px] italic text-textMuted">{item.note}</p>}
                       </div>
                       <p className="text-sm font-medium text-textPrimary shrink-0">{item.heure}</p>
@@ -573,7 +573,7 @@ export default function IdelPage() {
                 <div className="flex items-center gap-2">
                   {panneau.a_fichier && (
                     <button onClick={() => handleVoirScan(panneau.id)}
-                      className="rounded-lg border border-line px-2 py-1 text-xs text-textMuted hover:text-textPrimary">📄 Voir le scan</button>
+                      className="rounded-lg border border-line px-2 py-1 text-xs text-textMuted hover:text-textPrimary">Voir le scan</button>
                   )}
                   <button onClick={() => setPanneau(null)} className="text-textMuted hover:text-textPrimary text-xl">✕</button>
                 </div>

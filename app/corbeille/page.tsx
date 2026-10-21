@@ -69,7 +69,7 @@ export default function CorbeillePage() {
       <NavBar />
       <main className="mx-auto max-w-3xl px-4 py-8">
         <div className="mb-6">
-          <h1 className="font-display text-2xl text-textPrimary">🗑 Corbeille</h1>
+          <h1 className="font-display text-2xl text-textPrimary">Corbeille</h1>
           <p className="mt-1 text-sm text-textMuted">
             Clients, devis et factures supprimés — restaurables pendant 30 jours, puis effacés définitivement et automatiquement.
           </p>

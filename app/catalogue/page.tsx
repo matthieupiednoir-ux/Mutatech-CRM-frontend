@@ -146,7 +146,7 @@ export default function CataloguePage() {
               onClick={() => setImportOuvert(true)}
               className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
             >
-              📥 Importer CSV/Excel
+              Importer CSV/Excel
             </button>
             <button
               onClick={() => { resetForm(); setFormOuvert(true); }}

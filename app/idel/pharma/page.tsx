@@ -20,8 +20,8 @@ const STATUT_LABEL: Record<string, string> = {
   prete: "Prête", livree: "Livrée", annulee: "Annulée",
 };
 const STATUT_COULEUR: Record<string, string> = {
-  brouillon: "#77778A", envoyee: "#F5A623", en_preparation: "#F5A623",
-  prete: "#a89eff", livree: "#00D4AA", annulee: "#EF4444",
+  brouillon: "#8B90A0", envoyee: "#E5A33B", en_preparation: "#E5A33B",
+  prete: "#9FA3F7", livree: "#3DBE9C", annulee: "#E5605A",
 };
 const ORDRE_STATUTS = ["brouillon", "envoyee", "en_preparation", "prete", "livree", "annulee"];
 
@@ -205,7 +205,7 @@ export default function PharmaPage() {
                 onClick={() => setImportOuvert(true)}
                 className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
               >
-                📥 Importer CSV/Excel
+                Importer CSV/Excel
               </button>
             )}
             <button

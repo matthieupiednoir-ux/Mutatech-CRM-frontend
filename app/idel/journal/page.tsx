@@ -11,7 +11,7 @@ const ICONE_ACTION: Record<string, string> = {
 };
 const COULEUR_ACTION: Record<string, string> = {
   creation: "text-teal border-teal/40 bg-teal/10",
-  modification: "text-[#FF2E9A] border-[#FF2E9A]/40 bg-[#FF2E9A]/10",
+  modification: "text-violet border-violet/40 bg-violet/10",
   suppression: "text-amber border-amber/40 bg-amber/10",
 };
 
@@ -95,7 +95,7 @@ export default function JournalIdelPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-textPrimary">
-                    <span className="font-medium" style={{ color: "#FF2E9A" }}>{e.auteur}</span> — {e.description}
+                    <span className="font-medium" style={{ color: "#E0457B" }}>{e.auteur}</span> — {e.description}
                   </p>
                   <p className="mt-0.5 text-xs text-textMuted">
                     {new Date(e.cree_le).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}

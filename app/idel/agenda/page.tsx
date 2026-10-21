@@ -13,8 +13,8 @@ const TYPE_LABEL: Record<string, string> = {
   livraison: "Livraison", renouvellement_ordo: "Renouvellement ordo", autre: "Autre",
 };
 const TYPE_COULEUR: Record<string, string> = {
-  visite_patient: "#00D4AA", rdv_interne: "#6C63FF", rdv_externe: "#a89eff",
-  livraison: "#F5A623", renouvellement_ordo: "#EF4444", autre: "#77778A",
+  visite_patient: "#3DBE9C", rdv_interne: "#6E74F0", rdv_externe: "#9FA3F7",
+  livraison: "#E5A33B", renouvellement_ordo: "#E5605A", autre: "#8B90A0",
 };
 const STATUT_LABEL: Record<string, string> = {
   planifie: "Planifié", confirme: "Confirmé", termine: "Terminé", annule: "Annulé",
@@ -322,7 +322,7 @@ export default function AgendaPage() {
                         className="col-start-1 z-10 overflow-hidden rounded-md px-1.5 py-1 text-left text-[11px] leading-tight text-white shadow-sm"
                         style={{
                           gridRow: `${pos.rowStart} / span ${pos.rowSpan}`,
-                          backgroundColor: TYPE_COULEUR[ev.event_type] || "#77778A",
+                          backgroundColor: TYPE_COULEUR[ev.event_type] || "#8B90A0",
                           opacity: ev.status === "annule" ? 0.4 : 1,
                         }}
                       >

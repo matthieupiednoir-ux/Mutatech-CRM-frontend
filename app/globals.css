@@ -5,59 +5,119 @@
 /* ── Palette par defaut (theme "defaut") ────────────────────────────────
    Sert de valeur de repli tant qu'aucun data-theme n'est pose sur <body>
    (ex: avant que /parametres ait charge la config), et EST le theme
-   "Defaut" lui-meme -- exactement les couleurs d'origine du produit. */
+   "Defaut" lui-meme. Refonte d'octobre 2026 : graphite neutre plutot que
+   bleu nuit, accents desatures, plus de halos lumineux -- un rendu plus
+   sobre et plus professionnel. Les noms de variables ne changent pas. */
 :root {
-  --color-ink: #0F0F1E;
-  --color-surface: #16162C;
-  --color-surface-alt: #1E1E38;
-  --color-line: #2A2A4A;
-  --color-violet: #6C63FF;
-  --color-teal: #00D4AA;
-  --color-amber: #F5A623;
-  --color-text-primary: #F4F4FA;
-  --color-text-muted: #9999B5;
+  --color-ink: #0B0C10;
+  --color-surface: #13141A;
+  --color-surface-alt: #1A1C23;
+  --color-line: #262932;
+  --color-violet: #6E74F0;
+  --color-teal: #3DBE9C;
+  --color-amber: #E5A33B;
+  --color-text-primary: #ECEDF1;
+  --color-text-muted: #8B90A0;
 }
 
 html {
   color-scheme: dark;
+  min-height: 100%;
+  background-color: var(--color-ink);
 }
 
 body {
+  min-height: 100vh;
   background-color: var(--color-ink);
+  background-attachment: fixed;
   color: var(--color-text-primary);
-  transition: background-image 0.7s ease, background-color 0.4s ease, color 0.4s ease;
+  font-feature-settings: "cv11", "ss01";
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Mode CRM (Pixel) -- aura violette dominante par defaut, mais chaque
-   theme (data-theme) redefinit --accent lui-meme juste en dessous, donc
-   celui qui s'applique reellement depend du theme choisi. */
+/* Mode CRM (Pixel) -- accent indigo. Chaque theme (data-theme) redefinit
+   --accent juste en dessous, donc celui qui s'applique reellement depend
+   du theme choisi. Fond quasi uni : un seul voile tres leger en haut. */
 body[data-mode="crm"] {
   --accent: var(--color-violet);
   --accent-soft: color-mix(in srgb, var(--color-violet) 12%, transparent);
-  background-image:
-    radial-gradient(circle at 12% -8%, color-mix(in srgb, var(--color-violet) 24%, transparent), transparent 42%),
-    radial-gradient(circle at 90% 105%, color-mix(in srgb, var(--color-teal) 5%, transparent), transparent 45%);
+  background-image: radial-gradient(ellipse 80% 40% at 50% -10%, color-mix(in srgb, var(--color-violet) 7%, transparent), transparent 70%);
 }
 
-/* Mode IDEL / PSDM (Nova) -- aura rose hi-tech dominante -- jamais
-   affectee par les 5 themes CRM ci-dessous, qui ne s'appliquent que
-   lorsque data-mode="crm". */
+/* Mode IDEL / PSDM (Nova) -- accent framboise, plus pose que l'ancien
+   rose neon. --color-violet suit l'accent pour que les boutons
+   principaux (bg-violet) restent dans l'identite IDEL. Jamais affecte par
+   les themes CRM ci-dessous, qui ne s'appliquent que si data-mode="crm". */
 body[data-mode="idel"] {
-  --accent: #FF2E9A;
-  --accent-soft: rgba(255, 46, 154, 0.12);
-  background-image:
-    radial-gradient(circle at 88% -8%, rgba(255, 46, 154, 0.28), transparent 42%),
-    radial-gradient(circle at 10% 105%, rgba(255, 46, 154, 0.10), transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(108, 99, 255, 0.05), transparent 60%);
+  --color-violet: #E0457B;
+  --accent: #E0457B;
+  --accent-soft: rgba(224, 69, 123, 0.12);
+  background-image: radial-gradient(ellipse 80% 40% at 50% -10%, rgba(224, 69, 123, 0.07), transparent 70%);
 }
 
 /* Mode Admin -- neutre, ambre (ni Pixel ni Nova, la main de Mutatech) */
 body[data-mode="admin"] {
-  --accent: #F5A623;
-  --accent-soft: rgba(245, 166, 35, 0.10);
-  background-image:
-    radial-gradient(circle at 15% 0%, rgba(108, 99, 255, 0.10), transparent 40%),
-    radial-gradient(circle at 85% 100%, rgba(0, 212, 170, 0.10), transparent 45%);
+  --accent: #E5A33B;
+  --accent-soft: rgba(229, 163, 59, 0.10);
+  background-image: radial-gradient(ellipse 80% 40% at 50% -10%, rgba(229, 163, 59, 0.05), transparent 70%);
+}
+
+/* ── Socle visuel commun (tous modes, tous themes) ──────────────────── */
+@layer base {
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+  }
+  h1 {
+    font-weight: 600;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent, var(--color-violet)) 30%, transparent);
+  }
+  input, select, textarea {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input:focus, select:focus, textarea:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, var(--color-violet)) 18%, transparent);
+  }
+  button, a {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 0.15s;
+  }
+  table {
+    border-collapse: collapse;
+  }
+  th {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  /* Chiffres alignes (montants, compteurs, heures) */
+  .font-display, td, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+}
+
+/* Cartes : toutes les pages utilisent le meme trio de classes
+   (rounded-xl + border-line + bg-surface) -- une ombre discrete les
+   detache du fond sans toucher a chaque page. */
+.rounded-xl.bg-surface,
+.rounded-2xl.bg-surface {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+}
+
+/* Barre de navigation : onglets defilants sans barre de defilement visible */
+.nav-onglets {
+  scrollbar-width: none;
+}
+.nav-onglets::-webkit-scrollbar {
+  display: none;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -353,7 +413,7 @@ body[data-mode="crm"][data-theme="saison"][data-saison="hiver"] {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent, #00d4aa);
+  outline: 2px solid var(--accent, var(--color-violet));
   outline-offset: 2px;
 }
 
@@ -363,72 +423,6 @@ body[data-mode="crm"][data-theme="saison"][data-saison="hiver"] {
   *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
-  }
-}
-
-/* --- Anneau 3D de KPI (dashboard) --- */
-.kpi3d-scene {
-  position: relative;
-  height: 260px;
-  margin: 0 auto 2rem;
-  max-width: 620px;
-  perspective: 1100px;
-}
-
-.kpi3d-ring {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
-  animation-name: kpi3d-spin;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-.kpi3d-scene:hover .kpi3d-ring,
-.kpi3d-scene:focus-within .kpi3d-ring {
-  animation-play-state: paused;
-}
-
-.kpi3d-orb {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 150px;
-  height: 96px;
-  margin: -48px 0 0 -75px;
-  border-radius: 14px;
-  border: 1px solid;
-  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.kpi3d-label {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.kpi3d-valeur {
-  font-family: var(--font-space-grotesk), sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-@keyframes kpi3d-spin {
-  from { transform: rotateY(0deg); }
-  to { transform: rotateY(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .kpi3d-ring {
-    animation: none;
   }
 }
 

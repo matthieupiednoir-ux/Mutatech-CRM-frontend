@@ -20,7 +20,7 @@ const ONGLETS_CRM = [
   { id: "catalogue", href: "/catalogue", label: "Catalogue" },
   { id: "planning", href: "/planning", label: "Planning" },
   { id: "journal", href: "/journal", label: "Journal" },
-  { id: "corbeille", href: "/corbeille", label: "🗑 Corbeille" },
+  { id: "corbeille", href: "/corbeille", label: "Corbeille" },
   { id: "agent", href: "/agent", label: "Agent IA" },
 ];
 // Onglet a part (pas dans ONGLETS_CRM) : visible selon permission, mais
@@ -31,7 +31,7 @@ const ONGLETS_CRM = [
 const ONGLET_EQUIPE_CLIENT = { id: "equipe", href: "/equipe", label: "Mon équipe" };
 // Formation IA (abonnement) : toujours visible -- la page elle-meme
 // explique comment obtenir l'acces, le backend filtre le contenu.
-const ONGLET_FORMATION = { id: "formation", href: "/formation", label: "🎓 Formation" };
+const ONGLET_FORMATION = { id: "formation", href: "/formation", label: "Formation" };
 
 const ONGLETS_IDEL_BASE = [
   { id: "accueil", href: "/idel/accueil", label: "Accueil" },
@@ -42,7 +42,7 @@ const ONGLETS_IDEL_BASE = [
   { id: "planning", href: "/idel/planning", label: "Planning" },
   { id: "journal", href: "/idel/journal", label: "Journal" },
   { id: "remplacements", href: "/idel/remplacements", label: "Remplacements" },
-  { id: "nova", href: "/idel/nova", label: "✨ Nova" },
+  { id: "nova", href: "/idel/nova", label: "Nova" },
 ];
 const ONGLETS_MODULES: Record<string, { href: string; label: string }> = {
   tournees: { href: "/idel/tournees", label: "Tournées" },
@@ -56,8 +56,8 @@ const ONGLETS_ADMIN = [
   { href: "/admin", label: "Clients SaaS" },
   { href: "/admin/organisations", label: "Organisations & Modules" },
   { href: "/admin/equipe", label: "Équipe Mutatech" },
-  { href: "/admin/outils", label: "🗂 Outils" },
-  { href: "/formation", label: "🎓 Formation" },
+  { href: "/admin/outils", label: "Outils" },
+  { href: "/formation", label: "Formation" },
 ];
 
 export default function NavBar() {
@@ -135,14 +135,15 @@ function NavBarInterieur() {
         ...ongletsCrmFiltres,
         ...(peutGererEquipe ? [ONGLET_EQUIPE_CLIENT] : []),
         ONGLET_FORMATION,
-        { id: "parametres", href: "/parametres", label: "⚙" },
+        { id: "parametres", href: "/parametres", label: "Paramètres" },
       ];
-  const labelProduit = estAdmin
-    ? "Mutatech / Admin"
-    : estIdel
-    ? "Mutatech / IDEL · PSDM · Médical"
-    : "Mutatech / CRM";
-  const mascotteEmoji = estAdmin ? "⚙" : estIdel ? "🩺" : "🧭";
+  const labelProduit = estAdmin ? "Admin" : estIdel ? "IDEL · PSDM" : "CRM";
+  const initiales = (user?.nom || user?.email || "?")
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((m) => m[0]?.toUpperCase())
+    .join("");
 
   useEffect(() => {
     if (!estIdel && !estAdmin) {
@@ -190,34 +191,19 @@ function NavBarInterieur() {
   return (
     <>
       {!estIdel && !estAdmin && theme === "sakura" && <FallingPetals />}
-      <header
-        className="relative border-b border-line"
-        style={{ borderBottomColor: "var(--accent-soft, #2A2A4A)" }}
-      >
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-2 font-display text-sm font-bold text-[var(--accent)]">
-              <span
-                className="inline-block h-2 w-2 rounded-full"
-                style={{
-                  backgroundColor: "var(--accent)",
-                  boxShadow: "0 0 8px 1px var(--accent)",
-                }}
-              />
-              {labelProduit}
-              <span className="text-xs opacity-70">{mascotteEmoji}</span>
-            </span>
-
-            {/* Bouton hamburger -- visible uniquement sur petit ecran (sm:hidden) */}
-            <button
-              onClick={() => setMenuMobileOuvert((v) => !v)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-textMuted sm:hidden"
-              aria-label="Ouvrir le menu"
-              aria-expanded={menuMobileOuvert}
+      <header className="sticky top-0 z-30 border-b border-line bg-ink/85 backdrop-blur-md supports-[backdrop-filter]:bg-ink/70">
+        <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link href={estIdel ? "/idel/accueil" : estAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5">
+              <img src="/mutatech-logo.svg" alt="" aria-hidden="true" width={18} height={24} className="h-6 w-[18px]" />
+              <span className="font-display text-[15px] font-semibold tracking-tight text-textPrimary">Mutatech</span>
+            </Link>
+            <span
+              className="rounded-md px-2 py-0.5 text-[11px] font-medium"
+              style={{ color: "var(--accent)", backgroundColor: "var(--accent-soft, transparent)" }}
             >
-              {menuMobileOuvert ? "✕" : "☰"}
-            </button>
-
+              {labelProduit}
+            </span>
             {estAdmin && (
               <Link href="/dashboard" className="hidden text-sm text-textMuted hover:text-textPrimary sm:block">
                 ← Retour au CRM
@@ -225,123 +211,149 @@ function NavBarInterieur() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-2 sm:flex">
             {/* Switcher CRM ↔ IDEL */}
             {produit === "crm+idel" && !estAdmin && (
               <Link
                 href={estIdel ? "/dashboard" : "/idel/accueil"}
-                className="rounded-lg border px-3 py-1.5 text-xs font-medium text-textMuted transition hover:text-textPrimary"
-                style={{ borderColor: "var(--accent-soft, #2A2A4A)" }}
+                className="rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-textMuted hover:border-textMuted/40 hover:text-textPrimary"
               >
-                {estIdel ? "← CRM" : "IDEL/PSDM 🩺"}
+                {estIdel ? "Aller au CRM" : "Aller à l'espace IDEL"}
               </Link>
             )}
 
             {estRoleAdmin && !estAdmin && (
               <Link
                 href="/admin"
-                className="rounded-lg border px-3 py-1.5 text-xs font-medium transition"
-                style={{
-                  borderColor: "var(--accent-soft, #2A2A4A)",
-                  backgroundColor: "var(--accent-soft, transparent)",
-                  color: "var(--accent)",
-                }}
+                className="rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-textMuted hover:border-textMuted/40 hover:text-textPrimary"
               >
-                ⚙ Admin
+                Admin
               </Link>
             )}
 
             {!estIdel && !estAdmin && googleConnecte === false && (
               <a
                 href={urlConnexionGoogle()}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-white"
-                style={{ backgroundColor: "var(--accent)" }}
+                className="rounded-md bg-violet px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet/90"
               >
                 Connecter Google
               </a>
             )}
             {!estIdel && !estAdmin && googleConnecte === true && (
-              <span className="hidden items-center gap-1.5 text-xs text-teal sm:flex">
-                <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Google connecté
+              <span className="hidden items-center gap-1.5 px-1 text-xs text-textMuted lg:flex" title="Drive et Gmail sont actifs">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal" /> Google
               </span>
             )}
 
+            <span className="mx-1 h-5 w-px bg-line" aria-hidden="true" />
+
             {user?.email && (
-              <span className="hidden text-xs text-textMuted sm:block">{user.email}</span>
+              <span className="flex items-center gap-2" title={user.email}>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surfaceAlt text-[11px] font-semibold text-textPrimary ring-1 ring-line">
+                  {initiales}
+                </span>
+                <span className="hidden max-w-[200px] truncate text-xs text-textMuted lg:block">{user.email}</span>
+              </span>
             )}
 
             <button
               onClick={handleLogout}
-              className="text-xs text-textMuted hover:text-amber transition"
+              className="rounded-md px-2 py-1.5 text-xs text-textMuted hover:bg-surfaceAlt hover:text-textPrimary"
             >
               Déconnexion
             </button>
           </div>
+
+          {/* Bouton menu -- visible uniquement sur petit ecran (sm:hidden) */}
+          <button
+            onClick={() => setMenuMobileOuvert((v) => !v)}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-line text-textMuted sm:hidden"
+            aria-label={menuMobileOuvert ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-expanded={menuMobileOuvert}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              {menuMobileOuvert ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+          </button>
         </div>
 
-        {/* Rangee d'onglets pleine largeur -- volontairement HORS du
-            conteneur mx-auto max-w-6xl ci-dessus (le <header> lui, n'a
-            aucune contrainte de largeur), pour occuper tout l'ecran plutot
-            que de rester cantonnee au bloc centre. Chaque onglet est un
-            vrai bouton (fond + surbrillance active) plutot qu'un simple
-            lien texte, et flex-1 fait que la rangee se repartit sur toute
-            la largeur quel que soit le nombre d'onglets. flex-wrap laisse
-            les onglets en trop passer a la ligne suivante (toujours pleine
-            largeur) plutot que de se retasser illisiblement. */}
-        <nav className="hidden w-full flex-wrap border-t border-line sm:flex" style={{ borderTopColor: "var(--accent-soft, #2A2A4A)" }}>
+        {/* Onglets : une seule ligne, defilement horizontal si l'ecran est
+            trop etroit (plutot que de passer sur deux lignes). L'onglet
+            actif est souligne par l'accent du mode. */}
+        <nav className="nav-onglets hidden overflow-x-auto px-2 sm:flex sm:px-4" aria-label="Navigation principale">
           {onglets.map((onglet) => {
             const actif = isActive(onglet.href);
             return (
               <Link
                 key={onglet.href}
                 href={onglet.href}
-                className="flex-1 whitespace-nowrap px-4 py-2.5 text-center text-sm font-medium transition"
-                style={
-                  actif
-                    ? { color: "var(--accent)", backgroundColor: "var(--accent-soft, transparent)", boxShadow: "inset 0 -2px 0 var(--accent)" }
-                    : { color: "var(--color-text-muted)" }
-                }
-                onMouseEnter={(e) => { if (!actif) e.currentTarget.style.color = "var(--color-text-primary)"; }}
-                onMouseLeave={(e) => { if (!actif) e.currentTarget.style.color = "var(--color-text-muted)"; }}
+                aria-current={actif ? "page" : undefined}
+                className={`relative shrink-0 whitespace-nowrap px-3 py-2.5 text-[13px] font-medium ${
+                  actif ? "text-textPrimary" : "text-textMuted hover:text-textPrimary"
+                }`}
               >
                 {onglet.label}
+                {actif && (
+                  <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full" style={{ backgroundColor: "var(--accent)" }} />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Panneau mobile -- liste complete des onglets empilee, affichee
-            uniquement quand le hamburger est ouvert (sm:hidden au niveau
-            du bouton garantit que ce panneau n'existe que sur mobile). */}
+        {/* Panneau mobile -- liste complete des onglets et actions du
+            compte, affichee uniquement quand le menu est ouvert. */}
         {menuMobileOuvert && (
-          <nav className="flex flex-col gap-1 border-t border-line px-4 py-3 sm:hidden">
-            {onglets.map((onglet) => {
-              const actif = isActive(onglet.href);
-              return (
-                <Link
-                  key={onglet.href}
-                  href={onglet.href}
-                  className="rounded-lg px-3 py-2 text-sm font-medium transition hover:bg-surface"
-                  style={
-                    actif
-                      ? { color: "var(--accent)", backgroundColor: "var(--accent-soft, transparent)" }
-                      : { color: "var(--color-text-muted)" }
-                  }
-                >
-                  {onglet.label}
+          <nav className="max-h-[calc(100vh-3.5rem)] overflow-y-auto border-t border-line bg-ink px-3 py-3 sm:hidden" aria-label="Navigation principale">
+            <div className="grid grid-cols-2 gap-1">
+              {onglets.map((onglet) => {
+                const actif = isActive(onglet.href);
+                return (
+                  <Link
+                    key={onglet.href}
+                    href={onglet.href}
+                    aria-current={actif ? "page" : undefined}
+                    className={`rounded-md px-3 py-2.5 text-sm font-medium ${actif ? "" : "text-textMuted hover:bg-surfaceAlt hover:text-textPrimary"}`}
+                    style={actif ? { color: "var(--accent)", backgroundColor: "var(--accent-soft, transparent)" } : undefined}
+                  >
+                    {onglet.label}
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3">
+              {produit === "crm+idel" && !estAdmin && (
+                <Link href={estIdel ? "/dashboard" : "/idel/accueil"} className="rounded-md px-3 py-2.5 text-sm text-textMuted hover:bg-surfaceAlt hover:text-textPrimary">
+                  {estIdel ? "Aller au CRM" : "Aller à l'espace IDEL"}
                 </Link>
-              );
-            })}
-            {estAdmin && (
-              <Link href="/dashboard" className="rounded-lg px-2 py-2 text-sm text-textMuted hover:bg-surface hover:text-textPrimary">
-                ← Retour au CRM
-              </Link>
-            )}
+              )}
+              {estRoleAdmin && !estAdmin && (
+                <Link href="/admin" className="rounded-md px-3 py-2.5 text-sm text-textMuted hover:bg-surfaceAlt hover:text-textPrimary">
+                  Admin
+                </Link>
+              )}
+              {estAdmin && (
+                <Link href="/dashboard" className="rounded-md px-3 py-2.5 text-sm text-textMuted hover:bg-surfaceAlt hover:text-textPrimary">
+                  ← Retour au CRM
+                </Link>
+              )}
+              {!estIdel && !estAdmin && googleConnecte === false && (
+                <a href={urlConnexionGoogle()} className="rounded-md px-3 py-2.5 text-sm text-textMuted hover:bg-surfaceAlt hover:text-textPrimary">
+                  Connecter Google
+                </a>
+              )}
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="truncate text-xs text-textMuted">{user?.email}</span>
+                <button onClick={handleLogout} className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">
+                  Déconnexion
+                </button>
+              </div>
+            </div>
           </nav>
         )}
 
         {searchParams.get("google") === "connecte" && (
-          <div className="bg-teal/10 px-4 py-2 text-center text-xs text-teal">
+          <div className="border-t border-line bg-teal/10 px-4 py-2 text-center text-xs text-teal">
             ✓ Google connecté avec succès — Drive et Gmail sont actifs.
           </div>
         )}
