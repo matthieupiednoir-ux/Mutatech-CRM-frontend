@@ -30,7 +30,7 @@ export default function NovaChatPanel({ compact = false }: { compact?: boolean }
       voiceGenre="femme"
       messageAccueil={ACCUEIL_NOVA}
       suggestions={SUGGESTIONS_NOVA}
-      accentClass="bg-[#FF2E9A] hover:opacity-90"
+      accentClass="bg-violet hover:opacity-90"
     />
   );
 }

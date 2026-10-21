@@ -35,8 +35,8 @@ const THEMES_IDEL: { id: string; nom: string; description: string; couleurs: str
   {
     id: "defaut",
     nom: "Nova (Défaut)",
-    description: "Rose néon hi-tech, glassmorphism — l'identité Nova actuelle.",
-    couleurs: ["#05050B", "#12122A", "#FF2E9A", "#6C63FF"],
+    description: "Rose framboise et violet, clair ou sombre selon votre appareil.",
+    couleurs: ["#0E0F1A", "#F5F6FB", "#F0508C", "#8B7BFF"],
   },
   {
     id: "clinique",

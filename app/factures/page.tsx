@@ -281,7 +281,7 @@ export default function FacturesPage() {
                     </div>
                     {f.objet && <p className="mt-0.5 text-sm text-textMuted">{f.objet}</p>}
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
-                      {f.client?.nom && <span>👤 {f.client.nom}</span>}
+                      {f.client?.nom && <span>{f.client.nom}</span>}
                       {f.date_echeance && <span>Échéance {new Date(f.date_echeance).toLocaleDateString("fr-FR")}</span>}
                       {f.payee_le && <span className="text-teal">Payée le {new Date(f.payee_le).toLocaleDateString("fr-FR")}</span>}
                       {f.date_creation && <span>{new Date(f.date_creation).toLocaleDateString("fr-FR")}</span>}

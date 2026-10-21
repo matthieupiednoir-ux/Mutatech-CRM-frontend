@@ -358,18 +358,18 @@ export default function PageProspects() {
                     )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-textMuted">
-                    {p.telephone && <span>📞 {p.telephone}</span>}
-                    {p.email && <span>✉ {p.email}</span>}
+                    {p.telephone && <span>{p.telephone}</span>}
+                    {p.email && <span>{p.email}</span>}
                     {p.adresse && (
                       <span className="flex items-center gap-1.5">
-                        📍 {p.adresse}
+                        {p.adresse}
                         <a href={urlWaze(p.adresse)} target="_blank" rel="noopener noreferrer"
                           className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
-                          🧭 Waze
+                          Waze
                         </a>
                         <a href={urlMaps(p.adresse)} target="_blank" rel="noopener noreferrer"
                           className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
-                          🗺️ Maps
+                          Maps
                         </a>
                       </span>
                     )}

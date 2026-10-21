@@ -224,7 +224,7 @@ export default function IdelPatientsPage() {
           </div>
           <div className="flex gap-2">
             <label className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-textMuted hover:border-violet hover:text-textPrimary">
-              📥 Importer CSV/Excel
+              Importer CSV/Excel
               <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFichierCsv} />
             </label>
             <button onClick={() => { setForm({ ...VIDE }); setEditionId(null); setFormOuvert(true); }}
@@ -407,11 +407,11 @@ export default function IdelPatientsPage() {
                     <p className="font-display text-sm font-bold text-textPrimary">{p.nom} {p.prenom}</p>
                     <div className="mt-0.5 flex flex-wrap gap-3 text-xs text-textMuted">
                       {p.date_naissance && <span>Né(e) le {new Date(`${p.date_naissance}T12:00:00`).toLocaleDateString("fr-FR")}</span>}
-                      {p.telephone && <span>📞 {p.telephone}</span>}
+                      {p.telephone && <span>{p.telephone}</span>}
                       {p.medecin_traitant && <span>Dr {p.medecin_traitant}</span>}
                     </div>
                     {p.numero_secu && <p className="mt-0.5 font-mono text-[11px] text-textMuted">N° SS : {p.numero_secu}</p>}
-                    {p.adresse && <p className="text-[11px] text-textMuted">📍 {p.adresse}</p>}
+                    {p.adresse && <p className="text-[11px] text-textMuted">{p.adresse}</p>}
                     {p.notes && <p className="mt-1 text-[11px] italic text-textMuted">{p.notes}</p>}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">

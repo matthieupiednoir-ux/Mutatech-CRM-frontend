@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const c = (v) => `color-mix(in srgb, var(${v}) calc(<alpha-value> * 100%), transparent)`;
+
 module.exports = {
   content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
@@ -10,20 +12,29 @@ module.exports = {
         // /parametres) sans toucher a aucun composant existant : chaque
         // page continue d'utiliser bg-surface, text-textMuted, etc.
         // exactement comme avant, seule la VALEUR resolue change.
-        ink: "var(--color-ink)",
-        surface: "var(--color-surface)",
-        surfaceAlt: "var(--color-surface-alt)",
-        line: "var(--color-line)",
-        violet: "var(--color-violet)",
-        teal: "var(--color-teal)",
-        amber: "var(--color-amber)",
-        textPrimary: "var(--color-text-primary)",
-        textMuted: "var(--color-text-muted)",
+        // Couleur + opacite : color-mix() laisse fonctionner les variantes
+        // Tailwind du type bg-amber/10 ou border-line/60. Avec une simple
+        // var() elles etaient ignorees en silence (aucune classe generee).
+        ink: c("--color-ink"),
+        surface: c("--color-surface"),
+        surfaceAlt: c("--color-surface-alt"),
+        line: c("--color-line"),
+        violet: c("--color-violet"),
+        teal: c("--color-teal"),
+        amber: c("--color-amber"),
+        textPrimary: c("--color-text-primary"),
+        textMuted: c("--color-text-muted"),
       },
       fontFamily: {
-        display: ["var(--font-space-grotesk)", "sans-serif"],
-        body: ["var(--font-inter)", "sans-serif"],
+        // Une seule famille (Inter) pour les titres et le texte : rendu
+        // plus sobre et homogene que l'ancien duo Space Grotesk + Inter.
+        display: ["var(--font-inter)", "system-ui", "sans-serif"],
+        body: ["var(--font-inter)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "monospace"],
+      },
+      boxShadow: {
+        card: "0 1px 2px rgb(0 0 0 / 0.18), 0 1px 1px rgb(0 0 0 / 0.08)",
+        pop: "0 12px 32px -12px rgb(0 0 0 / 0.45)",
       },
     },
   },

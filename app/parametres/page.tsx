@@ -23,7 +23,7 @@ const ONGLETS_CONFIGURABLES = [
   { id: "catalogue", label: "Catalogue" },
   { id: "planning", label: "Planning" },
   { id: "journal", label: "Journal" },
-  { id: "corbeille", label: "🗑 Corbeille" },
+  { id: "corbeille", label: "Corbeille" },
 ];
 // "agent" (Agent IA) et "dashboard" restent volontairement absents de
 // cette liste : ils sont toujours visibles, comme cote NavBar.tsx.
@@ -37,8 +37,8 @@ const THEMES: { id: string; nom: string; description: string; couleurs: string[]
   {
     id: "defaut",
     nom: "Défaut",
-    description: "Violet tech, sombre — le thème actuel.",
-    couleurs: ["#0F0F1E", "#16162C", "#6C63FF", "#00D4AA"],
+    description: "Violet et vert d'eau, clair ou sombre selon votre appareil.",
+    couleurs: ["#0E0F1A", "#F5F6FB", "#7C6CFF", "#22C3A6"],
   },
   {
     id: "sakura",

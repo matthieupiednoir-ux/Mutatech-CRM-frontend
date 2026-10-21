@@ -17,9 +17,9 @@ export interface Insight {
 }
 
 const COULEUR: Record<string, string> = {
-  info: "#77778A",
-  attention: "#F5A623",
-  important: "#EF4444",
+  info: "var(--st-neutre)",
+  attention: "var(--st-warn)",
+  important: "var(--st-err)",
 };
 
 const LABEL_ACTION: Record<string, string> = {
@@ -85,11 +85,14 @@ export default function InsightStrip({
       {visibles.map(({ ins, i }) => (
         <div
           key={i}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ backgroundColor: `${COULEUR[ins.urgence]}15`, color: COULEUR[ins.urgence] }}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs text-textPrimary"
+          style={{ backgroundColor: `color-mix(in srgb, ${COULEUR[ins.urgence]} 6%, transparent)`, borderColor: `color-mix(in srgb, ${COULEUR[ins.urgence]} 20%, transparent)` }}
         >
           <div className="flex flex-1 flex-wrap items-center gap-2">
-            <span>💡 {ins.texte}</span>
+            <span className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: COULEUR[ins.urgence] }} aria-hidden="true" />
+              {ins.texte}
+            </span>
             {ins.action_type && Array.isArray(ins.items) && ins.items.length > 0 && (
               <span className="flex flex-wrap gap-1.5">
                 {ins.items.map((item) => {
@@ -101,7 +104,7 @@ export default function InsightStrip({
                       onClick={() => handleAction(ins.action_type as string, item)}
                       disabled={enCours === cle || fait}
                       className="rounded-full border px-2 py-0.5 text-[10px] font-medium transition disabled:opacity-50"
-                      style={{ borderColor: COULEUR[ins.urgence], color: fait ? "#00D4AA" : COULEUR[ins.urgence] }}
+                      style={{ borderColor: COULEUR[ins.urgence], color: fait ? "var(--st-ok)" : COULEUR[ins.urgence] }}
                     >
                       {fait ? `✓ ${item.label}` : enCours === cle ? "..." : `${LABEL_ACTION[ins.action_type as string]} ${item.label}`}
                     </button>
@@ -112,7 +115,8 @@ export default function InsightStrip({
           </div>
           <button
             onClick={() => setMasques((s) => new Set(s).add(i))}
-            className="shrink-0 opacity-60 hover:opacity-100"
+            className="shrink-0 text-textMuted opacity-70 hover:opacity-100"
+            aria-label="Masquer cette suggestion"
           >
             ✕
           </button>

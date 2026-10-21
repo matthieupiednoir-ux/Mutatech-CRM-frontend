@@ -20,8 +20,8 @@ const STATUT_LABEL: Record<string, string> = {
   prete: "Prête", livree: "Livrée", annulee: "Annulée",
 };
 const STATUT_COULEUR: Record<string, string> = {
-  brouillon: "#77778A", envoyee: "#F5A623", en_preparation: "#F5A623",
-  prete: "#a89eff", livree: "#00D4AA", annulee: "#EF4444",
+  brouillon: "var(--st-neutre)", envoyee: "var(--st-warn)", en_preparation: "var(--st-warn)",
+  prete: "var(--st-info)", livree: "var(--st-ok)", annulee: "var(--st-err)",
 };
 const ORDRE_STATUTS = ["brouillon", "envoyee", "en_preparation", "prete", "livree", "annulee"];
 
@@ -205,7 +205,7 @@ export default function PharmaPage() {
                 onClick={() => setImportOuvert(true)}
                 className="rounded-lg border border-line px-4 py-2 text-sm text-textMuted hover:text-textPrimary"
               >
-                📥 Importer CSV/Excel
+                Importer CSV/Excel
               </button>
             )}
             <button
@@ -357,7 +357,7 @@ export default function PharmaPage() {
                           {c.treatment_end_date && <p className="text-[11px] text-textMuted">Fin de traitement prévue le {new Date(`${c.treatment_end_date.slice(0, 10)}T12:00:00`).toLocaleDateString("fr-FR")}</p>}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: `${STATUT_COULEUR[c.status]}22`, color: STATUT_COULEUR[c.status] }}>
+                          <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: `color-mix(in srgb, ${STATUT_COULEUR[c.status]} 13%, transparent)`, color: STATUT_COULEUR[c.status] }}>
                             {STATUT_LABEL[c.status] || c.status}
                           </span>
                           {suivant && (

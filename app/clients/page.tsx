@@ -288,18 +288,18 @@ export default function ClientsPage() {
                     <p className="mt-0.5 text-xs text-textMuted">{c.activite_description}</p>
                   )}
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-textMuted">
-                    {c.email && <span>✉ {c.email}</span>}
-                    {c.telephone && <span>📞 {c.telephone}</span>}
+                    {c.email && <span>{c.email}</span>}
+                    {c.telephone && <span>{c.telephone}</span>}
                     {c.adresse && (
                       <span className="flex items-center gap-1.5">
-                        📍 {c.adresse}
+                        {c.adresse}
                         <a href={urlWaze(c.adresse)} target="_blank" rel="noopener noreferrer"
                           className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
-                          🧭 Waze
+                          Waze
                         </a>
                         <a href={urlMaps(c.adresse)} target="_blank" rel="noopener noreferrer"
                           className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary">
-                          🗺️ Maps
+                          Maps
                         </a>
                       </span>
                     )}

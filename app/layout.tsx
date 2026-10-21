@@ -1,16 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "700"],
-  variable: "--font-space-grotesk",
-});
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-inter",
 });
 
@@ -35,7 +29,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0F0F1E",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F5F6FB" },
+    { media: "(prefers-color-scheme: dark)", color: "#0E0F1A" },
+  ],
 };
 
 export default function RootLayout({
@@ -46,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body
-        className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} font-body`}
+        className={`${inter.variable} ${jetbrainsMono.variable} font-body antialiased`}
       >
         {children}
       </body>

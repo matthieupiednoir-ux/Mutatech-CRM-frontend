@@ -38,11 +38,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COULEUR: Record<string, string> = {
-  planned: "#77778A",
-  in_progress: "#F5A623",
-  completed: "#00D4AA",
-  delayed: "#EF4444",
-  cancelled: "#77778A",
+  planned: "var(--st-neutre)",
+  in_progress: "var(--st-warn)",
+  completed: "var(--st-ok)",
+  delayed: "var(--st-err)",
+  cancelled: "var(--st-neutre)",
 };
 
 function aujourdHui(): string {
@@ -338,7 +338,7 @@ export default function TourneesPage() {
                           className="rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
                           style={{ backgroundColor: "var(--accent)" }}
                         >
-                          🗺️ Itinéraire complet ({adressesOrdonnees.length} arrêts)
+                          Itinéraire complet ({adressesOrdonnees.length} arrêts)
                         </a>
                       )}
                       <button
@@ -381,11 +381,11 @@ export default function TourneesPage() {
                                 <span className="flex gap-1.5">
                                   <a href={urlWaze(v.patient_adresse)} target="_blank" rel="noopener noreferrer"
                                     className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary" title={v.patient_adresse}>
-                                    🧭 Waze
+                                    Waze
                                   </a>
                                   <a href={urlMaps(v.patient_adresse)} target="_blank" rel="noopener noreferrer"
                                     className="rounded border border-line px-1.5 py-0.5 text-[10px] text-textMuted hover:text-textPrimary" title={v.patient_adresse}>
-                                    📍 Maps
+                                    Maps
                                   </a>
                                 </span>
                               ) : (
@@ -403,7 +403,7 @@ export default function TourneesPage() {
                               onChange={(e) => handleChangerStatutVisite(t.id, v, e.target.value)}
                               className="rounded-full border-0 px-2.5 py-1 text-xs font-medium"
                               style={{
-                                backgroundColor: `${STATUS_COULEUR[v.status]}22`,
+                                backgroundColor: `color-mix(in srgb, ${STATUS_COULEUR[v.status]} 13%, transparent)`,
                                 color: STATUS_COULEUR[v.status],
                               }}
                             >

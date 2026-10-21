@@ -14,13 +14,13 @@ interface Outil {
 
 const OUTILS: Outil[] = [
   {
-    icone: "📅", couleur: "#6C63FF", fond: "rgba(108,99,255,0.12)",
+    icone: "📅", couleur: "#7C6CFF", fond: "rgba(108,99,255,0.12)",
     titre: "Agenda Mutatech",
     description: "Google Calendar — rendez-vous clients, publications LinkedIn programmées, échéances administratives.",
     href: "https://calendar.google.com", externe: true,
   },
   {
-    icone: "✅", couleur: "#00D4AA", fond: "rgba(0,212,170,0.12)",
+    icone: "✅", couleur: "#22C3A6", fond: "rgba(0,212,170,0.12)",
     titre: "To-do liste du projet",
     description: "Suivi complet de l'avancement Mutatech — piliers, workflow à 3 états, progression en temps réel.",
     href: "https://mutatech.fr/Mutatech-Todo-Liste.html", externe: true,
@@ -32,19 +32,19 @@ const OUTILS: Outil[] = [
     href: "https://mutatech.fr/Mutatech-Prospection-Manager.html", externe: true,
   },
   {
-    icone: "🤖", couleur: "#6C63FF", fond: "rgba(108,99,255,0.12)",
+    icone: "🤖", couleur: "#7C6CFF", fond: "rgba(108,99,255,0.12)",
     titre: "Orchestrateur IA",
     description: "Audit client → stack IA recommandée → déploiement piloté en direct.",
     href: "https://mutatech-orchestrator-frontend.netlify.app", externe: true,
   },
   {
-    icone: "💶", couleur: "#00D4AA", fond: "rgba(0,212,170,0.12)",
+    icone: "💶", couleur: "#22C3A6", fond: "rgba(0,212,170,0.12)",
     titre: "Gestion des tarifs",
     description: "Modifie les prix publiés sur le site (structure + IDEL) sans toucher au code — publication automatique en ~1 min.",
     href: "https://mutatech.fr/Mutatech-Gestion-Tarifs.html", externe: true,
   },
   {
-    icone: "📋", couleur: "#F5A623", fond: "rgba(245,166,35,0.12)",
+    icone: "📋", couleur: "#F5A524", fond: "rgba(245,166,35,0.12)",
     titre: "Outil Audit Diagnostic",
     description: "Formulaire de diagnostic client en rendez-vous, rapport PDF brandé Mutatech en sortie.",
     href: "https://mutatech-audit-frontend.netlify.app", externe: true,

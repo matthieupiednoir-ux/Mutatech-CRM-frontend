@@ -171,7 +171,7 @@ export default function FormationPage() {
     <>
       <NavBar />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="text-2xl font-semibold text-textPrimary">🎓 Formation IA</h1>
+        <h1 className="text-2xl font-semibold text-textPrimary">Formation IA</h1>
         <p className="mt-1 text-sm text-textMuted">
           10 modules pour intégrer l'intelligence artificielle dans une petite entreprise, avec des exercices pratiques.
         </p>

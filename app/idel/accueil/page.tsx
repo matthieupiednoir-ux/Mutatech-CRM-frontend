@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import InsightStrip from "@/components/InsightStrip";
+import KpiTuile from "@/components/KpiTuile";
 import { idelAccueil, idelInsights, IdelAccueil, IdelPerimetreAccueil, ApiError } from "@/lib/api";
 
 // Page d'accueil IDEL : recapitulatif simple de la journee et de
@@ -18,10 +19,10 @@ const PRESTATION: Record<string, string> = {
   aerosolotherapie: "Aérosolthérapie", autre: "Autre",
 };
 const STATUT_VISITE: Record<string, { label: string; couleur: string }> = {
-  planned: { label: "Prévue", couleur: "#77778A" },
-  in_progress: { label: "En cours", couleur: "#F0B429" },
-  delayed: { label: "Retardée", couleur: "#EF4444" },
-  completed: { label: "Faite", couleur: "#5fe0c0" },
+  planned: { label: "Prévue", couleur: "var(--st-neutre)" },
+  in_progress: { label: "En cours", couleur: "var(--st-warn)" },
+  delayed: { label: "Retardée", couleur: "var(--st-err)" },
+  completed: { label: "Faite", couleur: "var(--st-ok)" },
 };
 const MOIS_COURT = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
@@ -41,22 +42,18 @@ function Carte({ titre, lien, lienLabel = "Ouvrir →", children }: {
   return (
     <section className="rounded-xl border border-line bg-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-sm text-textPrimary">{titre}</h2>
-        {lien && <Link href={lien} className="text-xs text-[#FF2E9A] hover:underline">{lienLabel}</Link>}
+        <h2 className="font-display text-sm font-semibold text-textPrimary">{titre}</h2>
+        {lien && <Link href={lien} className="text-xs text-textMuted hover:text-violet">{lienLabel}</Link>}
       </div>
       {children}
     </section>
   );
 }
 
-function Kpi({ label, valeur, sousLabel, couleur = "text-textPrimary", lien }: {
-  label: string; valeur: string; sousLabel?: string; couleur?: string; lien: string;
-}) {
+function Kpi({ lien, ...props }: React.ComponentProps<typeof KpiTuile> & { lien: string }) {
   return (
-    <Link href={lien} className="rounded-xl border border-line bg-surface p-4 transition hover:bg-surfaceAlt/40">
-      <p className="text-[11px] uppercase tracking-wide text-textMuted">{label}</p>
-      <p className={`mt-1 font-display text-2xl font-bold ${couleur}`}>{valeur}</p>
-      {sousLabel && <p className="mt-0.5 text-[11px] text-textMuted">{sousLabel}</p>}
+    <Link href={lien} className="rounded-xl border border-line bg-surface p-4 transition hover:border-textMuted/30 hover:bg-surfaceAlt/40">
+      <KpiTuile {...props} />
     </Link>
   );
 }
@@ -80,7 +77,7 @@ function HistoriqueMois({ historique }: { historique: IdelAccueil["facturation"]
         return (
           <div key={m.mois} className="flex flex-1 flex-col items-center gap-1" title={`${MOIS_COURT[mois]} : ${euros(m.montant)}`}>
             <span className="text-[10px] text-textMuted">{m.montant > 0 ? euros(m.montant) : ""}</span>
-            <div className="w-full rounded-t bg-[#FF2E9A]/70" style={{ height: `${Math.max((m.montant / max) * 64, m.montant > 0 ? 4 : 1)}px` }} />
+            <div className="w-full rounded-t bg-violet/70" style={{ height: `${Math.max((m.montant / max) * 64, m.montant > 0 ? 4 : 1)}px` }} />
             <span className="text-[10px] text-textMuted">{MOIS_COURT[mois]}</span>
           </div>
         );
@@ -115,18 +112,18 @@ export default function AccueilIdelPage() {
 
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl text-textPrimary">
+            <h1 className="font-display text-2xl font-semibold text-textPrimary">
               {d?.prenom ? `Bonjour ${d.prenom}` : "Tableau de bord"}
             </h1>
             {d && <p className="mt-1 text-sm text-textMuted">{dateLongue(d.date)}{vueCabinet ? " · vue du cabinet" : ""}</p>}
           </div>
           {d?.coordination && (
-            <div className="flex rounded-lg border border-line p-0.5 text-xs">
+            <div className="flex rounded-lg border border-line bg-surface p-0.5 text-xs">
               {(["moi", "cabinet"] as IdelPerimetreAccueil[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPerimetre(p)}
-                  className={`rounded-md px-3 py-1.5 ${d.perimetre === p ? "bg-[#FF2E9A] text-white" : "text-textMuted hover:text-textPrimary"}`}
+                  className={`rounded-md px-3 py-1.5 ${d.perimetre === p ? "bg-surfaceAlt font-medium text-textPrimary shadow-sm ring-1 ring-line" : "text-textMuted hover:text-textPrimary"}`}
                 >
                   {p === "moi" ? "Mon activité" : "Cabinet"}
                 </button>
@@ -145,32 +142,32 @@ export default function AccueilIdelPage() {
             <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
               {d.journee ? (
                 <Kpi label="Visites du jour" valeur={String(d.journee.nb_restantes)}
-                     sousLabel={`restante(s) sur ${d.journee.nb_visites}`} lien="/idel/tournees" />
+                     sousLabel={`restante(s) sur ${d.journee.nb_visites}`} ton="sky" icone="agenda" lien="/idel/tournees" />
               ) : (
-                <Kpi label="Patients suivis" valeur={String(d.patients)} lien="/idel/patients" />
+                <Kpi label="Patients suivis" valeur={String(d.patients)} ton="rose" icone="clients" lien="/idel/patients" />
               )}
-              <Kpi label="Dossiers à traiter" valeur={String(aTraiter)} couleur={aTraiter > 0 ? "text-amber" : "text-textPrimary"}
+              <Kpi label="Dossiers à traiter" valeur={String(aTraiter)} ton={aTraiter > 0 ? "amber" : "neutre"} icone="dossier"
                    sousLabel="dans le Pipeline" lien="/idel" />
-              <Kpi label="Transmis ce mois" valeur={euros(d.facturation.facture_mois)} couleur="text-teal"
+              <Kpi label="Transmis ce mois" valeur={euros(d.facturation.facture_mois)} ton="teal" icone="envoi"
                    lien="/idel/comptabilite" />
               <Kpi label="En attente de paiement" valeur={euros(d.facturation.montant_en_attente_paiement)}
-                   couleur="text-violet" lien="/idel/comptabilite" />
+                   ton="violet" icone="portefeuille" lien="/idel/comptabilite" />
             </div>
 
-            <div className="grid items-start gap-4 lg:grid-cols-2">
+            <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
               {d.journee && (
                 <Carte titre={vueCabinet ? "Journée du cabinet" : "Ma journée"} lien="/idel/tournees" lienLabel="Tournées →">
                   {d.journee.visites.length === 0 ? (
                     <p className="text-xs text-textMuted">Aucune visite prévue aujourd'hui.</p>
                   ) : (
                     <>
-                      <div className="mb-3 h-2 overflow-hidden rounded bg-surfaceAlt">
-                        <div className="h-full rounded bg-teal"
+                      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-surfaceAlt">
+                        <div className="h-full rounded-full bg-teal"
                              style={{ width: `${d.journee.nb_visites ? (d.journee.nb_terminees / d.journee.nb_visites) * 100 : 0}%` }} />
                       </div>
                       <div className="space-y-1.5">
                         {d.journee.visites.map((v, i) => {
-                          const s = STATUT_VISITE[v.statut] || { label: v.statut, couleur: "#77778A" };
+                          const s = STATUT_VISITE[v.statut] || { label: v.statut, couleur: "var(--st-neutre)" };
                           return (
                             <div key={i} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
                               <span className="truncate text-xs text-textPrimary">
@@ -216,7 +213,7 @@ export default function AccueilIdelPage() {
                   ].map((e) => (
                     <div key={e.label} className={`rounded-lg px-3 py-2 ${e.alerte && e.n > 0 ? "bg-amber/10" : "bg-surfaceAlt"}`}>
                       <p className="text-[11px] text-textMuted">{e.label}</p>
-                      <p className={`font-display text-xl font-bold ${e.alerte && e.n > 0 ? "text-amber" : "text-textPrimary"}`}>{e.n}</p>
+                      <p className={`mt-0.5 font-display text-xl font-semibold ${e.alerte && e.n > 0 ? "text-amber" : "text-textPrimary"}`}>{e.n}</p>
                     </div>
                   ))}
                 </div>
@@ -255,7 +252,7 @@ export default function AccueilIdelPage() {
                   <Link href="/idel/patients" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Patients</Link>
                   {d.ordonnances && <Link href="/idel/prescriptions" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Ordonnances</Link>}
                   {d.commandes_en_attente !== null && <Link href="/idel/pharma" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Commandes</Link>}
-                  <Link href="/idel/nova" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">✨ Nova</Link>
+                  <Link href="/idel/nova" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Nova</Link>
                 </div>
               </Carte>
             </div>

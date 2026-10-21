@@ -82,7 +82,7 @@ function LoginForm() {
       const btn = document.getElementById("google-btn");
       if (btn) {
         window.google.accounts.id.renderButton(btn, {
-          theme: "filled_black",
+          theme: window.matchMedia("(prefers-color-scheme: light)").matches ? "outline" : "filled_black",
           size: "large",
           width: 320,
           text: "signin_with",
@@ -132,47 +132,46 @@ function LoginForm() {
   const next = searchParams.get("next") || "";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm space-y-6">
         {/* Logo */}
         <div className="text-center">
-          <a href="https://mutatech.fr" className="inline-flex items-center gap-2 font-display text-2xl font-bold text-textPrimary">
+          <a href="https://mutatech.fr" className="inline-flex items-center gap-2.5 font-display text-2xl font-semibold tracking-tight text-textPrimary">
             <img src="/mutatech-logo.svg" alt="" aria-hidden="true" width={24} height={32} className="h-8 w-6" />
-            <span>
-              Muta<span className="text-violet">tech</span>
-            </span>
+            <span>Mutatech</span>
           </a>
-          <p className="mt-2 text-sm text-textMuted">Connexion à votre espace</p>
+          <h1 className="mt-6 text-lg font-semibold text-textPrimary">Connexion à votre espace</h1>
+          <p className="mt-1 text-sm text-textMuted">CRM et espace IDEL · PSDM</p>
         </div>
 
         {/* Formulaire */}
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-line bg-surface p-6">
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-line bg-surface p-6 shadow-pop">
           {erreur && (
             <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-amber">{erreur}</p>
           )}
 
           <label className="block">
-            <span className="mb-1 block text-sm text-textMuted">Email</span>
+            <span className="mb-1.5 block text-xs font-medium text-textMuted">Email</span>
             <input
               type="email"
               required
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2.5 text-textPrimary placeholder:text-textMuted/60 focus:border-violet focus:outline-none"
+              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2.5 text-textPrimary placeholder:text-textMuted/60 focus:border-violet/70 focus:outline-none"
               placeholder="vous@mutatech.fr"
             />
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-sm text-textMuted">Mot de passe</span>
+            <span className="mb-1.5 block text-xs font-medium text-textMuted">Mot de passe</span>
             <input
               type="password"
               required
               autoComplete="current-password"
               value={motDePasse}
               onChange={(e) => setMotDePasse(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2.5 text-textPrimary focus:border-violet focus:outline-none"
+              className="w-full rounded-lg border border-line bg-surfaceAlt px-3 py-2.5 text-textPrimary focus:border-violet/70 focus:outline-none"
               placeholder="••••••••"
             />
           </label>
@@ -189,7 +188,9 @@ function LoginForm() {
         {/* Google */}
         {googleClientId && (
           <div className="space-y-3 text-center">
-            <p className="text-xs text-textMuted">ou</p>
+            <div className="flex items-center gap-3 text-xs text-textMuted">
+              <span className="h-px flex-1 bg-line" />ou<span className="h-px flex-1 bg-line" />
+            </div>
             <div id="google-btn" className="flex justify-center" />
             {!googlePret && (
               <p className="text-xs text-textMuted">Chargement de la connexion Google…</p>

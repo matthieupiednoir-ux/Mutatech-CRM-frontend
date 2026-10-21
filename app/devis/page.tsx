@@ -458,7 +458,7 @@ export default function DevisPage() {
                       </div>
                       {d.objet && <p className="mt-0.5 text-sm text-textMuted">{d.objet}</p>}
                       <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
-                        {d.client?.nom && <span>👤 {d.client.nom}</span>}
+                        {d.client?.nom && <span>{d.client.nom}</span>}
                         <span className="font-medium text-textPrimary">{ttc.toFixed(2)} € TTC</span>
                         {d.date_creation && <span>{new Date(d.date_creation).toLocaleDateString("fr-FR")}</span>}
                       </div>

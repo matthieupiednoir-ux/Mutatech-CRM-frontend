@@ -18,8 +18,8 @@ const VALIDITE_LABEL: Record<string, string> = {
   renouvelee: "Renouvelée", expiree: "Expirée",
 };
 const VALIDITE_COULEUR: Record<string, string> = {
-  active: "#00D4AA", a_renouveler: "#F5A623", renouvellement_demande: "#a89eff",
-  renouvelee: "#77778A", expiree: "#EF4444",
+  active: "var(--st-ok)", a_renouveler: "var(--st-warn)", renouvellement_demande: "var(--st-info)",
+  renouvelee: "var(--st-neutre)", expiree: "var(--st-err)",
 };
 
 function dateFr(v?: string | null): string {
@@ -309,7 +309,7 @@ export default function PrescriptionsPage() {
                       value={p.statut_validite || "active"}
                       onChange={(e) => handleChangerValidite(p, e.target.value)}
                       className="rounded-full border-0 px-2.5 py-1 text-xs font-medium"
-                      style={{ backgroundColor: `${VALIDITE_COULEUR[p.statut_validite || "active"]}22`, color: VALIDITE_COULEUR[p.statut_validite || "active"] }}
+                      style={{ backgroundColor: `color-mix(in srgb, ${VALIDITE_COULEUR[p.statut_validite || "active"]} 13%, transparent)`, color: VALIDITE_COULEUR[p.statut_validite || "active"] }}
                     >
                       {Object.entries(VALIDITE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                     </select>

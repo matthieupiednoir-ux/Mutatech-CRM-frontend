@@ -28,7 +28,7 @@ export default function PlanningPage() {
           fetchLoginUrl={planningLoginPersonnelUrl}
           fetchStatutPersonnel={planningStatutPersonnel}
           deconnexionPersonnelle={planningDeconnexionPersonnelle}
-          accentColor="#6C63FF"
+          accentColor="#7C6CFF"
         />
       </main>
     </>

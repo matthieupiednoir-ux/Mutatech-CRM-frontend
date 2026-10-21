@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
-import Kpi3DRing from "@/components/Kpi3DRing";
 import ChatAgentPanel from "@/components/ChatAgentPanel";
 import InsightStrip from "@/components/InsightStrip";
+import KpiTuile from "@/components/KpiTuile";
 import { agentInsights, idelInsights, idelDashboardResume, IdelResume } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import {
@@ -19,10 +19,10 @@ import {
 } from "@/lib/types";
 
 const COULEUR: Record<string, string> = {
-  brouillon:"#77778A", envoye:"#F0B429", accepte:"#5fe0c0", refuse:"#EF4444",
-  envoyee:"#F0B429", payee:"#5fe0c0", a_contacter:"#77778A", contacte:"#a89eff",
-  rdv_planifie:"#F0B429", converti:"#5fe0c0", perdu:"#EF4444",
-  todo:"#77778A", prog:"#F0B429", done:"#5fe0c0",
+  brouillon:"var(--st-neutre)", envoye:"var(--st-warn)", accepte:"var(--st-ok)", refuse:"var(--st-err)",
+  envoyee:"var(--st-warn)", payee:"var(--st-ok)", a_contacter:"var(--st-neutre)", contacte:"var(--st-info)",
+  rdv_planifie:"var(--st-warn)", converti:"var(--st-ok)", perdu:"var(--st-err)",
+  todo:"var(--st-neutre)", prog:"var(--st-warn)", done:"var(--st-ok)",
 };
 const LABEL: Record<string, string> = {
   brouillon:"Brouillon", envoye:"Envoyé", accepte:"Accepté", refuse:"Refusé",
@@ -71,18 +71,6 @@ const SPAN: Record<Taille, string> = {
 };
 const KEY = "mutatech-dashboard-v3";
 
-function KpiCard({ label, valeur, sousLabel, couleur="text-textPrimary" }: {
-  label:string; valeur:string; sousLabel?:string; couleur?:string;
-}) {
-  return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wide text-textMuted">{label}</p>
-      <p className={`mt-1 font-display text-2xl font-bold ${couleur}`}>{valeur}</p>
-      {sousLabel && <p className="mt-0.5 text-[11px] text-textMuted">{sousLabel}</p>}
-    </div>
-  );
-}
-
 function AperculCard({ titre, lien, items, modePerso }: {
   titre:string; lien:string;
   items:{texte:string;sousTexte?:string;couleur?:string}[];
@@ -92,8 +80,8 @@ function AperculCard({ titre, lien, items, modePerso }: {
   const inner = (
     <>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-display text-sm text-textPrimary">{titre}</h3>
-        {!modePerso && <span className="text-xs text-violet">Voir tout →</span>}
+        <h3 className="font-display text-sm font-semibold text-textPrimary">{titre}</h3>
+        {!modePerso && <span className="text-xs text-textMuted">Voir tout →</span>}
       </div>
       {list.length === 0
         ? <p className="text-xs text-textMuted">Rien pour l'instant.</p>
@@ -101,7 +89,7 @@ function AperculCard({ titre, lien, items, modePerso }: {
             {list.map((it, i) => (
               <div key={i} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
                 <span className="truncate text-xs text-textPrimary">{it.texte}</span>
-                {it.sousTexte && <span className="ml-2 shrink-0 text-[11px]" style={{color:it.couleur||"#77778A"}}>{it.sousTexte}</span>}
+                {it.sousTexte && <span className="ml-2 shrink-0 text-[11px]" style={{color:it.couleur||"var(--st-neutre)"}}>{it.sousTexte}</span>}
               </div>
             ))}
           </div>
@@ -117,15 +105,15 @@ function BarChart({ titre, donnees }: { titre:string; donnees:{statut:string;cou
   const total = items.length === 0 ? 0 : items.reduce((s, d) => s + (d.count || 0), 0);
   return (
     <div>
-      <h3 className="mb-3 font-display text-sm text-textPrimary">{titre}</h3>
+      <h3 className="mb-3 font-display text-sm font-semibold text-textPrimary">{titre}</h3>
       {total === 0
         ? <p className="text-xs text-textMuted">Aucune donnée.</p>
         : <div className="space-y-2">
             {items.map((d) => (
               <div key={d.statut} className="flex items-center gap-2">
                 <span className="w-24 shrink-0 text-[11px] text-textMuted">{LABEL[d.statut]||d.statut}</span>
-                <div className="h-5 flex-1 overflow-hidden rounded bg-surfaceAlt">
-                  <div className="h-full rounded" style={{width:`${Math.max(((d.count||0)/total)*100,4)}%`,background:COULEUR[d.statut]||"#77778A"}} />
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-surfaceAlt">
+                  <div className="h-full rounded-full" style={{width:`${Math.max(((d.count||0)/total)*100,4)}%`,background:COULEUR[d.statut]||"var(--st-neutre)"}} />
                 </div>
                 <span className="w-6 text-right text-[11px] text-textMuted">{d.count}</span>
               </div>
@@ -162,7 +150,7 @@ function Echeances({ modePerso }: { modePerso:boolean }) {
 
   return (
     <div>
-      <h3 className="mb-3 font-display text-sm text-textPrimary">Échéances &amp; Relances</h3>
+      <h3 className="mb-3 font-display text-sm font-semibold text-textPrimary">Échéances &amp; Relances</h3>
       {loading ? <p className="text-xs text-textMuted">Chargement…</p>
       : (enRetard.length + aVenir.length + abo.length) === 0
       ? <p className="text-xs text-textMuted">Tout est à jour.</p>
@@ -298,27 +286,16 @@ export default function DashboardPage() {
   const apP = P.slice(0,3).map(p=>({texte:p.nom,sousTexte:LABEL[p.statut]||p.statut,couleur:COULEUR[p.statut]}));
   const apT = T.slice(0,3).map(t=>({texte:t.titre,sousTexte:LABEL[t.statut]||t.statut,couleur:COULEUR[t.statut]}));
 
-  // Donnees du meme calcul, reformatees pour l'anneau 3D -- aucun nouveau
-  // fetch, juste une autre presentation des KPI deja charges plus haut.
-  const kpiRingItems = [
-    { label: "Clients", valeur: String(C.length), couleur: "#6C63FF" },
-    { label: "CA signé", valeur: `${caSigne.toFixed(0)} €`, couleur: "#00D4AA" },
-    { label: "En attente", valeur: `${caEnAttente.toFixed(0)} €`, couleur: "#F5A623" },
-    { label: "Facturé", valeur: `${caFacture.toFixed(0)} €`, couleur: "#6C63FF" },
-    { label: "Tâches", valeur: `${pctT}%`, couleur: "#00D4AA" },
-    { label: "Prospects actifs", valeur: String(pActifs), couleur: "#a89eff" },
-  ];
-
   const visibles = ordre.filter(id=>!masquees.includes(id));
 
   function carte(id: string): React.ReactNode {
     switch(id) {
-      case "kpi-clients": return <KpiCard label="Clients" valeur={String(C.length)} />;
-      case "kpi-ca-signe": return <KpiCard label="CA signé" valeur={`${caSigne.toFixed(0)} €`} couleur="text-teal" />;
-      case "kpi-en-attente": return <KpiCard label="En attente" valeur={`${caEnAttente.toFixed(0)} €`} couleur="text-amber" />;
-      case "kpi-facture": return <KpiCard label="Facturé" valeur={`${caFacture.toFixed(0)} €`} couleur="text-violet" />;
-      case "kpi-taches": return <KpiCard label="Tâches" valeur={`${pctT}%`} sousLabel={`${tDone}/${T.length}`} />;
-      case "kpi-prospects": return <KpiCard label="Prospects actifs" valeur={String(pActifs)} sousLabel={`${pctConv}% convertis`} />;
+      case "kpi-clients": return <KpiTuile label="Clients" valeur={String(C.length)} ton="violet" icone="clients" />;
+      case "kpi-ca-signe": return <KpiTuile label="CA signé" valeur={`${caSigne.toFixed(0)} €`} ton="teal" icone="euro" />;
+      case "kpi-en-attente": return <KpiTuile label="En attente" valeur={`${caEnAttente.toFixed(0)} €`} ton="amber" icone="horloge" />;
+      case "kpi-facture": return <KpiTuile label="Facturé" valeur={`${caFacture.toFixed(0)} €`} ton="violet" icone="facture" />;
+      case "kpi-taches": return <KpiTuile label="Tâches" valeur={`${pctT}%`} sousLabel={`${tDone}/${T.length}`} ton="sky" icone="coche" />;
+      case "kpi-prospects": return <KpiTuile label="Prospects actifs" valeur={String(pActifs)} sousLabel={`${pctConv}% convertis`} ton="rose" icone="cible" />;
       case "agent-ia": return <div className="h-[420px]"><ChatAgentPanel compact /></div>;
       case "echeances": return <Echeances modePerso={modePerso} />;
       case "apercu-devis": return <AperculCard titre="Devis" lien="/devis" items={apD} modePerso={modePerso} />;
@@ -339,19 +316,17 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         <InsightStrip fetcher={agentInsights} />
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-display text-2xl text-textPrimary">Tableau de bord</h1>
+          <h1 className="font-display text-2xl font-semibold text-textPrimary">Tableau de bord</h1>
           <div className="flex items-center gap-2">
             {modePerso && masquees.length>0 && <span className="text-xs text-textMuted">{masquees.length} masquée(s)</span>}
             {modePerso && <button onClick={()=>save(ORDRE_DEFAUT,[],TAILLE_DEFAUT)} className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Réinitialiser</button>}
             <button onClick={()=>setModePerso(v=>!v)} className={`rounded-lg px-4 py-1.5 text-sm font-medium ${modePerso?"bg-violet text-white":"border border-line text-textMuted hover:text-textPrimary"}`}>
-              {modePerso?"✓ Terminer":"⚙ Personnaliser"}
+              {modePerso?"Terminer":"Personnaliser"}
             </button>
           </div>
         </div>
 
         {error && <p className="mb-4 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">{error}</p>}
-
-        {!loading && !modePerso && <Kpi3DRing items={kpiRingItems} />}
 
         {modePerso && masquees.length>0 && (
           <div className="mb-6 rounded-xl border border-dashed border-line bg-surface/50 p-4">
@@ -388,8 +363,8 @@ export default function DashboardPage() {
         {aAccesIdel && (
           <div className="mt-8 border-t border-line pt-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg text-textPrimary">
-                <span style={{ color: "#FF2E9A" }}>●</span> Côté IDEL · PSDM · Médical
+              <h2 className="font-display text-lg font-semibold text-textPrimary">
+                <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#F0508C" }} /> Côté IDEL · PSDM · Médical
               </h2>
               <Link href="/idel" className="text-xs text-textMuted hover:text-textPrimary">
                 Ouvrir le pipeline complet →
@@ -401,16 +376,16 @@ export default function DashboardPage() {
             {idelResume && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Patients" valeur={String(idelResume.patients)} />
+                  <KpiTuile label="Patients" valeur={String(idelResume.patients)} ton="rose" icone="clients" />
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Tournées aujourd'hui" valeur={String(idelResume.tournees_aujourdhui)} />
+                  <KpiTuile label="Tournées aujourd'hui" valeur={String(idelResume.tournees_aujourdhui)} ton="sky" icone="agenda" />
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Commandes en attente" valeur={String(idelResume.commandes_en_attente)} couleur="text-amber" />
+                  <KpiTuile label="Commandes en attente" valeur={String(idelResume.commandes_en_attente)} ton="amber" icone="colis" />
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Ordonnances actives" valeur={String(idelResume.ordonnances_actives)} couleur="text-teal" />
+                  <KpiTuile label="Ordonnances actives" valeur={String(idelResume.ordonnances_actives)} ton="teal" icone="facture" />
                 </div>
               </div>
             )}
@@ -420,7 +395,7 @@ export default function DashboardPage() {
               <Link href="/idel/pharma" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Commandes</Link>
               <Link href="/idel/prescriptions" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Ordonnances</Link>
               <Link href="/idel/agenda" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Agenda</Link>
-              <Link href="/idel/nova" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">✨ Nova</Link>
+              <Link href="/idel/nova" className="rounded-lg border border-line px-3 py-1.5 text-xs text-textMuted hover:text-textPrimary">Nova</Link>
             </div>
           </div>
         )}

@@ -413,7 +413,7 @@ export default function RemplacementsPage() {
                             disabled={pdfEnCours === r.id}
                             className="rounded-lg border border-line px-2.5 py-1 text-xs text-textMuted hover:text-textPrimary disabled:opacity-50"
                           >
-                            {pdfEnCours === r.id ? "..." : "📄 Générer le PDF"}
+                            {pdfEnCours === r.id ? "..." : "Générer le PDF"}
                           </button>
                         )}
                         {!r.archive && (

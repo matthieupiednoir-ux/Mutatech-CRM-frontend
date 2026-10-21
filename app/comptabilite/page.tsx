@@ -178,7 +178,7 @@ export default function ComptabilitePage() {
               disabled={exportEnCours || loading}
               className="rounded-lg bg-violet px-4 py-2 text-sm font-medium text-white hover:bg-violet/90 disabled:opacity-50"
             >
-              {exportEnCours ? "Génération…" : "📄 Exporter le bilan annuel"}
+              {exportEnCours ? "Génération…" : "Exporter le bilan annuel"}
             </button>
           </div>
         </div>
