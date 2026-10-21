@@ -17,9 +17,9 @@ export interface Insight {
 }
 
 const COULEUR: Record<string, string> = {
-  info: "#8B90A0",
-  attention: "#E5A33B",
-  important: "#E5605A",
+  info: "var(--st-neutre)",
+  attention: "var(--st-warn)",
+  important: "var(--st-err)",
 };
 
 const LABEL_ACTION: Record<string, string> = {
@@ -86,7 +86,7 @@ export default function InsightStrip({
         <div
           key={i}
           className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs text-textPrimary"
-          style={{ backgroundColor: `${COULEUR[ins.urgence]}10`, borderColor: `${COULEUR[ins.urgence]}33` }}
+          style={{ backgroundColor: `color-mix(in srgb, ${COULEUR[ins.urgence]} 6%, transparent)`, borderColor: `color-mix(in srgb, ${COULEUR[ins.urgence]} 20%, transparent)` }}
         >
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <span className="flex items-center gap-2">
@@ -104,7 +104,7 @@ export default function InsightStrip({
                       onClick={() => handleAction(ins.action_type as string, item)}
                       disabled={enCours === cle || fait}
                       className="rounded-full border px-2 py-0.5 text-[10px] font-medium transition disabled:opacity-50"
-                      style={{ borderColor: COULEUR[ins.urgence], color: fait ? "#3DBE9C" : COULEUR[ins.urgence] }}
+                      style={{ borderColor: COULEUR[ins.urgence], color: fait ? "var(--st-ok)" : COULEUR[ins.urgence] }}
                     >
                       {fait ? `✓ ${item.label}` : enCours === cle ? "..." : `${LABEL_ACTION[ins.action_type as string]} ${item.label}`}
                     </button>

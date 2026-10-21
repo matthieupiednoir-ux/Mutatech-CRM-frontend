@@ -82,7 +82,7 @@ function LoginForm() {
       const btn = document.getElementById("google-btn");
       if (btn) {
         window.google.accounts.id.renderButton(btn, {
-          theme: "filled_black",
+          theme: window.matchMedia("(prefers-color-scheme: light)").matches ? "outline" : "filled_black",
           size: "large",
           width: 320,
           text: "signin_with",

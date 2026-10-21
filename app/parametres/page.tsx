@@ -37,8 +37,8 @@ const THEMES: { id: string; nom: string; description: string; couleurs: string[]
   {
     id: "defaut",
     nom: "Défaut",
-    description: "Graphite sobre, accent indigo — le thème Mutatech.",
-    couleurs: ["#0B0C10", "#13141A", "#6E74F0", "#3DBE9C"],
+    description: "Violet et vert d'eau, clair ou sombre selon votre appareil.",
+    couleurs: ["#0E0F1A", "#F5F6FB", "#7C6CFF", "#22C3A6"],
   },
   {
     id: "sakura",

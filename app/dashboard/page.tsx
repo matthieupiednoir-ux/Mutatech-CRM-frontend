@@ -5,6 +5,7 @@ import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import ChatAgentPanel from "@/components/ChatAgentPanel";
 import InsightStrip from "@/components/InsightStrip";
+import KpiTuile from "@/components/KpiTuile";
 import { agentInsights, idelInsights, idelDashboardResume, IdelResume } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import {
@@ -18,10 +19,10 @@ import {
 } from "@/lib/types";
 
 const COULEUR: Record<string, string> = {
-  brouillon:"#8B90A0", envoye:"#E5A33B", accepte:"#3DBE9C", refuse:"#E5605A",
-  envoyee:"#E5A33B", payee:"#3DBE9C", a_contacter:"#8B90A0", contacte:"#9FA3F7",
-  rdv_planifie:"#E5A33B", converti:"#3DBE9C", perdu:"#E5605A",
-  todo:"#8B90A0", prog:"#E5A33B", done:"#3DBE9C",
+  brouillon:"var(--st-neutre)", envoye:"var(--st-warn)", accepte:"var(--st-ok)", refuse:"var(--st-err)",
+  envoyee:"var(--st-warn)", payee:"var(--st-ok)", a_contacter:"var(--st-neutre)", contacte:"var(--st-info)",
+  rdv_planifie:"var(--st-warn)", converti:"var(--st-ok)", perdu:"var(--st-err)",
+  todo:"var(--st-neutre)", prog:"var(--st-warn)", done:"var(--st-ok)",
 };
 const LABEL: Record<string, string> = {
   brouillon:"Brouillon", envoye:"Envoyé", accepte:"Accepté", refuse:"Refusé",
@@ -70,18 +71,6 @@ const SPAN: Record<Taille, string> = {
 };
 const KEY = "mutatech-dashboard-v3";
 
-function KpiCard({ label, valeur, sousLabel, couleur="text-textPrimary" }: {
-  label:string; valeur:string; sousLabel?:string; couleur?:string;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-textMuted">{label}</p>
-      <p className={`mt-2 font-display text-[26px] font-semibold leading-none tracking-tight ${couleur}`}>{valeur}</p>
-      {sousLabel && <p className="mt-2 text-xs text-textMuted">{sousLabel}</p>}
-    </div>
-  );
-}
-
 function AperculCard({ titre, lien, items, modePerso }: {
   titre:string; lien:string;
   items:{texte:string;sousTexte?:string;couleur?:string}[];
@@ -100,7 +89,7 @@ function AperculCard({ titre, lien, items, modePerso }: {
             {list.map((it, i) => (
               <div key={i} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
                 <span className="truncate text-xs text-textPrimary">{it.texte}</span>
-                {it.sousTexte && <span className="ml-2 shrink-0 text-[11px]" style={{color:it.couleur||"#8B90A0"}}>{it.sousTexte}</span>}
+                {it.sousTexte && <span className="ml-2 shrink-0 text-[11px]" style={{color:it.couleur||"var(--st-neutre)"}}>{it.sousTexte}</span>}
               </div>
             ))}
           </div>
@@ -124,7 +113,7 @@ function BarChart({ titre, donnees }: { titre:string; donnees:{statut:string;cou
               <div key={d.statut} className="flex items-center gap-2">
                 <span className="w-24 shrink-0 text-[11px] text-textMuted">{LABEL[d.statut]||d.statut}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-surfaceAlt">
-                  <div className="h-full rounded-full" style={{width:`${Math.max(((d.count||0)/total)*100,4)}%`,background:COULEUR[d.statut]||"#8B90A0"}} />
+                  <div className="h-full rounded-full" style={{width:`${Math.max(((d.count||0)/total)*100,4)}%`,background:COULEUR[d.statut]||"var(--st-neutre)"}} />
                 </div>
                 <span className="w-6 text-right text-[11px] text-textMuted">{d.count}</span>
               </div>
@@ -301,12 +290,12 @@ export default function DashboardPage() {
 
   function carte(id: string): React.ReactNode {
     switch(id) {
-      case "kpi-clients": return <KpiCard label="Clients" valeur={String(C.length)} />;
-      case "kpi-ca-signe": return <KpiCard label="CA signé" valeur={`${caSigne.toFixed(0)} €`} couleur="text-teal" />;
-      case "kpi-en-attente": return <KpiCard label="En attente" valeur={`${caEnAttente.toFixed(0)} €`} couleur="text-amber" />;
-      case "kpi-facture": return <KpiCard label="Facturé" valeur={`${caFacture.toFixed(0)} €`} couleur="text-violet" />;
-      case "kpi-taches": return <KpiCard label="Tâches" valeur={`${pctT}%`} sousLabel={`${tDone}/${T.length}`} />;
-      case "kpi-prospects": return <KpiCard label="Prospects actifs" valeur={String(pActifs)} sousLabel={`${pctConv}% convertis`} />;
+      case "kpi-clients": return <KpiTuile label="Clients" valeur={String(C.length)} ton="violet" icone="clients" />;
+      case "kpi-ca-signe": return <KpiTuile label="CA signé" valeur={`${caSigne.toFixed(0)} €`} ton="teal" icone="euro" />;
+      case "kpi-en-attente": return <KpiTuile label="En attente" valeur={`${caEnAttente.toFixed(0)} €`} ton="amber" icone="horloge" />;
+      case "kpi-facture": return <KpiTuile label="Facturé" valeur={`${caFacture.toFixed(0)} €`} ton="violet" icone="facture" />;
+      case "kpi-taches": return <KpiTuile label="Tâches" valeur={`${pctT}%`} sousLabel={`${tDone}/${T.length}`} ton="sky" icone="coche" />;
+      case "kpi-prospects": return <KpiTuile label="Prospects actifs" valeur={String(pActifs)} sousLabel={`${pctConv}% convertis`} ton="rose" icone="cible" />;
       case "agent-ia": return <div className="h-[420px]"><ChatAgentPanel compact /></div>;
       case "echeances": return <Echeances modePerso={modePerso} />;
       case "apercu-devis": return <AperculCard titre="Devis" lien="/devis" items={apD} modePerso={modePerso} />;
@@ -375,7 +364,7 @@ export default function DashboardPage() {
           <div className="mt-8 border-t border-line pt-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg font-semibold text-textPrimary">
-                <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#E0457B" }} /> Côté IDEL · PSDM · Médical
+                <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#F0508C" }} /> Côté IDEL · PSDM · Médical
               </h2>
               <Link href="/idel" className="text-xs text-textMuted hover:text-textPrimary">
                 Ouvrir le pipeline complet →
@@ -387,16 +376,16 @@ export default function DashboardPage() {
             {idelResume && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Patients" valeur={String(idelResume.patients)} />
+                  <KpiTuile label="Patients" valeur={String(idelResume.patients)} ton="rose" icone="clients" />
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Tournées aujourd'hui" valeur={String(idelResume.tournees_aujourdhui)} />
+                  <KpiTuile label="Tournées aujourd'hui" valeur={String(idelResume.tournees_aujourdhui)} ton="sky" icone="agenda" />
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Commandes en attente" valeur={String(idelResume.commandes_en_attente)} couleur="text-amber" />
+                  <KpiTuile label="Commandes en attente" valeur={String(idelResume.commandes_en_attente)} ton="amber" icone="colis" />
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-4">
-                  <KpiCard label="Ordonnances actives" valeur={String(idelResume.ordonnances_actives)} couleur="text-teal" />
+                  <KpiTuile label="Ordonnances actives" valeur={String(idelResume.ordonnances_actives)} ton="teal" icone="facture" />
                 </div>
               </div>
             )}

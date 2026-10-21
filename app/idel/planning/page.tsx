@@ -28,7 +28,7 @@ export default function PlanningIdelPage() {
           fetchLoginUrl={idelPlanningLoginPersonnelUrl}
           fetchStatutPersonnel={idelPlanningStatutPersonnel}
           deconnexionPersonnelle={idelPlanningDeconnexionPersonnelle}
-          accentColor="#E0457B"
+          accentColor="#F0508C"
         />
       </main>
     </>

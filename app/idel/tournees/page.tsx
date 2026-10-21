@@ -38,11 +38,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COULEUR: Record<string, string> = {
-  planned: "#8B90A0",
-  in_progress: "#E5A33B",
-  completed: "#3DBE9C",
-  delayed: "#E5605A",
-  cancelled: "#8B90A0",
+  planned: "var(--st-neutre)",
+  in_progress: "var(--st-warn)",
+  completed: "var(--st-ok)",
+  delayed: "var(--st-err)",
+  cancelled: "var(--st-neutre)",
 };
 
 function aujourdHui(): string {
@@ -403,7 +403,7 @@ export default function TourneesPage() {
                               onChange={(e) => handleChangerStatutVisite(t.id, v, e.target.value)}
                               className="rounded-full border-0 px-2.5 py-1 text-xs font-medium"
                               style={{
-                                backgroundColor: `${STATUS_COULEUR[v.status]}22`,
+                                backgroundColor: `color-mix(in srgb, ${STATUS_COULEUR[v.status]} 13%, transparent)`,
                                 color: STATUS_COULEUR[v.status],
                               }}
                             >

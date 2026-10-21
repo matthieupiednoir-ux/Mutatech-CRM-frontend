@@ -4,20 +4,24 @@
 
 /* ── Palette par defaut (theme "defaut") ────────────────────────────────
    Sert de valeur de repli tant qu'aucun data-theme n'est pose sur <body>
-   (ex: avant que /parametres ait charge la config), et EST le theme
-   "Defaut" lui-meme. Refonte d'octobre 2026 : graphite neutre plutot que
-   bleu nuit, accents desatures, plus de halos lumineux -- un rendu plus
-   sobre et plus professionnel. Les noms de variables ne changent pas. */
+   et EST le theme "Defaut" lui-meme. Il suit le reglage clair/sombre du
+   navigateur ou du telephone (prefers-color-scheme) : palette sombre
+   ci-dessous, palette claire dans le @media plus bas. Les autres themes
+   (Sakura, Bois, Clinique...) gardent leur palette fixe. */
 :root {
-  --color-ink: #0B0C10;
-  --color-surface: #13141A;
-  --color-surface-alt: #1A1C23;
-  --color-line: #262932;
-  --color-violet: #6E74F0;
-  --color-teal: #3DBE9C;
-  --color-amber: #E5A33B;
-  --color-text-primary: #ECEDF1;
-  --color-text-muted: #8B90A0;
+  --color-ink: #0E0F1A;
+  --color-surface: #161827;
+  --color-surface-alt: #1E2134;
+  --color-line: #2B2F46;
+  --color-violet: #7C6CFF;
+  --color-teal: #22C3A6;
+  --color-amber: #F5A524;
+  --color-text-primary: #EEF0F8;
+  --color-text-muted: #9499B3;
+  /* Couleurs d'appoint du theme Defaut (degrades, pastilles) */
+  --color-second: #22C3A6;
+  --glow-1: rgba(124, 108, 255, 0.16);
+  --glow-2: rgba(34, 195, 166, 0.08);
 }
 
 html {
@@ -30,37 +34,100 @@ body {
   min-height: 100vh;
   background-color: var(--color-ink);
   background-attachment: fixed;
+  background-image:
+    radial-gradient(ellipse 70% 45% at 0% -5%, var(--glow-1), transparent 70%),
+    radial-gradient(ellipse 60% 45% at 100% 105%, var(--glow-2), transparent 70%);
   color: var(--color-text-primary);
+  /* Couleurs de statut (Accepté, En retard...) : derivees des couleurs du
+     theme actif, donc lisibles en clair comme en sombre. */
+  --st-ok: var(--color-teal);
+  --st-warn: var(--color-amber);
+  --st-err: var(--color-err, #EF6461);
+  --st-neutre: var(--color-text-muted);
+  --st-info: color-mix(in srgb, var(--color-violet) 75%, var(--color-text-muted));
   font-feature-settings: "cv11", "ss01";
   text-rendering: optimizeLegibility;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Mode CRM (Pixel) -- accent indigo. Chaque theme (data-theme) redefinit
-   --accent juste en dessous, donc celui qui s'applique reellement depend
-   du theme choisi. Fond quasi uni : un seul voile tres leger en haut. */
+/* Mode CRM (Pixel) -- accent violet, degrade violet -> vert d'eau.
+   Chaque theme (data-theme) redefinit --accent juste en dessous. */
 body[data-mode="crm"] {
   --accent: var(--color-violet);
-  --accent-soft: color-mix(in srgb, var(--color-violet) 12%, transparent);
-  background-image: radial-gradient(ellipse 80% 40% at 50% -10%, color-mix(in srgb, var(--color-violet) 7%, transparent), transparent 70%);
+  --accent-soft: color-mix(in srgb, var(--color-violet) 14%, transparent);
 }
 
-/* Mode IDEL / PSDM (Nova) -- accent framboise, plus pose que l'ancien
-   rose neon. --color-violet suit l'accent pour que les boutons
-   principaux (bg-violet) restent dans l'identite IDEL. Jamais affecte par
-   les themes CRM ci-dessous, qui ne s'appliquent que si data-mode="crm". */
+/* Mode IDEL / PSDM (Nova) -- accent rose framboise, degrade rose ->
+   violet. --color-violet suit l'accent pour que les boutons principaux
+   (bg-violet) restent dans l'identite IDEL. Jamais affecte par les themes
+   CRM, qui ne s'appliquent que si data-mode="crm". */
 body[data-mode="idel"] {
-  --color-violet: #E0457B;
-  --accent: #E0457B;
-  --accent-soft: rgba(224, 69, 123, 0.12);
-  background-image: radial-gradient(ellipse 80% 40% at 50% -10%, rgba(224, 69, 123, 0.07), transparent 70%);
+  --color-violet: #F0508C;
+  --color-second: #8B7BFF;
+  --accent: #F0508C;
+  --accent-soft: rgba(240, 80, 140, 0.14);
+  --glow-1: rgba(240, 80, 140, 0.15);
+  --glow-2: rgba(139, 123, 255, 0.10);
 }
 
-/* Mode Admin -- neutre, ambre (ni Pixel ni Nova, la main de Mutatech) */
+/* Mode Admin -- ambre (ni Pixel ni Nova, la main de Mutatech) */
 body[data-mode="admin"] {
-  --accent: #E5A33B;
-  --accent-soft: rgba(229, 163, 59, 0.10);
-  background-image: radial-gradient(ellipse 80% 40% at 50% -10%, rgba(229, 163, 59, 0.05), transparent 70%);
+  --accent: #F5A524;
+  --accent-soft: rgba(245, 165, 36, 0.12);
+  --color-second: #7C6CFF;
+  --glow-1: rgba(245, 165, 36, 0.10);
+  --glow-2: rgba(124, 108, 255, 0.08);
+}
+
+/* ── Version claire du theme Defaut (navigateur en mode clair) ──────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-ink: #F5F6FB;
+    --color-surface: #FFFFFF;
+    --color-surface-alt: #F0F2F8;
+    --color-line: #E2E5EF;
+    --color-violet: #5B4CF0;
+    --color-teal: #0E9F86;
+    --color-amber: #D3820A;
+    --color-text-primary: #161A2E;
+    --color-text-muted: #5F6682;
+    --color-second: #0E9F86;
+    --color-err: #D93F3C;
+    --glow-1: rgba(91, 76, 240, 0.10);
+    --glow-2: rgba(14, 159, 134, 0.07);
+  }
+  html {
+    color-scheme: light;
+  }
+  body[data-mode="idel"] {
+    --color-violet: #D6336C;
+    --color-second: #6F5CF0;
+    --accent: #D6336C;
+    --accent-soft: rgba(214, 51, 108, 0.10);
+    --glow-1: rgba(214, 51, 108, 0.09);
+    --glow-2: rgba(111, 92, 240, 0.07);
+  }
+  body[data-mode="admin"] {
+    --accent: #C77A08;
+    --accent-soft: rgba(199, 122, 8, 0.10);
+  }
+  /* Cartes un peu plus detachees du fond en clair */
+  html .rounded-xl.bg-surface,
+  html .rounded-2xl.bg-surface {
+    box-shadow: 0 1px 2px rgb(22 26 46 / 0.05), 0 4px 12px -6px rgb(22 26 46 / 0.08);
+  }
+}
+
+/* Theme Defaut uniquement : boutons principaux en degrade d'accent et
+   liseré colore sous la barre de navigation. */
+body:is(:not([data-theme]), [data-theme="defaut"]) .bg-violet {
+  background-image: linear-gradient(135deg, var(--color-violet), color-mix(in srgb, var(--color-violet) 60%, var(--color-second)));
+}
+body:is(:not([data-theme]), [data-theme="defaut"]) .bg-violet:hover {
+  filter: brightness(1.06);
+}
+.liseret-accent {
+  background-image: linear-gradient(90deg, var(--accent, var(--color-violet)), var(--color-second, var(--color-teal)), transparent);
 }
 
 /* ── Socle visuel commun (tous modes, tous themes) ──────────────────── */

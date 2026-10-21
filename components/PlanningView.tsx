@@ -42,10 +42,10 @@ interface PlanningViewProps {
   // encore, ex: la page IDEL qui n'a pas encore ete mise a jour).
   modifierEvenement?: (data: EvenementPlanningModifierInput) => Promise<EvenementPlanning>;
   supprimerEvenement?: (eventId: string, assigneAContexte: string) => Promise<unknown>;
-  accentColor?: string; // ex "#6E74F0" (CRM) ou "#E0457B" (IDEL)
+  accentColor?: string; // ex "#7C6CFF" (CRM) ou "#F0508C" (IDEL)
 }
 
-const PALETTE = ["#6E74F0", "#3DBE9C", "#E5A33B", "#9FA3F7", "#E5605A", "#E0457B", "#3DBE9C"];
+const PALETTE = ["#7C6CFF", "#22C3A6", "#F5A524", "#9FA3F7", "#E5605A", "#F0508C", "#22C3A6"];
 const NOMS_JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 // Formate une date en "YYYY-MM-DD" a partir de SES COMPOSANTES LOCALES
@@ -108,7 +108,7 @@ export default function PlanningView({
   fetchMembres, fetchEvenements, creerEvenement,
   fetchLoginUrl, fetchStatutPersonnel, deconnexionPersonnelle,
   modifierEvenement, supprimerEvenement,
-  accentColor = "#6E74F0",
+  accentColor = "#7C6CFF",
 }: PlanningViewProps) {
   const [vue, setVue] = useState<"mois" | "semaine">("mois");
   const [offsetSemaine, setOffsetSemaine] = useState(0);

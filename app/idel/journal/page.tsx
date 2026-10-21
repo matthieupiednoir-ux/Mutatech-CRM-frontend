@@ -95,7 +95,7 @@ export default function JournalIdelPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-textPrimary">
-                    <span className="font-medium" style={{ color: "#E0457B" }}>{e.auteur}</span> — {e.description}
+                    <span className="font-medium" style={{ color: "#F0508C" }}>{e.auteur}</span> — {e.description}
                   </p>
                   <p className="mt-0.5 text-xs text-textMuted">
                     {new Date(e.cree_le).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}

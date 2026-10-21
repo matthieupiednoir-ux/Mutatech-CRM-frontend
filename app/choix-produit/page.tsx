@@ -47,9 +47,9 @@ export default function ChoixProduitPage() {
           {/* Plateforme IDEL */}
           <button
             onClick={() => router.push("/idel/accueil")}
-            className="group flex flex-col items-start rounded-2xl border border-line bg-surface p-7 text-left transition hover:border-[#E0457B]/50 hover:shadow-pop"
+            className="group flex flex-col items-start rounded-2xl border border-line bg-surface p-7 text-left transition hover:border-[#F0508C]/50 hover:shadow-pop"
           >
-            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#E0457B]/10 text-[#E0457B] ring-1 ring-[#E0457B]/20">
+            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#F0508C]/10 text-[#F0508C] ring-1 ring-[#F0508C]/20">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z" /><path d="M9 12h2l1-2 1 4 1-2h1" />
               </svg>
@@ -60,7 +60,7 @@ export default function ChoixProduitPage() {
             <p className="text-sm text-textMuted leading-relaxed">
               Tableau de bord du jour, pipeline ordonnances, cotation NGAP, préparation des transmissions CPAM.
             </p>
-            <span className="mt-5 text-sm font-medium text-[#E0457B] group-hover:underline">
+            <span className="mt-5 text-sm font-medium text-[#F0508C] group-hover:underline">
               Accéder à l'espace IDEL →
             </span>
           </button>

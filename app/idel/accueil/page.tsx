@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import InsightStrip from "@/components/InsightStrip";
+import KpiTuile from "@/components/KpiTuile";
 import { idelAccueil, idelInsights, IdelAccueil, IdelPerimetreAccueil, ApiError } from "@/lib/api";
 
 // Page d'accueil IDEL : recapitulatif simple de la journee et de
@@ -18,10 +19,10 @@ const PRESTATION: Record<string, string> = {
   aerosolotherapie: "Aérosolthérapie", autre: "Autre",
 };
 const STATUT_VISITE: Record<string, { label: string; couleur: string }> = {
-  planned: { label: "Prévue", couleur: "#8B90A0" },
-  in_progress: { label: "En cours", couleur: "#E5A33B" },
-  delayed: { label: "Retardée", couleur: "#E5605A" },
-  completed: { label: "Faite", couleur: "#3DBE9C" },
+  planned: { label: "Prévue", couleur: "var(--st-neutre)" },
+  in_progress: { label: "En cours", couleur: "var(--st-warn)" },
+  delayed: { label: "Retardée", couleur: "var(--st-err)" },
+  completed: { label: "Faite", couleur: "var(--st-ok)" },
 };
 const MOIS_COURT = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
@@ -49,14 +50,10 @@ function Carte({ titre, lien, lienLabel = "Ouvrir →", children }: {
   );
 }
 
-function Kpi({ label, valeur, sousLabel, couleur = "text-textPrimary", lien }: {
-  label: string; valeur: string; sousLabel?: string; couleur?: string; lien: string;
-}) {
+function Kpi({ lien, ...props }: React.ComponentProps<typeof KpiTuile> & { lien: string }) {
   return (
     <Link href={lien} className="rounded-xl border border-line bg-surface p-4 transition hover:border-textMuted/30 hover:bg-surfaceAlt/40">
-      <p className="text-xs font-medium text-textMuted">{label}</p>
-      <p className={`mt-2 font-display text-[26px] font-semibold leading-none tracking-tight ${couleur}`}>{valeur}</p>
-      {sousLabel && <p className="mt-2 text-xs text-textMuted">{sousLabel}</p>}
+      <KpiTuile {...props} />
     </Link>
   );
 }
@@ -145,16 +142,16 @@ export default function AccueilIdelPage() {
             <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
               {d.journee ? (
                 <Kpi label="Visites du jour" valeur={String(d.journee.nb_restantes)}
-                     sousLabel={`restante(s) sur ${d.journee.nb_visites}`} lien="/idel/tournees" />
+                     sousLabel={`restante(s) sur ${d.journee.nb_visites}`} ton="sky" icone="agenda" lien="/idel/tournees" />
               ) : (
-                <Kpi label="Patients suivis" valeur={String(d.patients)} lien="/idel/patients" />
+                <Kpi label="Patients suivis" valeur={String(d.patients)} ton="rose" icone="clients" lien="/idel/patients" />
               )}
-              <Kpi label="Dossiers à traiter" valeur={String(aTraiter)} couleur={aTraiter > 0 ? "text-amber" : "text-textPrimary"}
+              <Kpi label="Dossiers à traiter" valeur={String(aTraiter)} ton={aTraiter > 0 ? "amber" : "neutre"} icone="dossier"
                    sousLabel="dans le Pipeline" lien="/idel" />
-              <Kpi label="Transmis ce mois" valeur={euros(d.facturation.facture_mois)} couleur="text-teal"
+              <Kpi label="Transmis ce mois" valeur={euros(d.facturation.facture_mois)} ton="teal" icone="envoi"
                    lien="/idel/comptabilite" />
               <Kpi label="En attente de paiement" valeur={euros(d.facturation.montant_en_attente_paiement)}
-                   couleur="text-violet" lien="/idel/comptabilite" />
+                   ton="violet" icone="portefeuille" lien="/idel/comptabilite" />
             </div>
 
             <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
@@ -170,7 +167,7 @@ export default function AccueilIdelPage() {
                       </div>
                       <div className="space-y-1.5">
                         {d.journee.visites.map((v, i) => {
-                          const s = STATUT_VISITE[v.statut] || { label: v.statut, couleur: "#8B90A0" };
+                          const s = STATUT_VISITE[v.statut] || { label: v.statut, couleur: "var(--st-neutre)" };
                           return (
                             <div key={i} className="flex items-center justify-between rounded-lg bg-surfaceAlt px-2.5 py-1.5">
                               <span className="truncate text-xs text-textPrimary">

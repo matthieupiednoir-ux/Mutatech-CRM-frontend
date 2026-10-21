@@ -35,8 +35,8 @@ const THEMES_IDEL: { id: string; nom: string; description: string; couleurs: str
   {
     id: "defaut",
     nom: "Nova (Défaut)",
-    description: "Graphite sobre, accent framboise — l'identité Nova.",
-    couleurs: ["#0B0C10", "#13141A", "#E0457B", "#3DBE9C"],
+    description: "Rose framboise et violet, clair ou sombre selon votre appareil.",
+    couleurs: ["#0E0F1A", "#F5F6FB", "#F0508C", "#8B7BFF"],
   },
   {
     id: "clinique",
