@@ -33,6 +33,8 @@ async function chargerConfigEtRediriger(produit?: string, suivant?: string | nul
     window.location.href = suivant;
   } else if (p === "idel") {
     window.location.href = "/idel/accueil";
+  } else if (p === "formation") {
+    window.location.href = "/formation";
   } else if (p === "crm+idel" || p === "crm_idel") {
     window.location.href = "/choix-produit";
   } else {

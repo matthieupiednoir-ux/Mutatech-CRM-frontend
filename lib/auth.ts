@@ -111,6 +111,16 @@ export function getProduit(): string {
   return getUser()?.produit || "crm";
 }
 
+// Compte « formation » seule (client sans CRM ni IDEL) : seules ces pages
+// lui sont utiles. Masquage cote interface uniquement, le backend repond
+// 403 sur toutes les autres routes.
+export const PRODUIT_FORMATION = "formation";
+export const PAGES_FORMATION_SEULE = ["/formation", "/equipe", "/admin"];
+
+export function estFormationSeule(): boolean {
+  return getProduit() === PRODUIT_FORMATION;
+}
+
 export function deconnecter(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);

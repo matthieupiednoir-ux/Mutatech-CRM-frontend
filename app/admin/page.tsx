@@ -23,12 +23,14 @@ const PRODUIT_LABEL: Record<string, string> = {
   crm: "CRM",
   idel: "IDEL",
   "crm+idel": "CRM + IDEL",
+  formation: "Formation seule",
 };
 
 const PRODUIT_COULEUR: Record<string, string> = {
   crm: "bg-violet/10 text-violet",
   idel: "bg-teal/10 text-teal",
   "crm+idel": "bg-amber/10 text-amber",
+  formation: "bg-surfaceAlt text-textPrimary",
 };
 
 const FORM_VIDE = {
@@ -280,7 +282,13 @@ export default function AdminPage() {
                   <option value="crm">CRM Mutatech</option>
                   <option value="idel">Plateforme IDEL</option>
                   <option value="crm+idel">CRM + IDEL</option>
+                  <option value="formation">Formation seule (sans CRM ni IDEL)</option>
                 </select>
+                {form.produit === "formation" && (
+                  <span className="mt-1 block text-xs text-textMuted">
+                    Accès à l&apos;espace Formation uniquement. L&apos;abonnement formation est activé à la création.
+                  </span>
+                )}
               </label>
 
               <label className="block">
