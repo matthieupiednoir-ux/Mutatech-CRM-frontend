@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { ApiError } from "@/lib/api";
 import { membresLister, membresInviter, membresModifier, membresRetirer, MembreEquipeClient } from "@/lib/api";
-import { getUser } from "@/lib/auth";
+import { estFormationSeule, getUser } from "@/lib/auth";
 
 const ROLE_LABEL: Record<string, string> = {
   owner: "Propriétaire",
@@ -113,7 +113,9 @@ export default function EquipeClientPage() {
           <div>
             <h1 className="font-display text-2xl text-textPrimary">Mon équipe</h1>
             <p className="mt-1 text-sm text-textMuted">
-              Invite tes collègues à rejoindre ton CRM — ils auront accès aux mêmes données que toi.
+              {estFormationSeule()
+                ? "Invite tes collègues, puis donne-leur l'accès aux modules depuis l'onglet Formation."
+                : "Invite tes collègues à rejoindre ton CRM — ils auront accès aux mêmes données que toi."}
             </p>
           </div>
           <button

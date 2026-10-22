@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { getGoogleStatus, urlConnexionGoogle, monOrganisation, getTenantConfig } from "@/lib/api";
-import { deconnecter, getUser } from "@/lib/auth";
+import { deconnecter, getUser, PAGES_FORMATION_SEULE, PRODUIT_FORMATION } from "@/lib/auth";
 import FallingPetals from "@/components/FallingPetals";
 import { saisonActuelle } from "@/lib/saison";
 
@@ -88,7 +88,8 @@ function NavBarInterieur() {
   const estAdmin = pathname.startsWith("/admin");
   const aAccesCrm = produit === "crm" || produit === "crm+idel";
   const aAccesIdel = produit === "idel" || produit === "crm+idel";
-  const estRoleAdmin = user?.role === "admin" || user?.role === "owner";
+  const formationSeule = produit === PRODUIT_FORMATION;
+  const estRoleAdmin = user?.role === "admin" || (user?.role === "owner" && !formationSeule);
 
   const mode = estAdmin ? "admin" : estIdel ? "idel" : "crm";
 
@@ -129,6 +130,8 @@ function NavBarInterieur() {
   const peutGererEquipe = user?.role === "owner" || user?.role === "admin";
   const onglets = estAdmin
     ? ONGLETS_ADMIN
+    : formationSeule
+    ? [ONGLET_FORMATION, ...(peutGererEquipe ? [ONGLET_EQUIPE_CLIENT] : [])]
     : estIdel
     ? ongletsIdel
     : [
@@ -137,7 +140,16 @@ function NavBarInterieur() {
         ONGLET_FORMATION,
         { id: "parametres", href: "/parametres", label: "Paramètres" },
       ];
-  const labelProduit = estAdmin ? "Admin" : estIdel ? "IDEL · PSDM" : "CRM";
+  const labelProduit = estAdmin ? "Admin" : formationSeule ? "Formation" : estIdel ? "IDEL · PSDM" : "CRM";
+  const accueil = estIdel ? "/idel/accueil" : estAdmin ? "/admin" : formationSeule ? "/formation" : "/dashboard";
+
+  // Compte formation seule arrive sur une page CRM ou IDEL (lien, favori,
+  // redirection par defaut vers /dashboard) : renvoi vers la formation.
+  useEffect(() => {
+    if (formationSeule && !PAGES_FORMATION_SEULE.some((p) => pathname.startsWith(p))) {
+      router.replace("/formation");
+    }
+  }, [formationSeule, pathname, router]);
   const initiales = (user?.nom || user?.email || "?")
     .split(/[\s@.]+/)
     .filter(Boolean)
@@ -147,9 +159,12 @@ function NavBarInterieur() {
 
   useEffect(() => {
     if (!estIdel && !estAdmin) {
-      getGoogleStatus()
-        .then((s) => setGoogleConnecte(s.connecte))
-        .catch(() => setGoogleConnecte(false));
+      // Google (Drive, Gmail) sert au CRM : rien a connecter en formation seule.
+      if (!formationSeule) {
+        getGoogleStatus()
+          .then((s) => setGoogleConnecte(s.connecte))
+          .catch(() => setGoogleConnecte(false));
+      }
       getTenantConfig()
         .then((config) => {
           const liste = (config.onglets_masques || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -158,7 +173,7 @@ function NavBarInterieur() {
         })
         .catch(() => setOngletsMasques(new Set()));
     }
-  }, [searchParams, estIdel, estAdmin]);
+  }, [searchParams, estIdel, estAdmin, formationSeule]);
 
   useEffect(() => {
     if (estIdel) {
@@ -195,7 +210,7 @@ function NavBarInterieur() {
         <div className="liseret-accent h-0.5 opacity-90" aria-hidden="true" />
         <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href={estIdel ? "/idel/accueil" : estAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5">
+            <Link href={accueil} className="flex items-center gap-2.5">
               <img src="/mutatech-logo.svg" alt="" aria-hidden="true" width={18} height={24} className="h-6 w-[18px]" />
               <span className="font-display text-[15px] font-semibold tracking-tight text-textPrimary">Mutatech</span>
             </Link>
@@ -205,7 +220,7 @@ function NavBarInterieur() {
             >
               {labelProduit}
             </span>
-            {estAdmin && (
+            {estAdmin && !formationSeule && (
               <Link href="/dashboard" className="hidden text-sm text-textMuted hover:text-textPrimary sm:block">
                 ← Retour au CRM
               </Link>
@@ -333,7 +348,7 @@ function NavBarInterieur() {
                   Admin
                 </Link>
               )}
-              {estAdmin && (
+              {estAdmin && !formationSeule && (
                 <Link href="/dashboard" className="rounded-md px-3 py-2.5 text-sm text-textMuted hover:bg-surfaceAlt hover:text-textPrimary">
                   ← Retour au CRM
                 </Link>
